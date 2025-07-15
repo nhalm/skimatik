@@ -1,9 +1,9 @@
-# dbutil-gen
+# skimatik
 
-[![Go Version](https://img.shields.io/github/go-mod/go-version/nhalm/dbutil)](https://golang.org/doc/devel/release.html)
-[![CI Status](https://github.com/nhalm/dbutil/actions/workflows/ci.yml/badge.svg)](https://github.com/nhalm/dbutil/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/nhalm/dbutil)](https://goreportcard.com/report/github.com/nhalm/dbutil)
-[![Release](https://img.shields.io/github/v/release/nhalm/dbutil)](https://github.com/nhalm/dbutil/releases)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/nhalm/skimatik)](https://golang.org/doc/devel/release.html)
+[![CI Status](https://github.com/nhalm/skimatik/actions/workflows/ci.yml/badge.svg)](https://github.com/nhalm/skimatik/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/nhalm/skimatik)](https://goreportcard.com/report/github.com/nhalm/skimatik)
+[![Release](https://img.shields.io/github/v/release/nhalm/skimatik)](https://github.com/nhalm/skimatik/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A database-first code generator for PostgreSQL that creates type-safe Go repositories with built-in cursor-based pagination. Generate clean, efficient CRUD operations and custom query functions directly from your database schema.
@@ -24,27 +24,27 @@ A database-first code generator for PostgreSQL that creates type-safe Go reposit
 ### Installation
 
 ```bash
-go install github.com/nhalm/dbutil/cmd/dbutil-gen@latest
+go install github.com/nhalm/skimatik/cmd/skimatic@latest
 ```
 
 ### Basic Usage
 
 1. **Generate table-based repositories:**
 ```bash
-dbutil-gen --dsn="postgres://user:pass@localhost/mydb" --tables --output="./repositories"
+skimatik --config="skimatik.yaml"
 ```
 
 2. **Generated code example:**
 ```go
 // users_generated.go
 type Users struct {
-    ID        uuid.UUID `json:"id" db:"id"`
-    Name      string    `json:"name" db:"name"`
-    Email     string    `json:"email" db:"email"`
-    CreatedAt time.Time `json:"created_at" db:"created_at"`
+    Id        uuid.UUID          `json:"id" db:"id"`
+    Name      string             `json:"name" db:"name"`
+    Email     string             `json:"email" db:"email"`
+    CreatedAt pgtype.Timestamptz `json:"created_at" db:"created_at"`
 }
 
-func (u Users) GetID() uuid.UUID { return u.ID }
+func (u Users) GetID() uuid.UUID { return u.Id }
 
 // Complete CRUD operations
 func (r *UsersRepository) GetByID(ctx context.Context, id uuid.UUID) (*Users, error)
@@ -132,30 +132,14 @@ CREATE TABLE legacy_table (
 
 ```bash
 # Install latest version
-go install github.com/nhalm/dbutil/cmd/dbutil-gen@latest
+go install github.com/nhalm/skimatik/cmd/skimatic@latest
 
 # Or download binary from releases
-curl -L https://github.com/nhalm/dbutil/releases/latest/download/dbutil-gen-linux-amd64 -o dbutil-gen
-chmod +x dbutil-gen
+curl -L https://github.com/nhalm/skimatik/releases/latest/download/skimatik-linux-amd64 -o skimatik
+chmod +x skimatik
 ```
 
-### 2. Docker Usage (Alternative)
-
-You can also run dbutil-gen using Docker:
-
-```bash
-# Build the Docker image
-docker build -t dbutil-gen .
-
-# Run the tool in a container
-docker run --rm -it --network host dbutil-gen --help
-
-# Or use the Makefile
-make docker-build
-make docker-run
-```
-
-### 3. Prepare Your Database
+### 2. Prepare Your Database
 
 Ensure your PostgreSQL database has UUID v7 primary keys:
 
@@ -175,22 +159,38 @@ CREATE TABLE users (
 
 ### 3. Generate Code
 
+Create a configuration file `skimatik.yaml`:
+
+```yaml
+database:
+  dsn: "postgres://user:pass@localhost/mydb"
+  schema: "public"
+
+output:
+  directory: "./repositories"
+  package: "repositories"
+
+tables:
+  users:
+    functions:
+      - "create"
+      - "get"
+      - "update"
+      - "delete"
+      - "list"
+      - "paginate"
+  posts:
+    functions:
+      - "create"
+      - "get"
+      - "list"
+      - "paginate"
+```
+
+Then run:
+
 ```bash
-# Basic table generation
-dbutil-gen --dsn="postgres://user:pass@localhost/mydb" --tables
-
-# With custom output directory and package
-dbutil-gen \
-  --dsn="postgres://user:pass@localhost/mydb" \
-  --tables \
-  --output="./internal/repositories" \
-  --package="repositories"
-
-# Exclude specific tables
-dbutil-gen \
-  --dsn="postgres://user:pass@localhost/mydb" \
-  --tables \
-  --exclude="migrations,schema_versions"
+skimatik --config=skimatik.yaml
 ```
 
 ## 📖 Usage Guide
@@ -198,29 +198,15 @@ dbutil-gen \
 ### Command Line Options
 
 ```bash
-dbutil-gen [options]
+skimatik [options]
 
 Options:
-  -dsn string
-        PostgreSQL connection string (or use DATABASE_URL env var)
-  -tables
-        Generate table-based repositories
-  -queries string
-        Directory containing SQL query files for custom generation
-  -output string
-        Output directory for generated files (default "./repositories")
-  -package string
-        Package name for generated code (default "repositories")
-  -schema string
-        Database schema to introspect (default "public")
-  -include string
-        Comma-separated list of tables to include
-  -exclude string
-        Comma-separated list of tables to exclude
   -config string
-        Path to configuration file
-  -verbose
-        Enable verbose logging
+        Path to YAML configuration file (default "skimatik.yaml")
+  -help
+        Show detailed help and examples
+  -version
+        Show version information
 ```
 
 ### Environment Variables
@@ -229,43 +215,51 @@ Options:
 # Database connection
 export DATABASE_URL="postgres://user:pass@localhost/mydb"
 
-# Then run without --dsn
-dbutil-gen --tables
+# Or use individual variables
+export POSTGRES_HOST="localhost"
+export POSTGRES_PORT="5432"
+export POSTGRES_USER="myuser"
+export POSTGRES_PASSWORD="mypass"
+export POSTGRES_DB="mydb"
 ```
 
 ### Configuration File
 
-Create `dbutil-gen.yaml`:
+The configuration file supports:
 
 ```yaml
-dsn: "postgres://user:pass@localhost/mydb"
-output: "./internal/repositories"
-package: "repositories"
-schema: "public"
-tables: true
-exclude:
-  - "migrations"
-  - "schema_versions"
+database:
+  dsn: "postgres://user:pass@localhost/mydb"
+  schema: "public"
+
+output:
+  directory: "./repositories"
+  package: "repositories"
+
+tables:
+  users:
+    functions:
+      - "create"
+      - "get"
+      - "update"
+      - "delete"
+      - "list"
+      - "paginate"
+  posts:
+    functions:
+      - "create"
+      - "get"
+      - "list"
+      - "paginate"
+
+queries:
+  directory: "./sql"
+
+types:
+  mappings:
+    custom_enum: "string"
+
 verbose: true
-```
-
-Use with:
-```bash
-dbutil-gen --config=dbutil-gen.yaml
-```
-
-### Table Filtering
-
-```bash
-# Include only specific tables
-dbutil-gen --dsn="..." --tables --include="users,posts,comments"
-
-# Exclude specific tables
-dbutil-gen --dsn="..." --tables --exclude="migrations,temp_*"
-
-# Include and exclude (include takes precedence)
-dbutil-gen --dsn="..." --tables --include="users,posts" --exclude="posts"
-# Result: only "users" table
 ```
 
 ## 🔄 Pagination
@@ -362,7 +356,7 @@ Nullable columns automatically use pgtype equivalents:
 Add to your Go files:
 
 ```go
-//go:generate dbutil-gen --dsn="$DATABASE_URL" --tables --output="./repositories"
+//go:generate skimatik --config=skimatik.yaml
 ```
 
 Then run:
@@ -497,31 +491,6 @@ ALTER TABLE users RENAME COLUMN uuid_id TO id;
 ALTER TABLE users ADD PRIMARY KEY (id);
 ```
 
-**Option B: Create new tables with UUID and migrate data**
-
-```sql
--- 1. Create new table with UUID
-CREATE TABLE users_new (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    old_id INTEGER, -- temporary reference
-    name TEXT NOT NULL,
-    -- other columns...
-);
-
--- 2. Migrate data
-INSERT INTO users_new (old_id, name, ...)
-SELECT id, name, ... FROM users;
-
--- 3. Update application to use new table
--- 4. Drop old table when ready
-```
-
-### Performance Considerations
-
-- UUID v7 is time-ordered, providing good performance for pagination
-- Consider partitioning for very large tables
-- Index foreign key columns that reference UUIDs
-
 ## 🔍 Troubleshooting
 
 ### Common Issues
@@ -555,17 +524,7 @@ Solution: Check schema name with `--schema` flag or verify database has tables
 Use `--verbose` for detailed logging:
 
 ```bash
-dbutil-gen --dsn="..." --tables --verbose
-```
-
-Output:
-```
-2025/01/15 10:30:00 Connected to database, schema: public
-2025/01/15 10:30:00 Found 5 tables in schema 'public'
-2025/01/15 10:30:00 Generating code for 3 tables after filtering
-2025/01/15 10:30:00 Generating repository for table: users
-Generated: repositories/users_generated.go
-...
+skimatik --config=skimatik.yaml --verbose
 ```
 
 ## 📊 Performance
@@ -582,8 +541,8 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 ```bash
 # Clone repository
-git clone https://github.com/nhalm/dbutil.git
-cd dbutil
+git clone https://github.com/nhalm/skimatik.git
+cd skimatik
 
 # Install dependencies
 go mod download
@@ -592,13 +551,14 @@ go mod download
 make test
 
 # Start test database
-make test-setup
+make dev-setup
 
 # Run integration tests
 make integration-test
 
 # Test code generation
-make test-generate
+make build
+./bin/skimatik --config=configs/test-config.yaml
 ```
 
 ## 📄 License
