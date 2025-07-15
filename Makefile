@@ -11,7 +11,7 @@ GOLINT=golangci-lint
 BINARY_NAME=dbutil-gen
 BINARY_PATH=./bin/$(BINARY_NAME)
 MAIN_PATH=./cmd/dbutil-gen
-DOCKER_COMPOSE=docker-compose
+DOCKER_COMPOSE=docker-compose -f build/docker-compose.yml
 
 # Test parameters
 TEST_DB_URL=postgres://dbutil:dbutil_test_password@localhost:5432/dbutil_test?sslmode=disable

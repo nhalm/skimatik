@@ -20,7 +20,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ./test/sql:/docker-entrypoint-initdb.d
+      - ../test/sql:/docker-entrypoint-initdb.d
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       <<: *postgres-healthcheck
@@ -36,7 +36,7 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - ./test/sql:/docker-entrypoint-initdb.d
+      - ../test/sql:/docker-entrypoint-initdb.d
       - db_data:/var/lib/postgresql/data
     healthcheck:
       <<: *postgres-healthcheck
