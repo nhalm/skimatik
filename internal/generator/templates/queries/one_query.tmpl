@@ -1,0 +1,12 @@
+// {{.FunctionName}} executes the {{.QueryName}} query and returns a single result
+func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterDeclarations}}) (*{{.ResultType}}, error) {
+	query := `{{.SQL}}`
+	
+	var result {{.ResultType}}
+	err := r.conn.QueryRow(ctx, query{{.ParameterArgs}}).Scan({{.ScanArgs}})
+	if err != nil {
+		return nil, err
+	}
+	
+	return &result, nil
+} 

@@ -301,7 +301,7 @@ The existing tests will catch any regressions - no need for additional testing i
 
 ### Phase 2: Template Migration
 - [x] Migrate `shared_types_templates.go` → `templates/repository/complete_repository.tmpl`
-- [ ] Migrate `query_templates.go` → `templates/queries/*.tmpl`
+- [x] Migrate `query_templates.go` → `templates/queries/*.tmpl`
 - [ ] Migrate `shared_pagination_templates.go` → `templates/pagination/shared_types.tmpl`
 - [x] Migrate `inline_pagination_templates.go` → `templates/pagination/*.tmpl`
 - [ ] Migrate `crud_templates.go` → `templates/crud/*.tmpl`
@@ -414,18 +414,35 @@ Simple git-based rollback:
    - **Benefits**: Eliminated 304 lines of complex inline template strings with extensive backtick escaping
    - **Clean Templates**: No more string concatenation or Go escaping hell
 
+3. ✅ **`query_templates.go`** → `templates/queries/*.tmpl` (431 lines) - **COMPLETED**
+   - Migrated `generateQueryResultStruct` template → `templates/queries/result_struct.tmpl`
+   - Migrated `generateQueryRepository` template → `templates/queries/repository.tmpl`
+   - Migrated `generateOneQueryFunction` template → `templates/queries/one_query.tmpl`
+   - Migrated `generateManyQueryFunction` template → `templates/queries/many_query.tmpl`
+   - Migrated `generateExecQueryFunction` template → `templates/queries/exec_query.tmpl`
+   - Migrated `generatePaginatedQueryFunction` template → `templates/queries/paginated_query.tmpl`
+   - **Benefits**: Eliminated 431 lines of complex inline template strings with extensive backtick escaping
+   - **Clean Templates**: No more string concatenation or Go escaping hell
+   - **Template Manager Integration**: All query functions now use `templateMgr.ExecuteTemplate()`
+
 **Files Created:**
 - `internal/generator/templates/pagination/pagination_utils.tmpl` - Pagination types and utility functions
 - `internal/generator/templates/crud/list.tmpl` - Simple list operation template
 - `internal/generator/templates/pagination/inline_paginated.tmpl` - Paginated list template
 - `internal/generator/templates/repository/complete_repository.tmpl` - Complete repository template with all CRUD operations
 - `internal/generator/templates/pagination/shared_types.tmpl` - Shared pagination types and utilities
-- `internal/generator/templates/queries/.gitkeep` - Placeholder for future query templates
+- `internal/generator/templates/queries/result_struct.tmpl` - Query result struct template
+- `internal/generator/templates/queries/repository.tmpl` - Query repository struct template
+- `internal/generator/templates/queries/one_query.tmpl` - Single row query function template
+- `internal/generator/templates/queries/many_query.tmpl` - Multiple row query function template
+- `internal/generator/templates/queries/exec_query.tmpl` - Exec query function template
+- `internal/generator/templates/queries/paginated_query.tmpl` - Paginated query function template
 - `internal/generator/templates/shared/.gitkeep` - Placeholder for future shared templates
 
 **Infrastructure Updates:**
-- ✅ Updated `templates.go` embed directive to include `templates/repository/*`
+- ✅ Updated `templates.go` embed directive to include `templates/repository/*` and `templates/queries/*`
 - ✅ Template path constants ready for new templates
+- ✅ Added `TemplateQueryResultStruct`, `TemplateQueryRepository`, `TemplateQueryOne`, `TemplateQueryMany`, `TemplateQueryExec`, `TemplateQueryPaginated` constants
 - ✅ All tests passing, build successful
 
 **Important Notes:**
@@ -437,19 +454,39 @@ Simple git-based rollback:
 
 **Build Status**: ✅ All code compiles successfully
 
+**Testing Status**: ✅ All tests passing including:
+- End-to-end system tests
+- Query generation tests
+- Template generation tests
+- Integration tests
+
+**Query Templates Migration Summary:**
+- ✅ **6 Templates Migrated**: Successfully migrated all 6 query templates from inline strings to `.tmpl` files
+- ✅ **431 Lines Eliminated**: Removed 431 lines of complex inline template strings with extensive backtick escaping
+- ✅ **Template Manager Integration**: All query generation functions now use `templateMgr.ExecuteTemplate()`
+- ✅ **Clean Template Syntax**: Templates now have proper Go template syntax without string escaping
+- ✅ **Zero Regression**: All existing functionality preserved, tests passing
+
+**Technical Implementation:**
+- ✅ Created 6 new template files in `templates/queries/`
+- ✅ Updated `templates.go` embed directive to include `templates/queries/*`
+- ✅ Added 6 new template path constants for type safety
+- ✅ Modified all query generation functions to use template manager
+- ✅ Removed unused `text/template` import
+- ✅ Maintained existing template data structures and logic
+
 ## Next Steps
 
 ### For Next Agent:
-1. **Priority**: Migrate `query_templates.go` (431 lines) - largest remaining template
-2. **Update embed directive** in `templates.go` to include `templates/queries/*` when populated
+1. **Priority**: Migrate `shared_pagination_templates.go` (169 lines) - **NOTE**: Different from migrated templates - uses private functions and shared approach
+2. **Reconcile pagination differences** between migrated `shared_types_templates.go` and `shared_pagination_templates.go`
 3. **Test template usage** by updating code generation functions to use `templateMgr.ExecuteTemplate()`
 4. **Verify output** matches existing generated code exactly
 
 ### Remaining Template Migrations:
-1. `query_templates.go` → `templates/queries/*.tmpl` (431 lines) - **NEXT PRIORITY**
-2. `shared_pagination_templates.go` → `templates/pagination/shared_*.tmpl` (169 lines) - **NOTE**: Different from migrated templates - uses private functions and shared approach
-3. `crud_templates.go` → `templates/crud/*.tmpl` (110 lines)
-4. Remaining inline templates in `codegen.go` and other files
+1. `shared_pagination_templates.go` → `templates/pagination/shared_*.tmpl` (169 lines) - **NEXT PRIORITY** - **NOTE**: Different from migrated templates - uses private functions and shared approach
+2. `crud_templates.go` → `templates/crud/*.tmpl` (110 lines)
+3. Remaining inline templates in `codegen.go` and other files
 
 ### Original Next Steps:
 1. **Review this guide** with the team

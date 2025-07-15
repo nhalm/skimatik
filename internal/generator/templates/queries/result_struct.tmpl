@@ -1,0 +1,12 @@
+// {{.StructName}} represents the result of the {{.QueryName}} query
+type {{.StructName}} struct {
+{{range .Fields}}	{{.Name}} {{.Type}} `{{.Tag}}`
+{{end}}}
+
+// GetID returns the ID field for pagination (assumes first UUID field is the ID)
+func (r {{.StructName}}) GetID() uuid.UUID {
+{{if .IDField}}{{if .IDFieldIsPgtype}}	return uuid.UUID(r.{{.IDField}}.Bytes)
+{{else}}	return r.{{.IDField}}
+{{end}}{{else}}	// No UUID field found, return zero UUID
+	return uuid.UUID{}
+{{end}}} 

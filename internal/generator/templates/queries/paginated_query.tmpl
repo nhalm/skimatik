@@ -1,0 +1,65 @@
+// {{.FunctionName}} executes the {{.QueryName}} query with pagination
+func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context, params PaginationParams{{.ParameterDeclarations}}) (*PaginationResult[{{.ResultType}}], error) {
+	// Validate pagination parameters
+	if err := validatePaginationParams(params); err != nil {
+		return nil, err
+	}
+
+	// Build query with pagination
+	query := `{{.SQL}}`
+	args := []interface{}{}
+	
+	// Add cursor condition if provided
+	if params.Cursor != "" {
+		cursorID, err := decodeCursor(params.Cursor)
+		if err != nil {
+			return nil, fmt.Errorf("invalid cursor: %w", err)
+		}
+		args = append(args, cursorID)
+	}
+	
+	// Add limit (request one extra to determine hasMore)
+	args = append(args, params.Limit+1)
+	
+	// Add user parameters{{.ParameterArgs}}
+	
+	rows, err := r.conn.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var results []{{.ResultType}}
+	for rows.Next() {
+		var result {{.ResultType}}
+		err := rows.Scan({{.ScanArgs}})
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, result)
+	}
+	
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	
+	// Calculate pagination metadata
+	hasMore := len(results) > int(params.Limit)
+	if hasMore {
+		// Remove the extra item
+		results = results[:params.Limit]
+	}
+	
+	var nextCursor string
+	if hasMore && len(results) > 0 {
+		// Use the last item's ID as the next cursor
+		lastItem := results[len(results)-1]
+		nextCursor = encodeCursor(lastItem.GetID())
+	}
+	
+	return &PaginationResult[{{.ResultType}}]{
+		Items:      results,
+		HasMore:    hasMore,
+		NextCursor: nextCursor,
+	}, nil
+} 

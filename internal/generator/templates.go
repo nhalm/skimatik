@@ -4,7 +4,7 @@ import "embed"
 
 // Embed all template files at build time
 //
-//go:embed templates/crud/* templates/pagination/* templates/repository/*
+//go:embed templates/crud/* templates/pagination/* templates/repository/* templates/queries/*
 var templateFS embed.FS
 
 // Template file paths (constants for type safety)
@@ -22,10 +22,12 @@ const (
 	TemplatePaginationUtils  = "templates/pagination/pagination_utils.tmpl"
 
 	// Query templates
-	TemplateQueryOne       = "templates/queries/one_query.tmpl"
-	TemplateQueryMany      = "templates/queries/many_query.tmpl"
-	TemplateQueryExec      = "templates/queries/exec_query.tmpl"
-	TemplateQueryPaginated = "templates/queries/paginated_query.tmpl"
+	TemplateQueryResultStruct = "templates/queries/result_struct.tmpl"
+	TemplateQueryRepository   = "templates/queries/repository.tmpl"
+	TemplateQueryOne          = "templates/queries/one_query.tmpl"
+	TemplateQueryMany         = "templates/queries/many_query.tmpl"
+	TemplateQueryExec         = "templates/queries/exec_query.tmpl"
+	TemplateQueryPaginated    = "templates/queries/paginated_query.tmpl"
 
 	// Repository templates
 	TemplateRepositoryStruct   = "templates/repository/repository_struct.tmpl"

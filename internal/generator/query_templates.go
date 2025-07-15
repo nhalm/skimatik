@@ -3,7 +3,6 @@ package generator
 import (
 	"fmt"
 	"strings"
-	"text/template"
 )
 
 // Query generation helper methods for CodeGenerator
@@ -65,19 +64,6 @@ func (cg *CodeGenerator) generateQueryResultStruct(query Query) (string, error) 
 		return "", fmt.Errorf("query %s has no columns for result struct", query.Name)
 	}
 
-	tmpl := `// {{.StructName}} represents the result of the {{.QueryName}} query
-type {{.StructName}} struct {
-{{range .Fields}}	{{.Name}} {{.Type}} ` + "`{{.Tag}}`" + `
-{{end}}}
-
-// GetID returns the ID field for pagination (assumes first UUID field is the ID)
-func (r {{.StructName}}) GetID() uuid.UUID {
-{{if .IDField}}{{if .IDFieldIsPgtype}}	return uuid.UUID(r.{{.IDField}}.Bytes)
-{{else}}	return r.{{.IDField}}
-{{end}}{{else}}	// No UUID field found, return zero UUID
-	return uuid.UUID{}
-{{end}}}`
-
 	// Prepare template data
 	data := struct {
 		StructName      string
@@ -114,18 +100,8 @@ func (r {{.StructName}}) GetID() uuid.UUID {
 		}
 	}
 
-	// Execute template
-	t, err := template.New("resultStruct").Parse(tmpl)
-	if err != nil {
-		return "", err
-	}
-
-	var result strings.Builder
-	if err := t.Execute(&result, data); err != nil {
-		return "", err
-	}
-
-	return result.String(), nil
+	// Execute template using template manager
+	return cg.templateMgr.ExecuteTemplate(TemplateQueryResultStruct, data)
 }
 
 // generateQueryRepository generates the repository struct and constructor for queries
@@ -136,18 +112,6 @@ func (cg *CodeGenerator) generateQueryRepository(sourceFile string, queries []Qu
 	baseName := strings.TrimSuffix(filename, ".sql")
 	repositoryName := toPascalCase(baseName) + "Queries"
 
-	tmpl := `// {{.RepositoryName}} provides database operations for queries in {{.SourceFile}}
-type {{.RepositoryName}} struct {
-	conn *pgxpool.Pool
-}
-
-// New{{.RepositoryName}} creates a new {{.RepositoryName}}
-func New{{.RepositoryName}}(conn *pgxpool.Pool) *{{.RepositoryName}} {
-	return &{{.RepositoryName}}{
-		conn: conn,
-	}
-}`
-
 	// Prepare template data
 	data := struct {
 		RepositoryName string
@@ -157,18 +121,8 @@ func New{{.RepositoryName}}(conn *pgxpool.Pool) *{{.RepositoryName}} {
 		SourceFile:     sourceFile,
 	}
 
-	// Execute template
-	t, err := template.New("queryRepository").Parse(tmpl)
-	if err != nil {
-		return "", err
-	}
-
-	var result strings.Builder
-	if err := t.Execute(&result, data); err != nil {
-		return "", err
-	}
-
-	return result.String(), nil
+	// Execute template using template manager
+	return cg.templateMgr.ExecuteTemplate(TemplateQueryRepository, data)
 }
 
 // generateQueryFunction generates a Go function for a specific query
@@ -189,192 +143,46 @@ func (cg *CodeGenerator) generateQueryFunction(query Query) (string, error) {
 
 // generateOneQueryFunction generates a function that returns a single row
 func (cg *CodeGenerator) generateOneQueryFunction(query Query) (string, error) {
-	tmpl := `// {{.FunctionName}} executes the {{.QueryName}} query and returns a single result
-func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterDeclarations}}) (*{{.ResultType}}, error) {
-	query := ` + "`" + `{{.SQL}}` + "`" + `
-	
-	var result {{.ResultType}}
-	err := r.conn.QueryRow(ctx, query{{.ParameterArgs}}).Scan({{.ScanArgs}})
-	if err != nil {
-		return nil, err
-	}
-	
-	return &result, nil
-}`
-
 	data, err := cg.prepareQueryTemplateData(query)
 	if err != nil {
 		return "", err
 	}
 
-	t, err := template.New("oneQuery").Parse(tmpl)
-	if err != nil {
-		return "", err
-	}
-
-	var result strings.Builder
-	if err := t.Execute(&result, data); err != nil {
-		return "", err
-	}
-
-	return result.String(), nil
+	// Execute template using template manager
+	return cg.templateMgr.ExecuteTemplate(TemplateQueryOne, data)
 }
 
 // generateManyQueryFunction generates a function that returns multiple rows
 func (cg *CodeGenerator) generateManyQueryFunction(query Query) (string, error) {
-	tmpl := `// {{.FunctionName}} executes the {{.QueryName}} query and returns multiple results
-func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterDeclarations}}) ([]{{.ResultType}}, error) {
-	query := ` + "`" + `{{.SQL}}` + "`" + `
-	
-	rows, err := r.conn.Query(ctx, query{{.ParameterArgs}})
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	
-	var results []{{.ResultType}}
-	for rows.Next() {
-		var result {{.ResultType}}
-		err := rows.Scan({{.ScanArgs}})
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, result)
-	}
-	
-	return results, rows.Err()
-}`
-
 	data, err := cg.prepareQueryTemplateData(query)
 	if err != nil {
 		return "", err
 	}
 
-	t, err := template.New("manyQuery").Parse(tmpl)
-	if err != nil {
-		return "", err
-	}
-
-	var result strings.Builder
-	if err := t.Execute(&result, data); err != nil {
-		return "", err
-	}
-
-	return result.String(), nil
+	// Execute template using template manager
+	return cg.templateMgr.ExecuteTemplate(TemplateQueryMany, data)
 }
 
 // generateExecQueryFunction generates a function that executes without returning rows
 func (cg *CodeGenerator) generateExecQueryFunction(query Query) (string, error) {
-	tmpl := `// {{.FunctionName}} executes the {{.QueryName}} query
-func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterDeclarations}}) error {
-	query := ` + "`" + `{{.SQL}}` + "`" + `
-	
-	_, err := r.conn.Exec(ctx, query{{.ParameterArgs}})
-	return err
-}`
-
 	data, err := cg.prepareQueryTemplateData(query)
 	if err != nil {
 		return "", err
 	}
 
-	t, err := template.New("execQuery").Parse(tmpl)
-	if err != nil {
-		return "", err
-	}
-
-	var result strings.Builder
-	if err := t.Execute(&result, data); err != nil {
-		return "", err
-	}
-
-	return result.String(), nil
+	// Execute template using template manager
+	return cg.templateMgr.ExecuteTemplate(TemplateQueryExec, data)
 }
 
 // generatePaginatedQueryFunction generates a function that returns paginated results
 func (cg *CodeGenerator) generatePaginatedQueryFunction(query Query) (string, error) {
-	tmpl := `// {{.FunctionName}} executes the {{.QueryName}} query with pagination
-func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context, params PaginationParams{{.ParameterDeclarations}}) (*PaginationResult[{{.ResultType}}], error) {
-	// Validate pagination parameters
-	if err := validatePaginationParams(params); err != nil {
-		return nil, err
-	}
-
-	// Build query with pagination
-	query := ` + "`" + `{{.SQL}}` + "`" + `
-	args := []interface{}{}
-	
-	// Add cursor condition if provided
-	if params.Cursor != "" {
-		cursorID, err := decodeCursor(params.Cursor)
-		if err != nil {
-			return nil, fmt.Errorf("invalid cursor: %w", err)
-		}
-		args = append(args, cursorID)
-	}
-	
-	// Add limit (request one extra to determine hasMore)
-	args = append(args, params.Limit+1)
-	
-	// Add user parameters{{.ParameterArgs}}
-	
-	rows, err := r.conn.Query(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	
-	var results []{{.ResultType}}
-	for rows.Next() {
-		var result {{.ResultType}}
-		err := rows.Scan({{.ScanArgs}})
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, result)
-	}
-	
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	
-	// Calculate pagination metadata
-	hasMore := len(results) > int(params.Limit)
-	if hasMore {
-		// Remove the extra item
-		results = results[:params.Limit]
-	}
-	
-	var nextCursor string
-	if hasMore && len(results) > 0 {
-		// Use the last item's ID as the next cursor
-		lastItem := results[len(results)-1]
-		nextCursor = encodeCursor(lastItem.GetID())
-	}
-	
-	return &PaginationResult[{{.ResultType}}]{
-		Items:      results,
-		HasMore:    hasMore,
-		NextCursor: nextCursor,
-	}, nil
-}`
-
 	data, err := cg.prepareQueryTemplateData(query)
 	if err != nil {
 		return "", err
 	}
 
-	t, err := template.New("paginatedQuery").Parse(tmpl)
-	if err != nil {
-		return "", err
-	}
-
-	var result strings.Builder
-	if err := t.Execute(&result, data); err != nil {
-		return "", err
-	}
-
-	return result.String(), nil
+	// Execute template using template manager
+	return cg.templateMgr.ExecuteTemplate(TemplateQueryPaginated, data)
 }
 
 // prepareQueryTemplateData prepares common template data for query functions

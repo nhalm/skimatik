@@ -1,0 +1,22 @@
+// {{.FunctionName}} executes the {{.QueryName}} query and returns multiple results
+func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterDeclarations}}) ([]{{.ResultType}}, error) {
+	query := `{{.SQL}}`
+	
+	rows, err := r.conn.Query(ctx, query{{.ParameterArgs}})
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var results []{{.ResultType}}
+	for rows.Next() {
+		var result {{.ResultType}}
+		err := rows.Scan({{.ScanArgs}})
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, result)
+	}
+	
+	return results, rows.Err()
+} 
