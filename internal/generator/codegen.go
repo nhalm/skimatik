@@ -115,16 +115,6 @@ func (cg *CodeGenerator) generateTableCode(table Table) (string, error) {
 
 // generateStruct generates the Go struct for a table
 func (cg *CodeGenerator) generateStruct(table Table) (string, error) {
-	tmpl := `// {{.StructName}} represents a row from the {{.TableName}} table
-type {{.StructName}} struct {
-{{range .Fields}}	{{.Name}} {{.Type}} ` + "`{{.Tag}}`" + `
-{{end}}}
-
-// GetID returns the ID of the {{.StructName}} for pagination
-func ({{.ReceiverName}} {{.StructName}}) GetID() uuid.UUID {
-	return {{.ReceiverName}}.{{.IDField}}
-}`
-
 	// Prepare template data
 	data := struct {
 		StructName   string
@@ -157,34 +147,12 @@ func ({{.ReceiverName}} {{.StructName}}) GetID() uuid.UUID {
 		data.Fields = append(data.Fields, field)
 	}
 
-	// Execute template
-	t, err := template.New("struct").Parse(tmpl)
-	if err != nil {
-		return "", err
-	}
-
-	var result strings.Builder
-	if err := t.Execute(&result, data); err != nil {
-		return "", err
-	}
-
-	return result.String(), nil
+	// Execute template using template manager
+	return cg.templateMgr.ExecuteTemplate(TemplateStruct, data)
 }
 
 // generateRepository generates the repository struct and constructor
 func (cg *CodeGenerator) generateRepository(table Table) (string, error) {
-	tmpl := `// {{.RepositoryName}} provides database operations for {{.TableName}}
-type {{.RepositoryName}} struct {
-	conn *pgxpool.Pool
-}
-
-// New{{.RepositoryName}} creates a new {{.RepositoryName}}
-func New{{.RepositoryName}}(conn *pgxpool.Pool) *{{.RepositoryName}} {
-	return &{{.RepositoryName}}{
-		conn: conn,
-	}
-}`
-
 	// Prepare template data
 	data := struct {
 		RepositoryName string
@@ -194,18 +162,8 @@ func New{{.RepositoryName}}(conn *pgxpool.Pool) *{{.RepositoryName}} {
 		TableName:      table.Name,
 	}
 
-	// Execute template
-	t, err := template.New("repository").Parse(tmpl)
-	if err != nil {
-		return "", err
-	}
-
-	var result strings.Builder
-	if err := t.Execute(&result, data); err != nil {
-		return "", err
-	}
-
-	return result.String(), nil
+	// Execute template using template manager
+	return cg.templateMgr.ExecuteTemplate(TemplateRepositoryStruct, data)
 }
 
 // generateCRUDOperations generates specified CRUD operations for a table
@@ -221,14 +179,14 @@ func (cg *CodeGenerator) generateCRUDOperations(table Table) (string, error) {
 	// Get the functions to generate for this table
 	functions := cg.config.GetTableFunctions(table.Name)
 
-	// Map function names to templates (mixed approach during migration)
+	// Map function names to templates (using template manager)
 	operationTemplates := map[string]string{
-		"get":      getByIDTemplate,
-		"create":   createTemplate,
-		"update":   updateTemplate,
-		"delete":   deleteTemplate,
-		"list":     listTemplate,
-		"paginate": TemplatePaginationSharedListPaginated, // Using template manager
+		"get":      TemplateGetByID,
+		"create":   TemplateCreate,
+		"update":   TemplateUpdate,
+		"delete":   TemplateDelete,
+		"list":     TemplateList,
+		"paginate": TemplatePaginationSharedListPaginated,
 	}
 
 	// Generate each requested CRUD operation
@@ -446,18 +404,13 @@ func (cg *CodeGenerator) generateRepositoryWithSharedTypes(table Table) (string,
 	data["ExtraImports"] = imports
 	data["PackageName"] = cg.config.PackageName
 
-	// Execute template
-	tmpl, err := template.New("repository").Parse(repositoryFileTemplate)
+	// Execute template using template manager
+	result, err := cg.templateMgr.ExecuteTemplate(TemplateRepositoryComplete, data)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse repository template: %w", err)
-	}
-
-	var result strings.Builder
-	if err := tmpl.Execute(&result, data); err != nil {
 		return "", fmt.Errorf("failed to execute repository template: %w", err)
 	}
 
-	return result.String(), nil
+	return result, nil
 }
 
 func (cg *CodeGenerator) GenerateQueries(queries []Query) error {

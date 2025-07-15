@@ -1,0 +1,22 @@
+// Update{{.StructName}}Params holds parameters for updating a {{.StructName}}
+type Update{{.StructName}}Params struct {
+{{range .UpdateFields}}	{{.Name}} {{.Type}} `{{.Tag}}`
+{{end}}}
+
+// Update updates a {{.StructName}} by ID
+func (r *{{.RepositoryName}}) Update(ctx context.Context, id uuid.UUID, params Update{{.StructName}}Params) (*{{.StructName}}, error) {
+	query := `
+		UPDATE {{.TableName}}
+		SET {{.UpdateAssignments}}
+		WHERE {{.IDColumn}} = ${{.IDParamIndex}}
+		RETURNING {{.SelectColumns}}
+	`
+	
+	var {{.ReceiverName}} {{.StructName}}
+	err := r.conn.QueryRow(ctx, query, {{.UpdateArgs}}).Scan({{.ScanArgs}})
+	if err != nil {
+		return nil, err
+	}
+	
+	return &{{.ReceiverName}}, nil
+} 

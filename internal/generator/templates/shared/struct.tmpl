@@ -1,0 +1,9 @@
+// {{.StructName}} represents a row from the {{.TableName}} table
+type {{.StructName}} struct {
+{{range .Fields}}	{{.Name}} {{.Type}} `{{.Tag}}`
+{{end}}}
+
+// GetID returns the ID of the {{.StructName}} for pagination
+func ({{.ReceiverName}} {{.StructName}}) GetID() uuid.UUID {
+	return {{.ReceiverName}}.{{.IDField}}
+} 

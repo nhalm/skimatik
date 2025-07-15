@@ -1,0 +1,21 @@
+// Create{{.StructName}}Params holds parameters for creating a {{.StructName}}
+type Create{{.StructName}}Params struct {
+{{range .CreateFields}}	{{.Name}} {{.Type}} `{{.Tag}}`
+{{end}}}
+
+// Create creates a new {{.StructName}}
+func (r *{{.RepositoryName}}) Create(ctx context.Context, params Create{{.StructName}}Params) (*{{.StructName}}, error) {
+	query := `
+		INSERT INTO {{.TableName}} ({{.InsertColumns}})
+		VALUES ({{.InsertPlaceholders}})
+		RETURNING {{.SelectColumns}}
+	`
+	
+	var {{.ReceiverName}} {{.StructName}}
+	err := r.conn.QueryRow(ctx, query, {{.InsertArgs}}).Scan({{.ScanArgs}})
+	if err != nil {
+		return nil, err
+	}
+	
+	return &{{.ReceiverName}}, nil
+} 

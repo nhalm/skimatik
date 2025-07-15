@@ -1,0 +1,16 @@
+// GetByID retrieves a {{.StructName}} by its ID
+func (r *{{.RepositoryName}}) GetByID(ctx context.Context, id uuid.UUID) (*{{.StructName}}, error) {
+	query := `
+		SELECT {{.SelectColumns}}
+		FROM {{.TableName}}
+		WHERE {{.IDColumn}} = $1
+	`
+	
+	var {{.ReceiverName}} {{.StructName}}
+	err := r.conn.QueryRow(ctx, query, id).Scan({{.ScanArgs}})
+	if err != nil {
+		return nil, err
+	}
+	
+	return &{{.ReceiverName}}, nil
+} 

@@ -4,7 +4,7 @@ import "embed"
 
 // Embed all template files at build time
 //
-//go:embed templates/crud/* templates/pagination/* templates/repository/* templates/queries/*
+//go:embed templates/crud/* templates/pagination/* templates/repository/* templates/queries/* templates/shared/*
 var templateFS embed.FS
 
 // Template file paths (constants for type safety)

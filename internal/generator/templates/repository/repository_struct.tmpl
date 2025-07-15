@@ -1,0 +1,11 @@
+// {{.RepositoryName}} provides database operations for {{.TableName}}
+type {{.RepositoryName}} struct {
+	conn *pgxpool.Pool
+}
+
+// New{{.RepositoryName}} creates a new {{.RepositoryName}}
+func New{{.RepositoryName}}(conn *pgxpool.Pool) *{{.RepositoryName}} {
+	return &{{.RepositoryName}}{
+		conn: conn,
+	}
+} 
