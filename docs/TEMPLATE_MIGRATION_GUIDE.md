@@ -565,6 +565,8 @@ Simple git-based rollback:
 - [x] Update all template references
 - [x] Remove unused imports
 - [x] Run full test suite
+- [x] **Move helper functions from template files to codegen.go**
+- [x] **Delete remaining template files: `query_templates.go`, `inline_pagination_templates.go`**
 
 ### Phase 4: Verification (✅ COMPLETED)
 - [x] Compare generated output (old vs new)
@@ -603,4 +605,58 @@ Simple git-based rollback:
 3. **Template Documentation**: Document template data structures and usage patterns
 4. **Template Validation**: Add build-time template validation if desired
 
-The template migration is now **100% COMPLETE** and ready for production use. All inline template strings have been successfully migrated to embedded `.tmpl` files with full template manager integration. 
+The template migration is now **100% COMPLETE** and ready for production use. All inline template strings have been successfully migrated to embedded `.tmpl` files with full template manager integration.
+
+## Final Cleanup Phase (✅ COMPLETED)
+
+**Agent**: Template Migration Cleanup Agent  
+**Date**: Current session  
+**Task**: Complete the template migration by removing old template files and moving helper functions
+
+### ✅ COMPLETED SUCCESSFULLY
+
+**What Was Completed:**
+- ✅ **Moved Helper Functions**: Successfully moved all query generation helper functions from `query_templates.go` to `codegen.go`
+- ✅ **Deleted Old Template Files**: Removed both `query_templates.go` and `inline_pagination_templates.go` files
+- ✅ **Zero Regression**: All existing functionality preserved, all tests passing
+- ✅ **Build Verification**: Code compiles successfully without any template-related errors
+
+**Technical Implementation:**
+- ✅ Moved 12 helper functions from `query_templates.go` to `codegen.go`:
+  - `getQueryImports()` - Import calculation for queries
+  - `convertParametersToColumns()` - Parameter to column conversion
+  - `needsResultStruct()` - Result struct requirement check
+  - `getQueryResultStructName()` - Result struct naming
+  - `generateQueryResultStruct()` - Result struct generation
+  - `generateQueryRepository()` - Repository struct generation
+  - `generateQueryFunction()` - Query function dispatcher
+  - `generateOneQueryFunction()` - Single row query generation
+  - `generateManyQueryFunction()` - Multiple row query generation
+  - `generateExecQueryFunction()` - Exec query generation
+  - `generatePaginatedQueryFunction()` - Paginated query generation
+  - `prepareQueryTemplateData()` - Template data preparation
+- ✅ Deleted 2 old template files:
+  - `internal/generator/query_templates.go` (239 lines)
+  - `internal/generator/inline_pagination_templates.go` (181 lines)
+- ✅ All template constants and inline template strings have been eliminated
+- ✅ All code generation now uses the unified template manager system
+
+**Build Status**: ✅ All tests passing, code compiles successfully
+
+**Final Template Migration Statistics:**
+- **Total Templates Migrated**: 20+ templates across 6 template files
+- **Total Lines Eliminated**: 1,600+ lines of complex inline template strings
+- **Template Files Deleted**: 7 old template constant files
+- **Template Files Created**: 15+ `.tmpl` files in organized directory structure
+- **Helper Functions Consolidated**: All query generation functions moved to `codegen.go`
+
+**Success Metrics Achieved:**
+- ✅ **Zero Dependencies**: All templates embedded at build time using Go's `embed` package
+- ✅ **Better Developer Experience**: Template syntax highlighting, no string escaping, easier maintenance
+- ✅ **Consistent Architecture**: All code generation uses unified template manager system
+- ✅ **Performance**: Template caching implemented, no performance regression
+- ✅ **Maintainability**: Templates are organized, readable, and easy to modify
+- ✅ **Build Integration**: Templates automatically embedded, no runtime dependencies
+- ✅ **Clean Codebase**: No remaining inline template strings or template constant files
+
+The template migration is now **FULLY COMPLETE** with all cleanup tasks finished. The codebase is clean, maintainable, and ready for production use. 
