@@ -1,0 +1,27 @@
+database:
+  dsn: "postgres://dbutil:dbutil_test_password@localhost:5432/dbutil_test?sslmode=disable"
+  schema: "public"
+
+output:
+  directory: "./test-output"
+  package: "repositories"
+
+tables:
+  users:
+    functions:
+      - "create"
+      - "get"
+      - "update"
+      - "delete"
+      - "paginate"
+  posts:
+    functions:
+      - "create"
+      - "get"
+      - "list"
+      - "paginate"
+  comments:
+    functions:
+      - "create"
+      - "delete"
+      - "paginate" 

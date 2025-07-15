@@ -1,0 +1,52 @@
+# Extension fields for reusable configuration
+x-postgres-env: &postgres-env
+  POSTGRES_DB: dbutil_test
+  POSTGRES_USER: dbutil
+  POSTGRES_PASSWORD: dbutil_test_password
+  POSTGRES_HOST_AUTH_METHOD: trust
+
+x-postgres-healthcheck: &postgres-healthcheck
+  test: ["CMD-SHELL", "pg_isready -U dbutil -d dbutil_test"]
+  interval: 5s
+  timeout: 5s
+  retries: 5
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: dbutil-postgres
+    environment:
+      <<: *postgres-env
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./test/sql:/docker-entrypoint-initdb.d
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      <<: *postgres-healthcheck
+    networks:
+      - dbutil-network
+
+  # Alias for backward compatibility
+  db:
+    image: postgres:15-alpine
+    container_name: dbutil-db
+    environment:
+      <<: *postgres-env
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./test/sql:/docker-entrypoint-initdb.d
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      <<: *postgres-healthcheck
+    networks:
+      - dbutil-network
+
+volumes:
+  postgres_data:
+  db_data:
+
+networks:
+  dbutil-network:
+    driver: bridge 

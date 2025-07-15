@@ -1,0 +1,74 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Build output directory
+/bin/
+
+# Built binary
+/dbutil-gen
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Go build cache
+.cache/
+
+# Go module download cache
+go.sum.backup
+
+# Environment variables
+.env
+
+# Generated test output directories
+/test_output/
+/test-output/
+
+# Generated files (anywhere in project)
+*_generated.go
+pagination.go
+
+# Coverage files
+coverage.out
+coverage.html
+
+# Temporary files
+*.tmp
+*.temp
+
+# Docker files
+.dockerignore
+
+# Claude AI directory
+.claude/
+
+# Other AI/development tools
+.cursor/
+.copilot/
+.cursorrules
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

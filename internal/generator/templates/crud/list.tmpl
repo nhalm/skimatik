@@ -1,0 +1,26 @@
+// List retrieves all {{.StructName}}s
+func (r *{{.RepositoryName}}) List(ctx context.Context) ([]{{.StructName}}, error) {
+	query := `
+		SELECT {{.SelectColumns}}
+		FROM {{.TableName}}
+		ORDER BY {{.IDColumn}} ASC
+	`
+	
+	rows, err := r.conn.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var results []{{.StructName}}
+	for rows.Next() {
+		var {{.ReceiverName}} {{.StructName}}
+		err := rows.Scan({{.ScanArgs}})
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, {{.ReceiverName}})
+	}
+	
+	return results, rows.Err()
+} 
