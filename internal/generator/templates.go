@@ -17,9 +17,11 @@ const (
 	TemplateList    = "templates/crud/list.tmpl"
 
 	// Pagination templates
-	TemplatePaginationShared = "templates/pagination/shared_types.tmpl"
-	TemplatePaginationInline = "templates/pagination/inline_paginated.tmpl"
-	TemplatePaginationUtils  = "templates/pagination/pagination_utils.tmpl"
+	TemplatePaginationShared              = "templates/pagination/shared_types.tmpl"
+	TemplatePaginationInline              = "templates/pagination/inline_paginated.tmpl"
+	TemplatePaginationUtils               = "templates/pagination/pagination_utils.tmpl"
+	TemplatePaginationSharedTypes         = "templates/pagination/shared_pagination_types.tmpl"
+	TemplatePaginationSharedListPaginated = "templates/pagination/shared_list_paginated.tmpl"
 
 	// Query templates
 	TemplateQueryResultStruct = "templates/queries/result_struct.tmpl"

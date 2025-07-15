@@ -221,20 +221,20 @@ func (cg *CodeGenerator) generateCRUDOperations(table Table) (string, error) {
 	// Get the functions to generate for this table
 	functions := cg.config.GetTableFunctions(table.Name)
 
-	// Map function names to templates
+	// Map function names to templates (mixed approach during migration)
 	operationTemplates := map[string]string{
 		"get":      getByIDTemplate,
 		"create":   createTemplate,
 		"update":   updateTemplate,
 		"delete":   deleteTemplate,
 		"list":     listTemplate,
-		"paginate": sharedListPaginatedTemplate,
+		"paginate": TemplatePaginationSharedListPaginated, // Using template manager
 	}
 
 	// Generate each requested CRUD operation
 	first := true
 	for _, function := range functions {
-		tmplStr, exists := operationTemplates[function]
+		templateStr, exists := operationTemplates[function]
 		if !exists {
 			return "", fmt.Errorf("unknown function type: %s", function)
 		}
@@ -244,14 +244,31 @@ func (cg *CodeGenerator) generateCRUDOperations(table Table) (string, error) {
 		}
 		first = false
 
-		tmpl, err := template.New("crud").Parse(tmplStr)
-		if err != nil {
-			return "", fmt.Errorf("failed to parse template for %s: %w", function, err)
+		var result string
+		var err error
+
+		// Check if this is a template manager template (starts with "templates/")
+		if strings.HasPrefix(templateStr, "templates/") {
+			// Use template manager
+			result, err = cg.templateMgr.ExecuteTemplate(templateStr, data)
+			if err != nil {
+				return "", fmt.Errorf("failed to execute template for %s: %w", function, err)
+			}
+		} else {
+			// Use old inline template parsing
+			tmpl, parseErr := template.New("crud").Parse(templateStr)
+			if parseErr != nil {
+				return "", fmt.Errorf("failed to parse template for %s: %w", function, parseErr)
+			}
+
+			var resultBuilder strings.Builder
+			if err := tmpl.Execute(&resultBuilder, data); err != nil {
+				return "", fmt.Errorf("failed to execute template for %s: %w", function, err)
+			}
+			result = resultBuilder.String()
 		}
 
-		if err := tmpl.Execute(&code, data); err != nil {
-			return "", fmt.Errorf("failed to execute template for %s: %w", function, err)
-		}
+		code.WriteString(result)
 	}
 
 	return code.String(), nil
@@ -362,20 +379,15 @@ func (cg *CodeGenerator) GenerateSharedPaginationTypes() error {
 		PackageName: cg.config.PackageName,
 	}
 
-	// Execute template
-	tmpl, err := template.New("pagination").Parse(sharedPaginationTypesTemplate)
+	// Execute template using template manager
+	result, err := cg.templateMgr.ExecuteTemplate(TemplatePaginationSharedTypes, data)
 	if err != nil {
-		return fmt.Errorf("failed to parse pagination template: %w", err)
-	}
-
-	var result strings.Builder
-	if err := tmpl.Execute(&result, data); err != nil {
 		return fmt.Errorf("failed to execute pagination template: %w", err)
 	}
 
 	// Write to file
 	filename := cg.config.GetOutputPath("pagination.go")
-	if err := cg.writeCodeToFile(filename, result.String()); err != nil {
+	if err := cg.writeCodeToFile(filename, result); err != nil {
 		return fmt.Errorf("failed to write pagination file: %w", err)
 	}
 
@@ -410,18 +422,13 @@ func (cg *CodeGenerator) generatePaginatedListWithSharedTypes(table Table) (stri
 		return "", fmt.Errorf("failed to prepare template data: %w", err)
 	}
 
-	// Use the shared pagination template
-	tmpl, err := template.New("paginated_list").Parse(sharedListPaginatedTemplate)
+	// Use the shared pagination template via template manager
+	result, err := cg.templateMgr.ExecuteTemplate(TemplatePaginationSharedListPaginated, data)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse template: %w", err)
-	}
-
-	var result strings.Builder
-	if err := tmpl.Execute(&result, data); err != nil {
 		return "", fmt.Errorf("failed to execute template: %w", err)
 	}
 
-	return result.String(), nil
+	return result, nil
 }
 
 // generateRepositoryWithSharedTypes generates a complete repository using shared pagination types
