@@ -10,7 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
-	"github.com/nhalm/pgxkit"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Example application demonstrating dbutil-gen generated repositories
@@ -21,7 +21,7 @@ func main() {
 	ctx := context.Background()
 	dsn := "postgres://dbutil:dbutil_test_password@localhost:5432/dbutil_test?sslmode=disable"
 
-	conn, err := pgxkit.NewConnection(ctx, dsn, nil)
+	conn, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -55,14 +55,14 @@ func main() {
 
 // APIServer demonstrates how to structure an application using generated repositories
 type APIServer struct {
-	conn *pgxkit.Connection
+	conn *pgxpool.Pool
 	// In a real application, you would inject the generated repositories here
 	// userRepo *repositories.UsersRepository
 	// postRepo *repositories.PostsRepository
 	// etc.
 }
 
-func NewAPIServer(conn *pgxkit.Connection) *APIServer {
+func NewAPIServer(conn *pgxpool.Pool) *APIServer {
 	return &APIServer{
 		conn: conn,
 	}
