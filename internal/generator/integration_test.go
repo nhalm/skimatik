@@ -260,28 +260,14 @@ func TestSystem_ErrorHandling(t *testing.T) {
 		ctx := context.Background()
 		err := generator.Generate(ctx)
 
-		// Test: System should succeed but skip tables without UUID primary keys
-		if err != nil {
-			t.Errorf("Expected success when skipping invalid tables, got error: %v", err)
+		// Test: System rejects tables without UUID primary keys
+		if err == nil {
+			t.Error("Expected error for table without UUID primary key")
 		}
 
-		// Test: No files should be generated for invalid tables
-		files, err := os.ReadDir(tempDir)
-		if err != nil {
-			t.Fatalf("Failed to read temp directory: %v", err)
-		}
-
-		// Should only have shared pagination files, no table-specific files
-		var hasTableFiles bool
-		for _, file := range files {
-			if strings.Contains(file.Name(), "invalid_pk_table") {
-				hasTableFiles = true
-				break
-			}
-		}
-
-		if hasTableFiles {
-			t.Error("Expected no files to be generated for invalid_pk_table")
+		// Test: Error message mentions UUID requirement
+		if !strings.Contains(err.Error(), "UUID") && !strings.Contains(err.Error(), "primary key") {
+			t.Errorf("Error message should mention UUID primary key requirement: %v", err)
 		}
 	})
 }

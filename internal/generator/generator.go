@@ -96,20 +96,6 @@ func (g *Generator) generateCode(ctx context.Context) error {
 	for _, table := range tables {
 		log.Printf("Generating code for table: %s", table.Name)
 
-		// Validate that the table has a valid UUID primary key
-		pkCol := table.GetPrimaryKeyColumn()
-		if pkCol == nil {
-			log.Printf("Skipping table %s: no single primary key column found", table.Name)
-			continue
-		}
-
-		// Use the type mapper to validate the primary key is a UUID
-		typeMapper := NewTypeMapper(nil)
-		if err := typeMapper.ValidateUUIDPrimaryKey(pkCol); err != nil {
-			log.Printf("Skipping table %s: %v", table.Name, err)
-			continue
-		}
-
 		if err := g.codegen.GenerateTableRepository(table); err != nil {
 			return fmt.Errorf("failed to generate code for table %s: %w", table.Name, err)
 		}
