@@ -170,21 +170,14 @@ output:
   directory: "./repositories"
   package: "repositories"
 
+# Generate all functions by default
+default_functions: "all"
+
 tables:
   users:
-    functions:
-      - "create"
-      - "get"
-      - "update"
-      - "delete"
-      - "list"
-      - "paginate"
   posts:
-    functions:
-      - "create"
-      - "get"
-      - "list"
-      - "paginate"
+  audit_logs:
+    functions: ["create", "list"]  # Override for specific tables
 ```
 
 Then run:
@@ -236,21 +229,14 @@ output:
   directory: "./repositories"
   package: "repositories"
 
+# Generate all functions by default (recommended)
+default_functions: "all"
+
 tables:
   users:
-    functions:
-      - "create"
-      - "get"
-      - "update"
-      - "delete"
-      - "list"
-      - "paginate"
   posts:
-    functions:
-      - "create"
-      - "get"
-      - "list"
-      - "paginate"
+  audit_logs:
+    functions: ["create", "list"]  # Override for specific tables
 
 queries:
   directory: "./sql"
@@ -261,6 +247,51 @@ types:
 
 verbose: true
 ```
+
+#### Default Functions Configuration
+
+The `default_functions` field simplifies configuration by automatically generating all standard functions unless overridden:
+
+```yaml
+# Option 1: Generate all functions (recommended)
+default_functions: "all"
+
+# Option 2: Specify default functions as array
+default_functions: ["create", "get", "update", "delete", "list", "paginate"]
+
+# Option 3: No default (original behavior)
+# default_functions: (not specified)
+```
+
+#### Migration from Verbose Configuration
+
+**Before (verbose):**
+```yaml
+tables:
+  users:
+    functions: ["create", "get", "update", "delete", "list", "paginate"]
+  posts:
+    functions: ["create", "get", "update", "delete", "list", "paginate"]
+  audit_logs:
+    functions: ["create", "list"]
+```
+
+**After (simplified):**
+```yaml
+default_functions: "all"
+
+tables:
+  users:
+  posts:
+  audit_logs:
+    functions: ["create", "list"]  # Only specify overrides
+```
+
+**Benefits:**
+- 📝 **Less Configuration**: Most tables require minimal config
+- 🔄 **Backward Compatible**: Existing configurations continue to work
+- 🎯 **Override When Needed**: Easily customize specific tables
+- 🚀 **Faster Setup**: New projects get started quickly
 
 ## 🔄 Pagination
 
