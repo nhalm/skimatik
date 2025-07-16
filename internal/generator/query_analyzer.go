@@ -135,13 +135,9 @@ func (qa *QueryAnalyzer) isSelectQuery(queryType QueryType) bool {
 
 // analyzeSelectQuery uses EXPLAIN to analyze a SELECT query and determine column types
 func (qa *QueryAnalyzer) analyzeSelectQuery(ctx context.Context, query *Query) error {
-	// Create a prepared statement to analyze the query structure
-	// We'll use EXPLAIN with a dummy parameter set to analyze the query
-	explainSQL := fmt.Sprintf("EXPLAIN (FORMAT JSON) %s", query.SQL)
-
 	// Replace parameters with dummy values for EXPLAIN
 	analyzableSQL := qa.replaceParametersForExplain(query.SQL, query.Parameters)
-	explainSQL = fmt.Sprintf("EXPLAIN (FORMAT JSON) %s", analyzableSQL)
+	explainSQL := fmt.Sprintf("EXPLAIN (FORMAT JSON) %s", analyzableSQL)
 
 	// Execute EXPLAIN query
 	rows, err := qa.db.Query(ctx, explainSQL)

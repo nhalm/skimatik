@@ -245,18 +245,13 @@ func isValidGoIdentifier(name string) bool {
 	}
 
 	// Must start with letter or underscore
-	if !((name[0] >= 'a' && name[0] <= 'z') ||
-		(name[0] >= 'A' && name[0] <= 'Z') ||
-		name[0] == '_') {
+	if (name[0] < 'a' || name[0] > 'z') && (name[0] < 'A' || name[0] > 'Z') && name[0] != '_' {
 		return false
 	}
 
 	// Rest must be letters, digits, or underscores
 	for i := 1; i < len(name); i++ {
-		if !((name[i] >= 'a' && name[i] <= 'z') ||
-			(name[i] >= 'A' && name[i] <= 'Z') ||
-			(name[i] >= '0' && name[i] <= '9') ||
-			name[i] == '_') {
+		if (name[i] < 'a' || name[i] > 'z') && (name[i] < 'A' || name[i] > 'Z') && (name[i] < '0' || name[i] > '9') && name[i] != '_' {
 			return false
 		}
 	}
