@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nhalm/pgxkit"
 {{range .ExtraImports}}	"{{.}}"
 {{end}})
 
@@ -33,11 +33,11 @@ type Update{{.StructName}}Params struct {
 
 // {{.RepositoryName}} provides database operations for {{.TableName}}
 type {{.RepositoryName}} struct {
-	conn *pgxpool.Pool
+	conn *pgxkit.Connection
 }
 
 // New{{.RepositoryName}} creates a new {{.RepositoryName}}
-func New{{.RepositoryName}}(conn *pgxpool.Pool) *{{.RepositoryName}} {
+func New{{.RepositoryName}}(conn *pgxkit.Connection) *{{.RepositoryName}} {
 	return &{{.RepositoryName}}{
 		conn: conn,
 	}
