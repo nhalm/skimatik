@@ -88,24 +88,21 @@ CONFIGURATION FILE:
         output:
           directory: "./repositories"
           package: "repositories"
+        # Generate all functions by default (recommended)
+        default_functions: "all"
         tables:
           users:
-            functions:
-              - "create"
-              - "get"
-              - "update"
-              - "delete"
-              - "list"
           posts:
-            functions:
-              - "create"
-              - "get"
-              - "list"
           comments:
-            functions:
-              - "create"
-              - "delete"
+            functions: ["create", "delete"]  # Override for specific tables
         verbose: true
+
+    Alternative (verbose format still supported):
+        tables:
+          users:
+            functions: ["create", "get", "update", "delete", "list", "paginate"]
+          posts:
+            functions: ["create", "get", "list", "paginate"]
 
 GENERATED FILES:
     Each table generates a *_generated.go file with:

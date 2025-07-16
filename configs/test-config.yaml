@@ -6,22 +6,11 @@ output:
   directory: "./test-output"
   package: "repositories"
 
+# Generate all functions by default
+default_functions: "all"
+
 tables:
   users:
-    functions:
-      - "create"
-      - "get"
-      - "update"
-      - "delete"
-      - "paginate"
   posts:
-    functions:
-      - "create"
-      - "get"
-      - "list"
-      - "paginate"
   comments:
-    functions:
-      - "create"
-      - "delete"
-      - "paginate" 
+    functions: ["create", "delete", "paginate"]  # Override for specific table 
