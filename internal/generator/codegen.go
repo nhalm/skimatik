@@ -372,47 +372,6 @@ func (cg *CodeGenerator) writeCodeToFile(filename, code string) error {
 	return nil
 }
 
-// generatePaginatedListWithSharedTypes generates just the paginated list method using shared types
-func (cg *CodeGenerator) generatePaginatedListWithSharedTypes(table Table) (string, error) {
-	// Prepare template data
-	data, err := cg.prepareCRUDTemplateData(table)
-	if err != nil {
-		return "", fmt.Errorf("failed to prepare template data: %w", err)
-	}
-
-	// Use the shared pagination template via template manager
-	result, err := cg.templateMgr.ExecuteTemplate(TemplatePaginationSharedListPaginated, data)
-	if err != nil {
-		return "", fmt.Errorf("failed to execute template: %w", err)
-	}
-
-	return result, nil
-}
-
-// generateRepositoryWithSharedTypes generates a complete repository using shared pagination types
-func (cg *CodeGenerator) generateRepositoryWithSharedTypes(table Table) (string, error) {
-	// Get required imports
-	imports := cg.typeMapper.GetRequiredImports(table.Columns)
-
-	// Prepare template data
-	data, err := cg.prepareCRUDTemplateData(table)
-	if err != nil {
-		return "", fmt.Errorf("failed to prepare template data: %w", err)
-	}
-
-	// Add extra imports and package info for the template
-	data["ExtraImports"] = imports
-	data["PackageName"] = cg.config.PackageName
-
-	// Execute template using template manager
-	result, err := cg.templateMgr.ExecuteTemplate(TemplateRepositoryComplete, data)
-	if err != nil {
-		return "", fmt.Errorf("failed to execute repository template: %w", err)
-	}
-
-	return result, nil
-}
-
 func (cg *CodeGenerator) GenerateQueries(queries []Query) error {
 	if len(queries) == 0 {
 		return nil
