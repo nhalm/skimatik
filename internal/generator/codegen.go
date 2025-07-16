@@ -55,7 +55,7 @@ func (cg *CodeGenerator) generateTableCode(table Table) (string, error) {
 	standardImports := []string{
 		"context",
 		"fmt",
-		"github.com/nhalm/pgxkit",
+		"github.com/jackc/pgx/v5/pgxpool",
 		"github.com/google/uuid",
 	}
 
