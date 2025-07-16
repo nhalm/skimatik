@@ -28,6 +28,9 @@ type Config struct {
 	// Table configurations (functions to generate per table)
 	TableConfigs map[string]TableConfig `yaml:"table_configs"`
 
+	// Default functions to generate when not specified per table
+	DefaultFunctions []string `yaml:"default_functions"`
+
 	// Options
 	Verbose bool `yaml:"verbose"`
 
@@ -69,12 +72,41 @@ type TypesConfig struct {
 
 // FileConfig represents the structure of a configuration file
 type FileConfig struct {
-	Database DatabaseConfig `yaml:"database"`
-	Output   OutputConfig   `yaml:"output"`
-	Tables   TablesConfig   `yaml:"tables"`
-	Queries  QueriesConfig  `yaml:"queries"`
-	Types    TypesConfig    `yaml:"types"`
-	Verbose  bool           `yaml:"verbose"`
+	Database         DatabaseConfig `yaml:"database"`
+	Output           OutputConfig   `yaml:"output"`
+	Tables           TablesConfig   `yaml:"tables"`
+	Queries          QueriesConfig  `yaml:"queries"`
+	Types            TypesConfig    `yaml:"types"`
+	DefaultFunctions interface{}    `yaml:"default_functions"` // "all" or []string
+	Verbose          bool           `yaml:"verbose"`
+}
+
+// parseDefaultFunctions parses the default_functions field from YAML
+// It can be either "all" (string) or an array of function names
+func parseDefaultFunctions(value interface{}) ([]string, error) {
+	if value == nil {
+		return nil, nil
+	}
+
+	switch v := value.(type) {
+	case string:
+		if v == "all" {
+			return []string{"create", "get", "update", "delete", "list", "paginate"}, nil
+		}
+		return nil, fmt.Errorf("invalid string value for default_functions: %q (only 'all' is supported)", v)
+	case []interface{}:
+		var functions []string
+		for _, item := range v {
+			if str, ok := item.(string); ok {
+				functions = append(functions, str)
+			} else {
+				return nil, fmt.Errorf("default_functions array must contain only strings")
+			}
+		}
+		return functions, nil
+	default:
+		return nil, fmt.Errorf("default_functions must be a string ('all') or array of strings")
+	}
 }
 
 // LoadConfig loads configuration from a YAML file
@@ -95,18 +127,25 @@ func LoadConfig(path string) (*Config, error) {
 		tableNames = append(tableNames, tableName)
 	}
 
+	// Parse default_functions field
+	defaultFunctions, err := parseDefaultFunctions(fileConfig.DefaultFunctions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse default_functions: %w", err)
+	}
+
 	// Convert FileConfig to Config
 	cfg := &Config{
-		DSN:          fileConfig.Database.DSN,
-		Schema:       fileConfig.Database.Schema,
-		OutputDir:    fileConfig.Output.Directory,
-		PackageName:  fileConfig.Output.Package,
-		Tables:       len(fileConfig.Tables) > 0,
-		QueriesDir:   fileConfig.Queries.Directory,
-		Include:      tableNames,
-		TableConfigs: fileConfig.Tables,
-		TypeMappings: fileConfig.Types.Mappings,
-		Verbose:      fileConfig.Verbose,
+		DSN:              fileConfig.Database.DSN,
+		Schema:           fileConfig.Database.Schema,
+		OutputDir:        fileConfig.Output.Directory,
+		PackageName:      fileConfig.Output.Package,
+		Tables:           len(fileConfig.Tables) > 0,
+		QueriesDir:       fileConfig.Queries.Directory,
+		Include:          tableNames,
+		TableConfigs:     fileConfig.Tables,
+		DefaultFunctions: defaultFunctions,
+		TypeMappings:     fileConfig.Types.Mappings,
+		Verbose:          fileConfig.Verbose,
 	}
 
 	// Set defaults
@@ -176,9 +215,19 @@ func (c *Config) ShouldIncludeTable(tableName string) bool {
 
 // GetTableFunctions returns the list of functions to generate for a specific table
 func (c *Config) GetTableFunctions(tableName string) []string {
+	// Check for table-specific override first
 	if config, exists := c.TableConfigs[tableName]; exists {
-		return config.Functions
+		if len(config.Functions) > 0 {
+			return config.Functions
+		}
+		// If table exists but functions are empty, use default
 	}
-	// Default to all CRUD operations if not specified
-	return []string{"create", "get", "update", "delete", "paginate"}
+
+	// Use global default_functions if specified
+	if len(c.DefaultFunctions) > 0 {
+		return c.DefaultFunctions
+	}
+
+	// Final fallback to all functions
+	return []string{"create", "get", "update", "delete", "list", "paginate"}
 }
