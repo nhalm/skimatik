@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nhalm/pgxkit"
 )
 
 // Generator handles the code generation process
 type Generator struct {
 	config     *Config
-	db         *pgxpool.Pool
+	db         *pgxkit.DB
 	introspect *Introspector
 	codegen    *CodeGenerator
 }
@@ -34,7 +34,7 @@ func (g *Generator) Generate(ctx context.Context) error {
 	if err := g.connect(ctx); err != nil {
 		return fmt.Errorf("database connection failed: %w", err)
 	}
-	defer g.db.Close()
+	defer g.db.Shutdown(context.Background())
 
 	// Initialize components
 	g.introspect = NewIntrospector(g.db, g.config.Schema)
@@ -68,27 +68,14 @@ func (g *Generator) Generate(ctx context.Context) error {
 
 // connect establishes a connection to the PostgreSQL database
 func (g *Generator) connect(ctx context.Context) error {
-	config, err := pgxpool.ParseConfig(g.config.DSN)
+	// Use pgxkit for connection management
+	db := pgxkit.NewDB()
+	err := db.Connect(ctx, g.config.DSN)
 	if err != nil {
-		return fmt.Errorf("failed to parse DSN: %w", err)
+		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	// Configure connection pool for introspection
-	config.MaxConns = 5
-	config.MinConns = 1
-
-	pool, err := pgxpool.NewWithConfig(ctx, config)
-	if err != nil {
-		return fmt.Errorf("failed to create connection pool: %w", err)
-	}
-
-	// Test connection
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		return fmt.Errorf("failed to ping database: %w", err)
-	}
-
-	g.db = pool
+	g.db = db
 	return nil
 }
 

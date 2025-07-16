@@ -5,17 +5,17 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nhalm/pgxkit"
 )
 
 // Introspector handles database schema introspection
 type Introspector struct {
-	db     *pgxpool.Pool
+	db     *pgxkit.DB
 	schema string
 }
 
 // NewIntrospector creates a new introspector instance
-func NewIntrospector(db *pgxpool.Pool, schema string) *Introspector {
+func NewIntrospector(db *pgxkit.DB, schema string) *Introspector {
 	return &Introspector{
 		db:     db,
 		schema: schema,

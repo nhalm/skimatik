@@ -16,7 +16,7 @@ func TestSystem_EndToEnd(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 	pool := getTestDB(t)
-	defer pool.Close()
+	defer pool.Shutdown(context.Background())
 
 	tempDir := t.TempDir()
 
@@ -78,7 +78,7 @@ func TestSystem_QueryGeneration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 	pool := getTestDB(t)
-	defer pool.Close()
+	defer pool.Shutdown(context.Background())
 
 	tempDir := t.TempDir()
 
@@ -145,7 +145,7 @@ func TestSystem_RealWorldScenarios(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 	pool := getTestDB(t)
-	defer pool.Close()
+	defer pool.Shutdown(context.Background())
 
 	scenarios := []struct {
 		name        string
@@ -239,7 +239,7 @@ func TestSystem_ErrorHandling(t *testing.T) {
 
 	t.Run("invalid_primary_key_table", func(t *testing.T) {
 		pool := getTestDB(t)
-		defer pool.Close()
+		defer pool.Shutdown(context.Background())
 
 		tempDir := t.TempDir()
 

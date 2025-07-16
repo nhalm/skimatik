@@ -1,38 +1,22 @@
 package generator
 
 import (
-	"context"
-	"os"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nhalm/pgxkit"
 )
 
-// getTestDB creates a connection to the test database
+// getTestDB creates a connection to the test database using pgxkit
 // This function is used across multiple integration test files
-func getTestDB(t *testing.T) *pgxpool.Pool {
+func getTestDB(t *testing.T) *pgxkit.DB {
 	if testing.Short() {
 		t.Skip("Skipping test database connection in short mode")
 		return nil
 	}
 
-	// Use environment variable if set, otherwise use default test database
-	dbURL := os.Getenv("TEST_DATABASE_URL")
-	if dbURL == "" {
-		dbURL = "postgres://dbutil:dbutil_test_password@localhost:5432/dbutil_test?sslmode=disable"
-	}
-
-	pool, err := pgxpool.New(context.Background(), dbURL)
-	if err != nil {
-		t.Skipf("Failed to connect to test database: %v", err)
-	}
-
-	// Test the connection
-	if err := pool.Ping(context.Background()); err != nil {
-		t.Skipf("Failed to ping test database: %v", err)
-	}
-
-	return pool
+	// Use pgxkit's RequireDB which handles test database setup and skipping
+	testDB := pgxkit.RequireDB(t)
+	return testDB.DB // TestDB embeds *DB
 }
 
 // getTestTable returns a standardized test table for code generation tests
