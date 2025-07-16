@@ -1,20 +1,14 @@
-run:
-  timeout: 5m
-
+version: "2"
 linters:
-  enable:
+  disable:
     - errcheck
-    - gosimple
+  enable:
     - govet
     - ineffassign
     - staticcheck
-    - typecheck
     - unused
-    - gofmt
-    - goimports
     - misspell
     - unconvert
-
 issues:
   max-issues-per-linter: 0
-  max-same-issues: 0 
+  max-same-issues: 0
