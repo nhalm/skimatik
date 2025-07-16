@@ -7,22 +7,23 @@ import (
 	"log"
 	"os"
 
-	"github.com/nhalm/skimatic/internal/generator"
+	"github.com/nhalm/skimatik/internal/generator"
 )
 
 func main() {
 	var (
-		config  = flag.String("config", "dbutil-gen.yaml", "Path to YAML configuration file")
+		config  = flag.String("config", "skimatik.yaml", "Path to YAML configuration file")
+		verbose = flag.Bool("verbose", false, "Enable verbose logging output")
 		help    = flag.Bool("help", false, "Show detailed help and examples")
 		version = flag.Bool("version", false, "Show version information")
 	)
 
 	// Custom usage function with better formatting
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, `dbutil-gen - Database-first code generator for PostgreSQL
+		fmt.Fprintf(os.Stderr, `skimatik - Database-first code generator for PostgreSQL
 
 USAGE:
-    dbutil-gen [options]
+    skimatik [options]
 
 DESCRIPTION:
     Generate type-safe Go repositories with built-in pagination from PostgreSQL databases.
@@ -41,17 +42,17 @@ OPTIONS:
 		fmt.Fprintf(os.Stderr, `
 EXAMPLES:
     # Generate repositories using configuration file (recommended)
-    dbutil-gen
+    skimatik
 
     # Generate with custom config file
-    dbutil-gen --config="./my-config.yaml"
+    skimatik --config="./my-config.yaml"
 
     # Generate repositories for specific tables with CLI flags (basic usage)
-    dbutil-gen --dsn="postgres://user:pass@localhost/mydb" --tables --include="users,posts,comments"
+    skimatik --dsn="postgres://user:pass@localhost/mydb" --tables --include="users,posts,comments"
 
     # Use environment variable for connection (DATABASE_URL)
     export DATABASE_URL="postgres://user:pass@localhost/mydb"
-    dbutil-gen --tables
+    skimatik --tables
 
     # Use POSTGRES_* environment variables for connection
     export POSTGRES_HOST="localhost"
@@ -59,16 +60,16 @@ EXAMPLES:
     export POSTGRES_USER="myuser"
     export POSTGRES_PASSWORD="mypass"
     export POSTGRES_DB="mydb"
-    dbutil-gen --tables
+    skimatik --tables
 
     # Generate from SQL files with custom queries
-    dbutil-gen --dsn="postgres://..." --queries="./sql" --output="./repositories"
+    skimatik --dsn="postgres://..." --queries="./sql" --output="./repositories"
 
     # Use configuration file
-    dbutil-gen --config="dbutil-gen.yaml"
+    skimatik --config="skimatik.yaml"
 
     # Verbose output for debugging
-    dbutil-gen --dsn="postgres://..." --tables --verbose
+    skimatik --dsn="postgres://..." --tables --verbose
 
 ENVIRONMENT VARIABLES:
     DATABASE_URL       PostgreSQL connection string (alternative to --dsn)
@@ -80,7 +81,7 @@ ENVIRONMENT VARIABLES:
     POSTGRES_SSLMODE   SSL mode (default: disable)
 
 CONFIGURATION FILE:
-    Create dbutil-gen.yaml:
+    Create skimatik.yaml:
         database:
           dsn: "postgres://user:pass@localhost/mydb"
           schema: "public"
@@ -123,9 +124,9 @@ PAGINATION:
     - O(log n) performance regardless of dataset size
 
 MORE INFO:
-    Documentation: https://github.com/nhalm/skimatic
-    Examples:      https://github.com/nhalm/skimatic/tree/main/examples
-    Issues:        https://github.com/nhalm/skimatic/issues
+    Documentation: https://github.com/nhalm/skimatik
+    Examples:      https://github.com/nhalm/skimatik/tree/main/examples
+    Issues:        https://github.com/nhalm/skimatik/issues
 
 `)
 	}
@@ -139,9 +140,9 @@ MORE INFO:
 	}
 
 	if *version {
-		fmt.Println("dbutil-gen version 2.0.0")
+		fmt.Println("skimatik version 2.0.0")
 		fmt.Println("Database-first code generator for PostgreSQL")
-		fmt.Println("https://github.com/nhalm/skimatic")
+		fmt.Println("https://github.com/nhalm/skimatik")
 		os.Exit(0)
 	}
 
@@ -149,6 +150,11 @@ MORE INFO:
 	cfg, err := generator.LoadConfig(*config)
 	if err != nil {
 		log.Fatalf("Failed to load config file: %v", err)
+	}
+
+	// Override verbose setting from CLI flag if provided
+	if *verbose {
+		cfg.Verbose = true
 	}
 
 	// Create and run generator
