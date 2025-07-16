@@ -8,17 +8,18 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
+	"github.com/nhalm/pgxkit"
 )
 
 // QueryAnalyzer analyzes SQL queries using PostgreSQL EXPLAIN to determine column types and validate queries
 type QueryAnalyzer struct {
-	db         *pgxpool.Pool
+	db         *pgxkit.DB
 	typeMapper *TypeMapper
 }
 
 // NewQueryAnalyzer creates a new query analyzer
-func NewQueryAnalyzer(db *pgxpool.Pool) *QueryAnalyzer {
+func NewQueryAnalyzer(db *pgxkit.DB) *QueryAnalyzer {
 	return &QueryAnalyzer{
 		db:         db,
 		typeMapper: NewTypeMapper(nil),
@@ -301,7 +302,7 @@ func (qa *QueryAnalyzer) validateQuerySyntax(ctx context.Context, query *Query) 
 func (qa *QueryAnalyzer) validateExecQuery(ctx context.Context, query *Query) error {
 	// Try to prepare the statement to validate syntax
 	// We'll use a transaction that we roll back to avoid side effects
-	tx, err := qa.db.Begin(ctx)
+	tx, err := qa.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction for validation: %w", err)
 	}
