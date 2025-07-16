@@ -84,40 +84,70 @@ func (g *Generator) Generate(ctx context.Context) error {
 
 // generateCode performs the actual code generation
 func (g *Generator) generateCode(ctx context.Context) error {
-	// Get tables from database
-	tables, err := g.introspect.GetTables(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to introspect tables: %w", err)
+	// Handle table generation
+	if g.config.Tables {
+		// Get tables from database
+		tables, err := g.introspect.GetTables(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to introspect tables: %w", err)
+		}
+
+		log.Printf("Found %d tables to generate", len(tables))
+
+		// Generate code for each table
+		for _, table := range tables {
+			log.Printf("Generating code for table: %s", table.Name)
+
+			// Validate that the table has a valid UUID primary key
+			pkCol := table.GetPrimaryKeyColumn()
+			if pkCol == nil {
+				log.Printf("Skipping table %s: no single primary key column found", table.Name)
+				continue
+			}
+
+			// Use the type mapper to validate the primary key is a UUID
+			typeMapper := NewTypeMapper(nil)
+			if err := typeMapper.ValidateUUIDPrimaryKey(pkCol); err != nil {
+				log.Printf("Skipping table %s: %v", table.Name, err)
+				continue
+			}
+
+			if err := g.codegen.GenerateTableRepository(table); err != nil {
+				return fmt.Errorf("failed to generate code for table %s: %w", table.Name, err)
+			}
+		}
+
+		// Generate shared files
+		if err := g.codegen.GenerateSharedPaginationTypes(); err != nil {
+			return fmt.Errorf("failed to generate shared files: %w", err)
+		}
 	}
 
-	log.Printf("Found %d tables to generate", len(tables))
+	// Handle query generation
+	if g.config.QueriesDir != "" {
+		log.Printf("Generating code for queries in directory: %s", g.config.QueriesDir)
 
-	// Generate code for each table
-	for _, table := range tables {
-		log.Printf("Generating code for table: %s", table.Name)
-
-		// Validate that the table has a valid UUID primary key
-		pkCol := table.GetPrimaryKeyColumn()
-		if pkCol == nil {
-			log.Printf("Skipping table %s: no single primary key column found", table.Name)
-			continue
+		// Parse queries from SQL files
+		parser := NewQueryParser(g.config.QueriesDir)
+		queries, err := parser.ParseQueries()
+		if err != nil {
+			return fmt.Errorf("failed to parse queries: %w", err)
 		}
 
-		// Use the type mapper to validate the primary key is a UUID
-		typeMapper := NewTypeMapper(nil)
-		if err := typeMapper.ValidateUUIDPrimaryKey(pkCol); err != nil {
-			log.Printf("Skipping table %s: %v", table.Name, err)
-			continue
+		log.Printf("Found %d queries to generate", len(queries))
+
+		// Analyze queries to extract parameters and columns
+		analyzer := NewQueryAnalyzer(g.db)
+		for i := range queries {
+			if err := analyzer.AnalyzeQuery(ctx, &queries[i]); err != nil {
+				return fmt.Errorf("failed to analyze query %s: %w", queries[i].Name, err)
+			}
 		}
 
-		if err := g.codegen.GenerateTableRepository(table); err != nil {
-			return fmt.Errorf("failed to generate code for table %s: %w", table.Name, err)
+		// Generate code for queries
+		if err := g.codegen.GenerateQueries(queries); err != nil {
+			return fmt.Errorf("failed to generate query code: %w", err)
 		}
-	}
-
-	// Generate shared files
-	if err := g.codegen.GenerateSharedPaginationTypes(); err != nil {
-		return fmt.Errorf("failed to generate shared files: %w", err)
 	}
 
 	return nil
