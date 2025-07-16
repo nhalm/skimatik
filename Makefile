@@ -1,4 +1,4 @@
-# Makefile for dbutil-gen project
+# Makefile for skimatik project
 
 # Go parameters
 GOCMD=go
@@ -8,9 +8,9 @@ GOMOD=$(GOCMD) mod
 GOLINT=golangci-lint
 
 # Project parameters
-BINARY_NAME=dbutil-gen
+BINARY_NAME=skimatik
 BINARY_PATH=./bin/$(BINARY_NAME)
-MAIN_PATH=./cmd/dbutil-gen
+MAIN_PATH=./cmd/skimatic
 DOCKER_COMPOSE=docker-compose -f build/docker-compose.yml
 
 # Test parameters
