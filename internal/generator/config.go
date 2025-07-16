@@ -74,6 +74,7 @@ type FileConfig struct {
 	Tables   TablesConfig   `yaml:"tables"`
 	Queries  QueriesConfig  `yaml:"queries"`
 	Types    TypesConfig    `yaml:"types"`
+	Verbose  bool           `yaml:"verbose"`
 }
 
 // LoadConfig loads configuration from a YAML file
@@ -105,6 +106,7 @@ func LoadConfig(path string) (*Config, error) {
 		Include:      tableNames,
 		TableConfigs: fileConfig.Tables,
 		TypeMappings: fileConfig.Types.Mappings,
+		Verbose:      fileConfig.Verbose,
 	}
 
 	// Set defaults
