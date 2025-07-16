@@ -437,7 +437,7 @@ func (cg *CodeGenerator) generateQueryCode(sourceFile string, queries []Query) (
 	// Add standard imports
 	standardImports := []string{
 		"context",
-		"github.com/nhalm/pgxkit",
+		"github.com/jackc/pgx/v5/pgxpool",
 		"github.com/google/uuid",
 	}
 
