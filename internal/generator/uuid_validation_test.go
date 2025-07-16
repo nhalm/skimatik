@@ -11,7 +11,7 @@ func TestUUIDValidation_ValidTables(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 	pool := getTestDB(t)
-	defer pool.Close()
+	defer pool.Shutdown(context.Background())
 
 	introspector := NewIntrospector(pool, "public")
 	typeMapper := NewTypeMapper(nil)
@@ -83,7 +83,7 @@ func TestUUIDValidation_InvalidTables(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 	pool := getTestDB(t)
-	defer pool.Close()
+	defer pool.Shutdown(context.Background())
 
 	introspector := NewIntrospector(pool, "public")
 	typeMapper := NewTypeMapper(nil)
@@ -151,7 +151,7 @@ func TestUUIDValidation_Integration_AllTables(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 	pool := getTestDB(t)
-	defer pool.Close()
+	defer pool.Shutdown(context.Background())
 
 	introspector := NewIntrospector(pool, "public")
 	typeMapper := NewTypeMapper(nil)
@@ -222,7 +222,7 @@ func TestUUIDValidation_PRDRequirement(t *testing.T) {
 	// "All primary keys must be UUID v7 for consistent time-ordered pagination"
 
 	pool := getTestDB(t)
-	defer pool.Close()
+	defer pool.Shutdown(context.Background())
 
 	introspector := NewIntrospector(pool, "public")
 	typeMapper := NewTypeMapper(nil)
