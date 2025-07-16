@@ -32,8 +32,7 @@ const (
 	TemplateQueryPaginated    = "templates/queries/paginated_query.tmpl"
 
 	// Repository templates
-	TemplateRepositoryStruct   = "templates/repository/repository_struct.tmpl"
-	TemplateRepositoryComplete = "templates/repository/complete_repository.tmpl"
+	TemplateRepositoryStruct = "templates/repository/repository_struct.tmpl"
 
 	// Shared templates
 	TemplateStruct = "templates/shared/struct.tmpl"
