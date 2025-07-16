@@ -7,7 +7,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/nhalm/skimatic/internal/generator"
+	"github.com/nhalm/skimatik/internal/generator"
 )
 
 func main() {
