@@ -3,17 +3,17 @@ type Update{{.StructName}}Params struct {
 {{range .UpdateFields}}	{{.Name}} {{.Type}} `{{.Tag}}`
 {{end}}}
 
-// Update updates a {{.StructName}} by ID
+// Update updates an existing {{.StructName}}
 func (r *{{.RepositoryName}}) Update(ctx context.Context, id uuid.UUID, params Update{{.StructName}}Params) (*{{.StructName}}, error) {
 	query := `
 		UPDATE {{.TableName}}
-		SET {{.UpdateAssignments}}
+		SET {{.UpdateColumns}}
 		WHERE {{.IDColumn}} = ${{.IDParamIndex}}
 		RETURNING {{.SelectColumns}}
 	`
 	
 	var {{.ReceiverName}} {{.StructName}}
-	err := r.conn.QueryRow(ctx, query, {{.UpdateArgs}}).Scan({{.ScanArgs}})
+	err := r.db.QueryRow(ctx, query, {{.UpdateArgs}}).Scan({{.ScanArgs}})
 	if err != nil {
 		return nil, err
 	}
