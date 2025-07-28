@@ -230,11 +230,12 @@ if err != nil {
 
 ---
 
-### Phase 4: Update Code Generation Logic ⏳
+### Phase 4: Update Code Generation Logic ✅ COMPLETED
 **Goal**: Update the code generator to use pgxkit-compatible imports and patterns
 
-**Status**: Not Started  
-**Estimated Time**: 3-4 hours  
+**Status**: ✅ **COMPLETED**  
+**Completed**: 2025-01-28  
+**Duration**: 1 hour (already implemented)  
 **Risk Level**: Low  
 
 #### Files to Modify
@@ -267,18 +268,74 @@ type TemplateData struct {
 }
 ```
 
-#### Tasks
-- [ ] Update import generation to include pgxkit
-- [ ] Update template data structures for pgxkit features
-- [ ] Ensure consistent pgxkit patterns across all templates
-- [ ] Test code generation produces correct imports
-- [ ] Verify template rendering works with pgxkit data
+#### What Was Accomplished
 
-#### Success Criteria
-- ✅ Generated files include correct pgxkit imports
-- ✅ Template data supports pgxkit features
-- ✅ Code generation logic is consistent
-- ✅ All generated code compiles successfully
+**1. Import Generation Updated**
+- ✅ **Table generation** - `generateTableCode()` includes `"github.com/nhalm/pgxkit"` in standardImports
+- ✅ **Query generation** - `generateQueryCode()` includes `"github.com/nhalm/pgxkit"` in standardImports
+- ✅ **Proper deduplication** - `combineImports()` ensures no duplicate imports
+
+**2. Template Data Structures**
+- ✅ **Consistent data flow** - All template data structures already support pgxkit patterns
+- ✅ **Repository patterns** - Templates receive correct repository names and database field names
+- ✅ **No breaking changes** - Existing template data structure maintained compatibility
+
+**3. Code Generation Logic**
+- ✅ **Consistent pgxkit patterns** - All generated code uses `*pgxkit.DB` interface
+- ✅ **Proper imports** - Generated files include correct pgxkit imports automatically
+- ✅ **Template rendering** - All templates render correctly with pgxkit data
+
+#### Technical Implementation Details
+
+**Import Generation**:
+```go
+// generateTableCode() - includes pgxkit imports
+standardImports := []string{
+    "context",
+    "fmt",
+    "github.com/nhalm/pgxkit",  // ✅ pgxkit import included
+    "github.com/google/uuid",
+}
+
+// generateQueryCode() - includes pgxkit imports  
+standardImports := []string{
+    "context",
+    "github.com/nhalm/pgxkit",  // ✅ pgxkit import included
+    "github.com/google/uuid",
+}
+```
+
+**Generated Code Structure**:
+```go
+// Repository struct uses pgxkit.DB
+type UserRepository struct {
+    db *pgxkit.DB  // ✅ Uses pgxkit interface
+}
+
+// Constructor accepts pgxkit.DB
+func NewUserRepository(db *pgxkit.DB) *UserRepository {
+    return &UserRepository{db: db}
+}
+
+// Methods use pgxkit database operations
+func (r *UserRepository) Create(ctx context.Context, params CreateUserParams) (*User, error) {
+    err := r.db.QueryRow(ctx, query, args...).Scan(...)  // ✅ Uses pgxkit methods
+    // ...
+}
+```
+
+#### Success Criteria Met
+- ✅ Generated files include correct pgxkit imports (`"github.com/nhalm/pgxkit"`)
+- ✅ Template data supports pgxkit features (all templates work correctly)
+- ✅ Code generation logic is consistent (both table and query generation)
+- ✅ All generated code compiles successfully (verified by tests)
+- ✅ Integration tests pass with pgxkit code generation
+
+#### Benefits Achieved
+- **Automatic pgxkit imports** - No manual import management needed
+- **Consistent interface** - All generated repositories use `*pgxkit.DB`
+- **Template compatibility** - Existing templates work seamlessly with pgxkit
+- **Test coverage** - Full test suite validates pgxkit code generation
 
 ---
 
@@ -499,15 +556,17 @@ database:
 ### Completed Phases
 - ✅ **Phase 1: Add pgxkit Dependencies** - Successfully upgraded to pgxkit v1.1.0
 - ✅ **Phase 2: Migrate CLI App to pgxkit** - All CLI components now use pgxkit
+- ✅ **Phase 3: Update Code Generation Templates** - All templates use pgxkit.DB interface
+- ✅ **Phase 4: Update Code Generation Logic** - Import generation and template data structures complete
 
 ### Current Phase
-**Phase 3: Update Code Generation Templates**
+**Phase 5: Add Enhanced pgxkit Features**
 
 ### Next Actions
-1. Update repository struct template to use pgxkit.DB
-2. Update all CRUD operation templates
-3. Update query templates to use pgxkit methods
-4. Test generated code compiles with pgxkit
+1. Create retry method templates for all operations
+2. Create health check method templates  
+3. Add structured error handling throughout generated code
+4. Create test utility templates with pgxkit.RequireDB()
 
 ### Notes and Decisions
 - **2025-01-15**: Initial migration plan created
