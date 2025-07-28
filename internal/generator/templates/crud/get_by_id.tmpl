@@ -1,5 +1,5 @@
-// GetByID retrieves a {{.StructName}} by its ID
-func (r *{{.RepositoryName}}) GetByID(ctx context.Context, id uuid.UUID) (*{{.StructName}}, error) {
+// Get retrieves a {{.StructName}} by ID
+func (r *{{.RepositoryName}}) Get(ctx context.Context, id uuid.UUID) (*{{.StructName}}, error) {
 	query := `
 		SELECT {{.SelectColumns}}
 		FROM {{.TableName}}
@@ -7,7 +7,7 @@ func (r *{{.RepositoryName}}) GetByID(ctx context.Context, id uuid.UUID) (*{{.St
 	`
 	
 	var {{.ReceiverName}} {{.StructName}}
-	err := r.conn.QueryRow(ctx, query, id).Scan({{.ScanArgs}})
+	err := r.db.QueryRow(ctx, query, id).Scan({{.ScanArgs}})
 	if err != nil {
 		return nil, err
 	}
