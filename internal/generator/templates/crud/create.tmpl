@@ -12,7 +12,7 @@ func (r *{{.RepositoryName}}) Create(ctx context.Context, params Create{{.Struct
 	`
 	
 	var {{.ReceiverName}} {{.StructName}}
-	err := r.conn.QueryRow(ctx, query, {{.InsertArgs}}).Scan({{.ScanArgs}})
+	err := r.db.QueryRow(ctx, query, {{.InsertArgs}}).Scan({{.ScanArgs}})
 	if err != nil {
 		return nil, err
 	}

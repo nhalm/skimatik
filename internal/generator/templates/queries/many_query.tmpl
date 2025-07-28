@@ -2,7 +2,7 @@
 func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterDeclarations}}) ([]{{.ResultType}}, error) {
 	query := `{{.SQL}}`
 	
-	rows, err := r.conn.Query(ctx, query{{.ParameterArgs}})
+	rows, err := r.db.Query(ctx, query{{.ParameterArgs}})
 	if err != nil {
 		return nil, err
 	}
