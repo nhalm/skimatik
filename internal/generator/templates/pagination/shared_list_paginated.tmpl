@@ -33,7 +33,7 @@ func (r *{{.RepositoryName}}) ListPaginated(ctx context.Context, params Paginati
 		LIMIT $2
 	`
 	
-	rows, err := r.conn.Query(ctx, query, cursor, int32(limit+1))
+	rows, err := r.db.Query(ctx, query, cursor, int32(limit+1))
 	if err != nil {
 		return nil, fmt.Errorf("pagination query failed: %w", err)
 	}

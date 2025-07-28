@@ -1,34 +1,44 @@
 // {{.FunctionName}} executes the {{.QueryName}} query with pagination
-func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context, params PaginationParams{{.ParameterDeclarations}}) (*PaginationResult[{{.ResultType}}], error) {
-	// Validate pagination parameters
-	if err := validatePaginationParams(params); err != nil {
-		return nil, err
-	}
-
-	// Build query with pagination
-	query := `{{.SQL}}`
-	args := []interface{}{}
-	
-	// Add cursor condition if provided
-	if params.Cursor != "" {
-		cursorID, err := decodeCursor(params.Cursor)
+func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterDeclarations}}, cursor string, limit int) (*PaginatedResult[{{.ResultType}}], error) {
+	// Parse cursor
+	var afterID uuid.UUID
+	if cursor != "" {
+		decoded, err := base64.URLEncoding.DecodeString(cursor)
 		if err != nil {
 			return nil, fmt.Errorf("invalid cursor: %w", err)
 		}
-		args = append(args, cursorID)
+		afterID, err = uuid.Parse(string(decoded))
+		if err != nil {
+			return nil, fmt.Errorf("invalid cursor format: %w", err)
+		}
 	}
+
+	// Build query with pagination
+	baseQuery := `{{.SQL}}`
+	var query string
+	var args []interface{}
 	
-	// Add limit (request one extra to determine hasMore)
-	args = append(args, params.Limit+1)
+	// Add parameters first
+	{{if .ParameterArgs}}
+	args = append(args, {{.ParameterArgs}})
+	{{end}}
 	
-	// Add user parameters{{.ParameterArgs}}
-	
-	rows, err := r.conn.Query(ctx, query, args...)
+	if cursor != "" {
+		query = fmt.Sprintf("%s AND {{.IDColumn}} > $%d ORDER BY {{.IDColumn}} ASC LIMIT $%d", 
+			baseQuery, len(args)+1, len(args)+2)
+		args = append(args, afterID, limit+1) // +1 to check if there are more results
+	} else {
+		query = fmt.Sprintf("%s ORDER BY {{.IDColumn}} ASC LIMIT $%d", 
+			baseQuery, len(args)+1)
+		args = append(args, limit+1) // +1 to check if there are more results
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	
+
 	var results []{{.ResultType}}
 	for rows.Next() {
 		var result {{.ResultType}}
@@ -38,28 +48,27 @@ func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context, params Pagi
 		}
 		results = append(results, result)
 	}
-	
+
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	
-	// Calculate pagination metadata
-	hasMore := len(results) > int(params.Limit)
+
+	// Check if there are more results
+	hasMore := len(results) > limit
 	if hasMore {
-		// Remove the extra item
-		results = results[:params.Limit]
+		results = results[:limit] // Remove the extra result
 	}
-	
+
+	// Generate next cursor
 	var nextCursor string
 	if hasMore && len(results) > 0 {
-		// Use the last item's ID as the next cursor
-		lastItem := results[len(results)-1]
-		nextCursor = encodeCursor(lastItem.GetID())
+		lastID := results[len(results)-1].GetID()
+		nextCursor = base64.URLEncoding.EncodeToString([]byte(lastID.String()))
 	}
-	
-	return &PaginationResult[{{.ResultType}}]{
+
+	return &PaginatedResult[{{.ResultType}}]{
 		Items:      results,
-		HasMore:    hasMore,
 		NextCursor: nextCursor,
+		HasMore:    hasMore,
 	}, nil
 } 

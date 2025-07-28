@@ -6,7 +6,7 @@ func (r *{{.RepositoryName}}) List(ctx context.Context) ([]{{.StructName}}, erro
 		ORDER BY {{.IDColumn}} ASC
 	`
 	
-	rows, err := r.conn.Query(ctx, query)
+	rows, err := r.db.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}

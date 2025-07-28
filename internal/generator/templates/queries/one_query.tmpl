@@ -3,7 +3,7 @@ func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterD
 	query := `{{.SQL}}`
 	
 	var result {{.ResultType}}
-	err := r.conn.QueryRow(ctx, query{{.ParameterArgs}}).Scan({{.ScanArgs}})
+	err := r.db.QueryRow(ctx, query{{.ParameterArgs}}).Scan({{.ScanArgs}})
 	if err != nil {
 		return nil, err
 	}

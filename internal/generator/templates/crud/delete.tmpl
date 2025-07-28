@@ -1,10 +1,7 @@
-// Delete deletes a {{.StructName}} by ID
+// Delete removes a {{.StructName}} by ID
 func (r *{{.RepositoryName}}) Delete(ctx context.Context, id uuid.UUID) error {
-	query := `
-		DELETE FROM {{.TableName}}
-		WHERE {{.IDColumn}} = $1
-	`
+	query := `DELETE FROM {{.TableName}} WHERE {{.IDColumn}} = $1`
 	
-	_, err := r.conn.Exec(ctx, query, id)
+	_, err := r.db.Exec(ctx, query, id)
 	return err
 } 
