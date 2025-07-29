@@ -33,19 +33,36 @@ type UserManager interface {
     ListUsers(ctx context.Context) ([]repositories.Users, error)
 }
 
-// Implementation embeds generated repository
-type UserService struct {
+// Implementation creates repository that matches interface and embeds generated repository
+type UserRepository struct {
     *repositories.UsersRepository
 }
 
-func NewUserService(userRepo *repositories.UsersRepository) UserManager {
-    return &UserService{
-        UsersRepository: userRepo,
+func NewUserRepository(conn *pgxpool.Pool) UserManager {
+    return &UserRepository{
+        UsersRepository: repositories.NewUsersRepository(conn),
     }
 }
 
 // All interface methods automatically satisfied by embedded repository
 // No additional code needed!
+
+// Service layer uses the interface, fulfilled by the user's repository
+type UserServiceLayer struct {
+    userRepo UserManager  // Property of interface type
+}
+
+func NewUserServiceLayer(userRepo UserManager) *UserServiceLayer {
+    return &UserServiceLayer{
+        userRepo: userRepo,
+    }
+}
+
+// Service methods delegate to repository through interface
+func (s *UserServiceLayer) RegisterNewUser(ctx context.Context, name, email string) (*repositories.Users, error) {
+    params := repositories.CreateUsersParams{Name: name, Email: email}
+    return s.userRepo.CreateUser(ctx, params)
+}
 ```
 
 ### Benefits
@@ -79,31 +96,31 @@ type UserService interface {
     ActivateUser(ctx context.Context, id uuid.UUID) error
 }
 
-type userService struct {
+type userRepository struct {
     *repositories.UsersRepository  // Embedded - provides standard CRUD
     profileRepo *repositories.ProfilesRepository
 }
 
-func NewUserService(userRepo *repositories.UsersRepository, profileRepo *repositories.ProfilesRepository) UserService {
-    return &userService{
-        UsersRepository: userRepo,
-        profileRepo:     profileRepo,
+func NewUserRepository(conn *pgxpool.Pool) UserService {
+    return &userRepository{
+        UsersRepository: repositories.NewUsersRepository(conn),
+        profileRepo:     repositories.NewProfilesRepository(conn),
     }
 }
 
 // Standard methods automatically available via embedding
 
 // Custom business logic using shared utilities
-func (s *userService) CreateUserWithProfile(ctx context.Context, userData repositories.CreateUsersParams, bio string) (*repositories.Users, error) {
+func (r *userRepository) CreateUserWithProfile(ctx context.Context, userData repositories.CreateUsersParams, bio string) (*repositories.Users, error) {
     return repositories.RetryOperation(ctx, repositories.DefaultRetryConfig, "create_user_with_profile", func(ctx context.Context) (*repositories.Users, error) {
         // Create user first
-        user, err := s.UsersRepository.Create(ctx, userData)
+        user, err := r.UsersRepository.Create(ctx, userData)
         if err != nil {
             return nil, err
         }
         
         // Create profile
-        _, err = s.profileRepo.Create(ctx, repositories.CreateProfilesParams{
+        _, err = r.profileRepo.Create(ctx, repositories.CreateProfilesParams{
             UserID: user.Id,
             Bio:    bio,
         })
@@ -116,11 +133,11 @@ func (s *userService) CreateUserWithProfile(ctx context.Context, userData reposi
     })
 }
 
-func (s *userService) GetActiveUsers(ctx context.Context) ([]repositories.Users, error) {
+func (r *userRepository) GetActiveUsers(ctx context.Context) ([]repositories.Users, error) {
     // Custom query using shared database utilities
     query := `SELECT id, name, email, created_at FROM users WHERE is_active = true ORDER BY created_at DESC`
     
-    rows, err := repositories.ExecuteQuery(ctx, s.db, "get_active_users", "Users", query)
+    rows, err := repositories.ExecuteQuery(ctx, r.db, "get_active_users", "Users", query)
     if err != nil {
         return nil, err
     }
@@ -139,9 +156,9 @@ func (s *userService) GetActiveUsers(ctx context.Context) ([]repositories.Users,
     return results, repositories.HandleRowsResult("Users", rows)
 }
 
-func (s *userService) ActivateUser(ctx context.Context, id uuid.UUID) error {
+func (r *userRepository) ActivateUser(ctx context.Context, id uuid.UUID) error {
     query := `UPDATE users SET is_active = true, updated_at = NOW() WHERE id = $1`
-    return repositories.ExecuteNonQuery(ctx, s.db, "activate_user", "Users", query, id)
+    return repositories.ExecuteNonQuery(ctx, r.db, "activate_user", "Users", query, id)
 }
 ```
 
@@ -261,6 +278,22 @@ func (s *blogService) DeleteUserAccount(ctx context.Context, userID uuid.UUID) e
         
         return struct{}{}, nil
     })
+}
+
+// Service layer that uses the BlogService interface
+type BlogApplication struct {
+    blogService BlogService  // Property of interface type
+}
+
+func NewBlogApplication(blogService BlogService) *BlogApplication {
+    return &BlogApplication{
+        blogService: blogService,
+    }
+}
+
+// Application methods delegate to service through interface
+func (app *BlogApplication) HandleCreatePost(authorID uuid.UUID, title, content string) (*BlogPost, error) {
+    return app.blogService.CreateBlogPost(context.Background(), authorID, title, content)
 }
 ```
 
@@ -420,13 +453,11 @@ func TestUserService_Integration(t *testing.T) {
         "DELETE FROM users WHERE email LIKE 'test_%'",
     )
     
-    // Create service with real repositories
-    userRepo := repositories.NewUsersRepository(conn)
-    profileRepo := repositories.NewProfilesRepository(conn)
-    userService := services.NewUserService(userRepo, profileRepo)
+    // Create repository with embedded generated repositories
+    userRepo := services.NewUserRepository(conn)  // This embeds generated repository internally
     
     // Test business logic
-    user, err := userService.CreateUserWithProfile(context.Background(), 
+    user, err := userRepo.CreateUserWithProfile(context.Background(), 
         repositories.CreateUsersParams{
             Name:  "Test User",
             Email: "test_user@example.com",
