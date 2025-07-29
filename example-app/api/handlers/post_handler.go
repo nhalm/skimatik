@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"github.com/nhalm/skimatik/example-app/service"
 )
 
@@ -47,12 +47,10 @@ func (h *PostHandler) GetPublishedPosts(w http.ResponseWriter, r *http.Request) 
 
 // GetPost handles GET /api/posts/{id}
 func (h *PostHandler) GetPost(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	postIDStr := vars["id"]
-
-	postID, err := uuid.Parse(postIDStr)
+	idStr := chi.URLParam(r, "id")
+	postID, err := uuid.Parse(idStr)
 	if err != nil {
-		http.Error(w, "Invalid post ID format", http.StatusBadRequest)
+		http.Error(w, "Invalid post ID", http.StatusBadRequest)
 		return
 	}
 
@@ -62,13 +60,13 @@ func (h *PostHandler) GetPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.writeJSON(w, http.StatusOK, post)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(post)
 }
 
 // GetUserPosts handles GET /api/users/{id}/posts
 func (h *PostHandler) GetUserPosts(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	userIDStr := vars["id"]
+	userIDStr := chi.URLParam(r, "id")
 
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
@@ -78,11 +76,12 @@ func (h *PostHandler) GetUserPosts(w http.ResponseWriter, r *http.Request) {
 
 	posts, err := h.postService.GetUserPosts(r.Context(), userID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		http.Error(w, "Failed to get user posts", http.StatusInternalServerError)
 		return
 	}
 
-	h.writeJSON(w, http.StatusOK, map[string]interface{}{
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
 		"posts": posts,
 		"count": len(posts),
 	})
@@ -113,8 +112,7 @@ func (h *PostHandler) GetPostsWithStats(w http.ResponseWriter, r *http.Request) 
 
 // PublishPost handles PUT /api/posts/{id}/publish
 func (h *PostHandler) PublishPost(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	postIDStr := vars["id"]
+	postIDStr := chi.URLParam(r, "id")
 
 	postID, err := uuid.Parse(postIDStr)
 	if err != nil {
@@ -128,7 +126,8 @@ func (h *PostHandler) PublishPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.writeJSON(w, http.StatusOK, map[string]string{
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Post published successfully",
 	})
 }
