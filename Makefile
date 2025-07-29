@@ -14,7 +14,7 @@ MAIN_PATH=./cmd/skimatic
 DOCKER_COMPOSE=docker-compose -f build/docker-compose.yml
 
 # Test parameters
-TEST_DB_URL=postgres://dbutil:dbutil_test_password@localhost:5432/dbutil_test?sslmode=disable
+TEST_DB_URL=postgres://skimatik:skimatik_test_password@localhost:5432/skimatik_test?sslmode=disable
 TEST_TIMEOUT=30s
 
 # Default target - show help
@@ -68,7 +68,7 @@ dev-setup:
 	@echo "Starting PostgreSQL database..."
 	$(DOCKER_COMPOSE) up -d postgres
 	@echo "Waiting for database to be ready..."
-	@bash -c 'for i in {1..30}; do if pg_isready -h localhost -p 5432 -U dbutil -d dbutil_test >/dev/null 2>&1; then break; fi; sleep 1; done'
+	@bash -c 'for i in {1..30}; do if pg_isready -h localhost -p 5432 -U skimatik -d skimatik_test >/dev/null 2>&1; then break; fi; sleep 1; done'
 	@echo "Running test data migrations..."
 	@./test/run_migrations.sh
 	@echo "✅ Development environment ready!"

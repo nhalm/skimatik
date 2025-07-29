@@ -14,7 +14,7 @@ RUN go mod download
 COPY . .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o dbutil-gen ./cmd/dbutil-gen
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o skimatik ./cmd/skimatic
 
 # Final stage
 FROM alpine:latest
@@ -22,14 +22,14 @@ FROM alpine:latest
 # No runtime dependencies needed
 
 # Create non-root user
-RUN addgroup -g 1001 -S dbutil && \
-    adduser -u 1001 -S dbutil -G dbutil
+RUN addgroup -g 1001 -S skimatik && \
+    adduser -u 1001 -S skimatik -G skimatik
 
 # Copy binary from builder
-COPY --from=builder /app/dbutil-gen /usr/local/bin/dbutil-gen
+COPY --from=builder /app/skimatik /usr/local/bin/skimatik
 
 # Switch to non-root user
-USER dbutil
+USER skimatik
 
 # Default command
-ENTRYPOINT ["dbutil-gen"] 
+ENTRYPOINT ["skimatik"] 

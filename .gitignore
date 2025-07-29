@@ -9,7 +9,7 @@
 /bin/
 
 # Built binary
-/dbutil-gen
+/skimatik
 
 # Test binary, built with `go test -c`
 *.test

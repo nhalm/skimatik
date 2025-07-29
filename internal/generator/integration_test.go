@@ -22,7 +22,7 @@ func TestSystem_EndToEnd(t *testing.T) {
 
 	// Configure for end-to-end generation
 	config := &Config{
-		DSN:         "postgres://dbutil:dbutil_test_password@localhost:5432/dbutil_test",
+		DSN:         "postgres://skimatik:skimatik_test_password@localhost:5432/skimatik_test",
 		Schema:      "public",
 		OutputDir:   tempDir,
 		PackageName: "testgen",
@@ -109,7 +109,7 @@ SELECT id, name, email FROM users ORDER BY id ASC LIMIT $1;`
 
 	// Configure for query generation
 	config := &Config{
-		DSN:         "postgres://dbutil:dbutil_test_password@localhost:5432/dbutil_test",
+		DSN:         "postgres://skimatik:skimatik_test_password@localhost:5432/skimatik_test",
 		Schema:      "public",
 		OutputDir:   tempDir,
 		PackageName: "testgen",
@@ -174,7 +174,7 @@ func TestSystem_RealWorldScenarios(t *testing.T) {
 			tempDir := t.TempDir()
 
 			config := &Config{
-				DSN:         "postgres://dbutil:dbutil_test_password@localhost:5432/dbutil_test",
+				DSN:         "postgres://skimatik:skimatik_test_password@localhost:5432/skimatik_test",
 				Schema:      "public",
 				OutputDir:   tempDir,
 				PackageName: "testgen",
@@ -244,7 +244,7 @@ func TestSystem_ErrorHandling(t *testing.T) {
 		tempDir := t.TempDir()
 
 		config := &Config{
-			DSN:         "postgres://dbutil:dbutil_test_password@localhost:5432/dbutil_test",
+			DSN:         "postgres://skimatik:skimatik_test_password@localhost:5432/skimatik_test",
 			Schema:      "public",
 			OutputDir:   tempDir,
 			PackageName: "testgen",

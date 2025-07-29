@@ -1,12 +1,12 @@
 # Extension fields for reusable configuration
 x-postgres-env: &postgres-env
-  POSTGRES_DB: dbutil_test
-  POSTGRES_USER: dbutil
-  POSTGRES_PASSWORD: dbutil_test_password
+  POSTGRES_DB: skimatik_test
+  POSTGRES_USER: skimatik
+  POSTGRES_PASSWORD: skimatik_test_password
   POSTGRES_HOST_AUTH_METHOD: trust
 
 x-postgres-healthcheck: &postgres-healthcheck
-  test: ["CMD-SHELL", "pg_isready -U dbutil -d dbutil_test"]
+  test: ["CMD-SHELL", "pg_isready -U skimatik -d skimatik_test"]
   interval: 5s
   timeout: 5s
   retries: 5
@@ -14,7 +14,7 @@ x-postgres-healthcheck: &postgres-healthcheck
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: dbutil-postgres
+    container_name: skimatik-postgres
     environment:
       <<: *postgres-env
     ports:
@@ -25,12 +25,12 @@ services:
     healthcheck:
       <<: *postgres-healthcheck
     networks:
-      - dbutil-network
+      - skimatik-network
 
   # Alias for backward compatibility
   db:
     image: postgres:15-alpine
-    container_name: dbutil-db
+    container_name: skimatik-db
     environment:
       <<: *postgres-env
     ports:
@@ -41,12 +41,12 @@ services:
     healthcheck:
       <<: *postgres-healthcheck
     networks:
-      - dbutil-network
+      - skimatik-network
 
 volumes:
   postgres_data:
   db_data:
 
 networks:
-  dbutil-network:
+  skimatik-network:
     driver: bridge 

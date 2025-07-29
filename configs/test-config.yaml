@@ -1,5 +1,5 @@
 database:
-  dsn: "postgres://dbutil:dbutil_test_password@localhost:5432/dbutil_test?sslmode=disable"
+  dsn: "postgres://skimatik:skimatik_test_password@localhost:5432/skimatik_test?sslmode=disable"
   schema: "public"
 
 output:
