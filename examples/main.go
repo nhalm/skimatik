@@ -262,7 +262,7 @@ func (s *UserService) GetUserDashboard(ctx context.Context) ([]Users, error) {
 func main() {
 	// Database connection
 	ctx := context.Background()
-	dsn := "postgres://dbutil:dbutil_test_password@localhost:5432/dbutil_test?sslmode=disable"
+	dsn := "postgres://skimatik:skimatik_test_password@localhost:5432/skimatik_test?sslmode=disable"
 
 	db, err := pgxkit.New(ctx, dsn)
 	if err != nil {

@@ -6,7 +6,7 @@
 set -e
 
 # Configuration
-DB_URL="${DATABASE_URL:-postgres://dbutil:dbutil_test_password@localhost:5432/dbutil_test?sslmode=disable}"
+DB_URL="${DATABASE_URL:-postgres://skimatik:skimatik_test_password@localhost:5432/skimatik_test?sslmode=disable}"
 MIGRATIONS_DIR="$(dirname "$0")/migrations"
 
 echo "Running migrations..."
