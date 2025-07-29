@@ -4,36 +4,7 @@ This is a complete example application demonstrating skimatik's recommended mult
 
 ## 🏗️ Architecture
 
-```
-example-app/
-├── api/
-│   ├── handlers/           # HTTP request handlers
-│   │   ├── user_handler.go
-│   │   ├── post_handler.go
-│   │   └── comment_handler.go
-│   └── middleware/         # HTTP middleware
-│       ├── auth.go
-│       └── logging.go
-├── service/                # Business logic layer
-│   ├── user_service.go
-│   ├── post_service.go
-│   └── comment_service.go
-├── repository/             # Data access layer
-│   └── generated/          # skimatik generated code
-│       ├── users_queries.go
-│       ├── posts_queries.go
-│       ├── comments_queries.go
-│       └── pagination.go
-├── database/               # Database setup
-│   ├── schema.sql
-│   └── queries/            # SQL files with annotations
-│       ├── users.sql
-│       ├── posts.sql
-│       └── comments.sql
-├── go.mod
-├── main.go
-└── README.md
-```
+This example demonstrates a clean multi-layer architecture with proper separation of concerns.
 
 ## 🚀 Quick Start
 
