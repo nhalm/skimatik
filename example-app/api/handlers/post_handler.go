@@ -98,7 +98,7 @@ func (h *PostHandler) GetPostsWithStats(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	posts, err := h.postService.GetPostsWithCommentCount(r.Context(), limit)
+	posts, err := h.postService.GetPostsWithStats(r.Context(), limit)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -130,6 +130,73 @@ func (h *PostHandler) PublishPost(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Post published successfully",
 	})
+}
+
+// GetFeaturedPosts handles GET /api/posts/featured
+func (h *PostHandler) GetFeaturedPosts(w http.ResponseWriter, r *http.Request) {
+	limitStr := r.URL.Query().Get("limit")
+	limit := 5 // default for featured posts
+
+	if limitStr != "" {
+		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 && parsedLimit <= 20 {
+			limit = parsedLimit
+		}
+	}
+
+	posts, err := h.postService.GetFeaturedPosts(r.Context(), limit)
+	if err != nil {
+		http.Error(w, "Failed to get featured posts", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"posts": posts,
+		"count": len(posts),
+	})
+}
+
+// GetPostsByTag handles GET /api/posts/tag/{tag}
+func (h *PostHandler) GetPostsByTag(w http.ResponseWriter, r *http.Request) {
+	tag := chi.URLParam(r, "tag")
+	if tag == "" {
+		http.Error(w, "Tag parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	limitStr := r.URL.Query().Get("limit")
+	limit := 10 // default
+
+	if limitStr != "" {
+		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 && parsedLimit <= 50 {
+			limit = parsedLimit
+		}
+	}
+
+	posts, err := h.postService.GetPostsByTag(r.Context(), tag, limit)
+	if err != nil {
+		http.Error(w, "Failed to get posts by tag", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"posts": posts,
+		"tag":   tag,
+		"count": len(posts),
+	})
+}
+
+// GetPostStatistics handles GET /api/posts/statistics
+func (h *PostHandler) GetPostStatistics(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.postService.GetPostStatistics(r.Context())
+	if err != nil {
+		http.Error(w, "Failed to get post statistics", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
 }
 
 // writeJSON writes a JSON response

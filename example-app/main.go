@@ -92,12 +92,19 @@ func main() {
 		// 	r.Delete("/{id}", userHandler.DeactivateUser)
 		// })
 
-		// Post routes
+		// Post routes - demonstrates custom repository pattern
+		// These will be enabled after running 'make generate'
 		// r.Route("/posts", func(r chi.Router) {
+		// 	// Standard generated query methods
 		// 	r.Get("/", postHandler.GetPublishedPosts)
 		// 	r.Get("/with-stats", postHandler.GetPostsWithStats)
 		// 	r.Get("/{id}", postHandler.GetPost)
 		// 	r.Put("/{id}/publish", postHandler.PublishPost)
+		//
+		// 	// Custom repository methods that extend generated functionality
+		// 	r.Get("/featured", postHandler.GetFeaturedPosts)        // Custom business logic
+		// 	r.Get("/statistics", postHandler.GetPostStatistics)     // Aggregation across queries
+		// 	r.Get("/tag/{tag}", postHandler.GetPostsByTag)          // Custom filtering
 		// })
 	})
 
