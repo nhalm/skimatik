@@ -188,22 +188,22 @@ type UserInterface interface {
     GetActiveUsers(ctx context.Context) ([]repositories.Users, error)
 }
 
-// Embed generated repository and extend with business logic
-type UserService struct {
+// Create repository that implements interface and embeds generated repository
+type UserRepository struct {
     *repositories.UsersRepository  // All generated methods available
     profileRepo *repositories.ProfilesRepository
 }
 
-func NewUserService(userRepo *repositories.UsersRepository, profileRepo *repositories.ProfilesRepository) UserInterface {
-    return &UserService{
-        UsersRepository: userRepo,
-        profileRepo:     profileRepo,
+func NewUserRepository(conn *pgxpool.Pool) UserInterface {
+    return &UserRepository{
+        UsersRepository: repositories.NewUsersRepository(conn),
+        profileRepo:     repositories.NewProfilesRepository(conn),
     }
 }
 
 // Implement interface using generated methods (no custom logic needed)
-func (s *UserService) CreateUser(ctx context.Context, params repositories.CreateUsersParams) (*repositories.Users, error) {
-    return s.UsersRepository.Create(ctx, params)
+func (r *UserRepository) CreateUser(ctx context.Context, params repositories.CreateUsersParams) (*repositories.Users, error) {
+    return r.UsersRepository.Create(ctx, params)
 }
 
 // Custom business logic using shared utilities
@@ -235,11 +235,11 @@ func (s *UserService) CreateUserWithProfile(ctx context.Context, userData reposi
 }
 
 // Custom queries with shared error handling
-func (s *UserService) GetActiveUsers(ctx context.Context) ([]repositories.Users, error) {
+func (r *UserRepository) GetActiveUsers(ctx context.Context) ([]repositories.Users, error) {
     return repositories.RetryOperationSlice(ctx, repositories.DefaultRetryConfig, "get_active_users", func(ctx context.Context) ([]repositories.Users, error) {
         query := `SELECT id, name, email, created_at FROM users WHERE is_active = true ORDER BY created_at DESC`
         
-        rows, err := repositories.ExecuteQuery(ctx, s.db, "get_active_users", "Users", query)
+        rows, err := repositories.ExecuteQuery(ctx, r.db, "get_active_users", "Users", query)
         if err != nil {
             return nil, err
         }
@@ -257,6 +257,49 @@ func (s *UserService) GetActiveUsers(ctx context.Context) ([]repositories.Users,
         
         return results, repositories.HandleRowsResult("Users", rows)
     })
+}
+
+// Service layer uses the interface, fulfilled by the user's repository
+type UserService struct {
+    userRepo UserInterface  // Property of interface type
+}
+
+func NewUserService(userRepo UserInterface) *UserService {
+    return &UserService{
+        userRepo: userRepo,
+    }
+}
+
+// Service methods delegate to repository through interface
+func (s *UserService) RegisterUser(ctx context.Context, name, email string) (*repositories.Users, error) {
+    params := repositories.CreateUsersParams{
+        Name:  name,
+        Email: email,
+    }
+    return s.userRepo.CreateUser(ctx, params)
+}
+
+func (s *UserService) GetUserDashboard(ctx context.Context) ([]repositories.Users, error) {
+    // Business logic can use any interface methods
+    return s.userRepo.GetActiveUsers(ctx)
+}
+```
+
+### Usage in Application
+
+```go
+func main() {
+    conn, _ := pgxpool.New(ctx, "postgres://...")
+    
+    // Create repository that implements interface
+    userRepo := NewUserRepository(conn)
+    
+    // Service has property of interface type, fulfilled by repository
+    userService := NewUserService(userRepo)
+    
+    // Use service for business operations
+    user, err := userService.RegisterUser(ctx, "John", "john@example.com")
+    dashboard, err := userService.GetUserDashboard(ctx)
 }
 ```
 
