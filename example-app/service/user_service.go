@@ -5,93 +5,127 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	// "github.com/nhalm/skimatik/example-app/repository/generated"
+	"github.com/nhalm/skimatik/example-app/domain"
 )
-
-// Temporarily comment out generated types until code generation runs
-// This will be uncommented when skimatik generates the code
-
-// UserService handles business logic for user operations
-type UserService interface {
-	GetActiveUsers(ctx context.Context, limit int) ([]UserSummary, error)
-	GetUserByEmail(ctx context.Context, email string) (*UserDetail, error)
-	SearchUsers(ctx context.Context, query string) ([]UserSummary, error)
-	GetUserStats(ctx context.Context, userID uuid.UUID) (*UserStats, error)
-	DeactivateUser(ctx context.Context, userID uuid.UUID) error
-	GetUser(ctx context.Context, userID uuid.UUID) (*UserDetail, error)
-}
-
-// UserSummary represents basic user information
-type UserSummary struct {
-	ID       uuid.UUID `json:"id"`
-	Name     string    `json:"name"`
-	Email    string    `json:"email"`
-	IsActive bool      `json:"is_active"`
-}
-
-// UserDetail represents detailed user information
-type UserDetail struct {
-	ID          uuid.UUID `json:"id"`
-	Name        string    `json:"name"`
-	Email       string    `json:"email"`
-	IsActive    bool      `json:"is_active"`
-	PostCount   int       `json:"post_count"`
-	CreatedAt   string    `json:"created_at"`
-	LastLoginAt *string   `json:"last_login_at,omitempty"`
-}
-
-// UserStats represents user engagement statistics
-type UserStats struct {
-	UserID       uuid.UUID `json:"user_id"`
-	PostCount    int       `json:"post_count"`
-	CommentCount int       `json:"comment_count"`
-	LastActivity *string   `json:"last_activity"`
-}
 
 var ErrUserNotFound = fmt.Errorf("user not found")
 
-// TODO: Implement when generated code is available
-/*
-type userService struct {
-	queries generated.UserQueries
+// UserRepository defines what the service layer needs from a user repository
+// This interface is owned by the consumer (service), not the implementer (repository package)
+// The repository should return domain types, not database-specific types
+type UserRepository interface {
+	// Basic generated query methods - all return domain types
+	GetActiveUsers(ctx context.Context, limit int32) ([]domain.UserSummary, error)
+	GetUserByEmail(ctx context.Context, email string) (*domain.UserDetail, error)
+	SearchUsers(ctx context.Context, query string) ([]domain.UserSummary, error)
+	GetUserStats(ctx context.Context, userID uuid.UUID) (*domain.UserStats, error)
+	DeactivateUser(ctx context.Context, userID uuid.UUID) error
+	GetUser(ctx context.Context, userID uuid.UUID) (*domain.UserDetail, error)
 }
 
-func NewUserService(queries generated.UserQueries) UserService {
+// userService implements the api.UserService interface using domain types
+type userService struct {
+	userRepo UserRepository
+}
+
+// NewUserService creates a new user service that implements api.UserService
+func NewUserService(userRepo UserRepository) *userService {
 	return &userService{
-		queries: queries,
+		userRepo: userRepo,
 	}
 }
 
-// Implementation methods will be added after code generation
-*/
+// Implement api.UserService interface methods
+// The service layer focuses on business logic, not data conversion
 
-// Temporary stub implementation - replace when generated code is available
-type userService struct{}
+func (s *userService) GetActiveUsers(ctx context.Context, limit int) ([]domain.UserSummary, error) {
+	users, err := s.userRepo.GetActiveUsers(ctx, int32(limit))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get active users: %w", err)
+	}
 
-func NewUserService(queries interface{}) UserService {
-	return &userService{}
+	// Service layer can apply business logic here if needed
+	// For now, we just pass through the domain types
+	return users, nil
 }
 
-func (s *userService) GetActiveUsers(ctx context.Context, limit int) ([]UserSummary, error) {
-	return nil, fmt.Errorf("not implemented - awaiting code generation")
+func (s *userService) GetUserByEmail(ctx context.Context, email string) (*domain.UserDetail, error) {
+	user, err := s.userRepo.GetUserByEmail(ctx, email)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user by email: %w", err)
+	}
+
+	// Service layer can apply business logic here if needed
+	return user, nil
 }
 
-func (s *userService) GetUserByEmail(ctx context.Context, email string) (*UserDetail, error) {
-	return nil, fmt.Errorf("not implemented - awaiting code generation")
+func (s *userService) SearchUsers(ctx context.Context, query string) ([]domain.UserSummary, error) {
+	users, err := s.userRepo.SearchUsers(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search users: %w", err)
+	}
+
+	// Service layer can apply business logic here if needed
+	return users, nil
 }
 
-func (s *userService) SearchUsers(ctx context.Context, query string) ([]UserSummary, error) {
-	return nil, fmt.Errorf("not implemented - awaiting code generation")
-}
+func (s *userService) GetUserStats(ctx context.Context, userID uuid.UUID) (*domain.UserStats, error) {
+	stats, err := s.userRepo.GetUserStats(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user stats: %w", err)
+	}
 
-func (s *userService) GetUserStats(ctx context.Context, userID uuid.UUID) (*UserStats, error) {
-	return nil, fmt.Errorf("not implemented - awaiting code generation")
+	// Service layer can apply business logic here if needed
+	return stats, nil
 }
 
 func (s *userService) DeactivateUser(ctx context.Context, userID uuid.UUID) error {
+	err := s.userRepo.DeactivateUser(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("failed to deactivate user: %w", err)
+	}
+
+	// Service layer can add business logic here (e.g., send notification, log activity)
+	return nil
+}
+
+func (s *userService) GetUser(ctx context.Context, userID uuid.UUID) (*domain.UserDetail, error) {
+	user, err := s.userRepo.GetUser(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	// Service layer can apply business logic here if needed
+	return user, nil
+}
+
+// Temporary stub implementation - replace when repository is implemented
+type stubUserService struct{}
+
+func NewStubUserService() *stubUserService {
+	return &stubUserService{}
+}
+
+func (s *stubUserService) GetActiveUsers(ctx context.Context, limit int) ([]domain.UserSummary, error) {
+	return nil, fmt.Errorf("not implemented - awaiting code generation")
+}
+
+func (s *stubUserService) GetUserByEmail(ctx context.Context, email string) (*domain.UserDetail, error) {
+	return nil, fmt.Errorf("not implemented - awaiting code generation")
+}
+
+func (s *stubUserService) SearchUsers(ctx context.Context, query string) ([]domain.UserSummary, error) {
+	return nil, fmt.Errorf("not implemented - awaiting code generation")
+}
+
+func (s *stubUserService) GetUserStats(ctx context.Context, userID uuid.UUID) (*domain.UserStats, error) {
+	return nil, fmt.Errorf("not implemented - awaiting code generation")
+}
+
+func (s *stubUserService) DeactivateUser(ctx context.Context, userID uuid.UUID) error {
 	return fmt.Errorf("not implemented - awaiting code generation")
 }
 
-func (s *userService) GetUser(ctx context.Context, userID uuid.UUID) (*UserDetail, error) {
+func (s *stubUserService) GetUser(ctx context.Context, userID uuid.UUID) (*domain.UserDetail, error) {
 	return nil, fmt.Errorf("not implemented - awaiting code generation")
 }

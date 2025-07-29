@@ -34,9 +34,13 @@ go.sum.backup
 /test_output/
 /test-output/
 
-# Generated files (anywhere in project)
+# Generated files (exclude from main project, but allow in example-app)
 *_generated.go
 pagination.go
+
+# Exception: Allow generated files in example-app
+!example-app/**/*_generated.go
+!example-app/**/pagination.go
 
 # Coverage files
 coverage.out

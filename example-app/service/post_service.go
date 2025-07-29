@@ -5,169 +5,144 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	// "github.com/nhalm/skimatik/example-app/repository"
-	// "github.com/nhalm/skimatik/example-app/repository/generated"
+	"github.com/nhalm/skimatik/example-app/domain"
 )
-
-// PostService handles business logic for post operations
-type PostService interface {
-	GetPublishedPosts(ctx context.Context, limit int) ([]PostSummary, error)
-	GetPostWithAuthor(ctx context.Context, postID uuid.UUID) (*PostDetail, error)
-	GetUserPosts(ctx context.Context, userID uuid.UUID) ([]PostSummary, error)
-	GetPostsWithStats(ctx context.Context, limit int) ([]PostWithStats, error)
-	PublishPost(ctx context.Context, postID uuid.UUID) error
-
-	// Custom business methods that use the embedded repository
-	GetFeaturedPosts(ctx context.Context, limit int) ([]PostSummary, error)
-	GetPostsByTag(ctx context.Context, tagName string, limit int) ([]PostSummary, error)
-	GetPostStatistics(ctx context.Context) (*PostStats, error)
-}
-
-// PostSummary represents a post summary for listings
-type PostSummary struct {
-	ID          uuid.UUID `json:"id"`
-	Title       string    `json:"title"`
-	Content     string    `json:"content"`
-	AuthorID    uuid.UUID `json:"author_id"`
-	IsPublished bool      `json:"is_published"`
-	PublishedAt *string   `json:"published_at,omitempty"`
-	CreatedAt   string    `json:"created_at"`
-}
-
-// PostDetail represents detailed post information with author
-type PostDetail struct {
-	ID          uuid.UUID `json:"id"`
-	Title       string    `json:"title"`
-	Content     string    `json:"content"`
-	AuthorID    uuid.UUID `json:"author_id"`
-	AuthorName  string    `json:"author_name"`
-	AuthorEmail string    `json:"author_email"`
-	IsPublished bool      `json:"is_published"`
-	PublishedAt *string   `json:"published_at,omitempty"`
-	CreatedAt   string    `json:"created_at"`
-}
-
-// PostWithStats represents a post with engagement statistics
-type PostWithStats struct {
-	ID           uuid.UUID `json:"id"`
-	Title        string    `json:"title"`
-	AuthorID     uuid.UUID `json:"author_id"`
-	AuthorName   string    `json:"author_name"`
-	CommentCount int       `json:"comment_count"`
-	CreatedAt    string    `json:"created_at"`
-}
-
-// PostStats represents aggregated post statistics
-type PostStats struct {
-	TotalPosts     int `json:"total_posts"`
-	PublishedPosts int `json:"published_posts"`
-	DraftPosts     int `json:"draft_posts"`
-}
 
 var ErrPostNotFound = fmt.Errorf("post not found")
 
-// TODO: Real implementation when generated code is available
-/*
-// postService demonstrates the proper layered architecture:
-// Service Layer -> Custom Repository -> Generated Queries -> Database
+// postService implements the api.PostService interface using domain types
 type postService struct {
-	// Use custom repository that embeds generated queries
-	postRepo *repository.PostRepository
+	postRepo PostRepository
 }
 
-func NewPostService(postRepo *repository.PostRepository) PostService {
+// NewPostService creates a new post service that implements api.PostService
+func NewPostService(postRepo PostRepository) *postService {
 	return &postService{
 		postRepo: postRepo,
 	}
 }
 
-// Standard methods that delegate to generated queries via custom repository
-func (s *postService) GetPublishedPosts(ctx context.Context, limit int) ([]PostSummary, error) {
-	// Custom repository calls generated query methods
-	rows, err := s.postRepo.GetPublishedPosts(ctx, int32(limit))
+// Implement api.PostService interface methods
+// The service layer focuses on business logic, not data conversion
+
+func (s *postService) GetPublishedPosts(ctx context.Context, limit int) ([]domain.PostSummary, error) {
+	posts, err := s.postRepo.GetPublishedPosts(ctx, int32(limit))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get published posts: %w", err)
 	}
 
-	// Convert generated types to service types
-	summaries := make([]PostSummary, len(rows))
-	for i, row := range rows {
-		summaries[i] = PostSummary{
-			ID:          row.ID,
-			Title:       row.Title,
-			Content:     row.Content,
-			AuthorID:    row.AuthorID,
-			IsPublished: true,
-			CreatedAt:   row.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		}
-	}
-
-	return summaries, nil
+	// Service layer can apply business logic here if needed
+	// For now, we just pass through the domain types
+	return posts, nil
 }
 
-// Custom business methods that use repository's extended functionality
-func (s *postService) GetFeaturedPosts(ctx context.Context, limit int) ([]PostSummary, error) {
-	// Use custom repository method that builds on generated queries
-	rows, err := s.postRepo.GetFeaturedPosts(ctx, limit)
+func (s *postService) GetPostWithAuthor(ctx context.Context, postID uuid.UUID) (*domain.PostDetail, error) {
+	post, err := s.postRepo.GetPostWithAuthor(ctx, postID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get post with author: %w", err)
+	}
+
+	// Service layer can apply business logic here if needed
+	return post, nil
+}
+
+func (s *postService) GetUserPosts(ctx context.Context, userID uuid.UUID) ([]domain.PostSummary, error) {
+	posts, err := s.postRepo.GetUserPosts(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user posts: %w", err)
+	}
+
+	// Service layer can apply business logic here if needed
+	return posts, nil
+}
+
+func (s *postService) GetPostsWithStats(ctx context.Context, limit int) ([]domain.PostWithStats, error) {
+	posts, err := s.postRepo.GetPostsWithStats(ctx, int32(limit))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get posts with stats: %w", err)
+	}
+
+	// Service layer can apply business logic here if needed
+	return posts, nil
+}
+
+func (s *postService) PublishPost(ctx context.Context, postID uuid.UUID) error {
+	err := s.postRepo.PublishPost(ctx, postID)
+	if err != nil {
+		return fmt.Errorf("failed to publish post: %w", err)
+	}
+
+	// Service layer can add business logic here (e.g., send notifications, update cache)
+	return nil
+}
+
+// Custom business methods
+
+func (s *postService) GetFeaturedPosts(ctx context.Context, limit int) ([]domain.PostSummary, error) {
+	posts, err := s.postRepo.GetFeaturedPosts(ctx, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get featured posts: %w", err)
 	}
 
-	// Convert to service types...
-	return convertToSummaries(rows), nil
+	// Service layer can apply business logic here if needed
+	return posts, nil
 }
 
-func (s *postService) GetPostsByTag(ctx context.Context, tagName string, limit int) ([]PostSummary, error) {
-	// Delegate to custom repository
-	rows, err := s.postRepo.GetPostsByTag(ctx, tagName, limit)
+func (s *postService) GetPostsByTag(ctx context.Context, tagName string, limit int) ([]domain.PostSummary, error) {
+	posts, err := s.postRepo.GetPostsByTag(ctx, tagName, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get posts by tag: %w", err)
 	}
 
-	return convertToSummaries(rows), nil
+	// Service layer can apply business logic here if needed
+	return posts, nil
 }
 
-func (s *postService) GetPostStatistics(ctx context.Context) (*PostStats, error) {
-	// Use custom repository's aggregation method
-	return s.postRepo.GetPostStatistics(ctx)
-}
-*/
+func (s *postService) GetPostStatistics(ctx context.Context) (*domain.PostStats, error) {
+	stats, err := s.postRepo.GetPostStatistics(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get post statistics: %w", err)
+	}
 
-// Temporary stub implementation - replace when generated code is available
-type postService struct{}
-
-func NewPostService(queries interface{}) PostService {
-	return &postService{}
+	// Service layer can apply business logic here if needed
+	return stats, nil
 }
 
-func (s *postService) GetPublishedPosts(ctx context.Context, limit int) ([]PostSummary, error) {
+// Temporary stub implementation - replace when repository is implemented
+type stubPostService struct{}
+
+func NewStubPostService() *stubPostService {
+	return &stubPostService{}
+}
+
+func (s *stubPostService) GetPublishedPosts(ctx context.Context, limit int) ([]domain.PostSummary, error) {
 	return nil, fmt.Errorf("not implemented - awaiting code generation")
 }
 
-func (s *postService) GetPostWithAuthor(ctx context.Context, postID uuid.UUID) (*PostDetail, error) {
+func (s *stubPostService) GetPostWithAuthor(ctx context.Context, postID uuid.UUID) (*domain.PostDetail, error) {
 	return nil, fmt.Errorf("not implemented - awaiting code generation")
 }
 
-func (s *postService) GetUserPosts(ctx context.Context, userID uuid.UUID) ([]PostSummary, error) {
+func (s *stubPostService) GetUserPosts(ctx context.Context, userID uuid.UUID) ([]domain.PostSummary, error) {
 	return nil, fmt.Errorf("not implemented - awaiting code generation")
 }
 
-func (s *postService) GetPostsWithStats(ctx context.Context, limit int) ([]PostWithStats, error) {
+func (s *stubPostService) GetPostsWithStats(ctx context.Context, limit int) ([]domain.PostWithStats, error) {
 	return nil, fmt.Errorf("not implemented - awaiting code generation")
 }
 
-func (s *postService) PublishPost(ctx context.Context, postID uuid.UUID) error {
+func (s *stubPostService) PublishPost(ctx context.Context, postID uuid.UUID) error {
 	return fmt.Errorf("not implemented - awaiting code generation")
 }
 
-func (s *postService) GetFeaturedPosts(ctx context.Context, limit int) ([]PostSummary, error) {
+func (s *stubPostService) GetFeaturedPosts(ctx context.Context, limit int) ([]domain.PostSummary, error) {
 	return nil, fmt.Errorf("not implemented - awaiting code generation")
 }
 
-func (s *postService) GetPostsByTag(ctx context.Context, tagName string, limit int) ([]PostSummary, error) {
+func (s *stubPostService) GetPostsByTag(ctx context.Context, tagName string, limit int) ([]domain.PostSummary, error) {
 	return nil, fmt.Errorf("not implemented - awaiting code generation")
 }
 
-func (s *postService) GetPostStatistics(ctx context.Context) (*PostStats, error) {
+func (s *stubPostService) GetPostStatistics(ctx context.Context) (*domain.PostStats, error) {
 	return nil, fmt.Errorf("not implemented - awaiting code generation")
 }
