@@ -37,49 +37,19 @@ example-app/
 
 ## 🚀 Quick Start
 
-### Automated Workflow (Recommended)
+### Quick Start
 
-**Complete setup and run in one command:**
+**Three simple steps:**
 ```bash
-make dev
+make setup     # Start database and apply schema
+make generate  # Generate Go code with skimatik  
+make run       # Start the API server
 ```
 
-This will automatically:
-1. 🐘 Start PostgreSQL database in Docker
-2. 📋 Apply schema with sample data
-3. ⚡ Generate Go code with skimatik
-4. 🚀 Start the API server
-
-**Other useful commands:**
+**Available commands:**
 ```bash
-make setup     # Database + code generation only
-make test-api  # Test all API endpoints
-make demo      # Show complete workflow explanation
-make help      # See all available commands
-```
-
-### Manual Setup (Step by Step)
-
-If you prefer to run each step manually:
-
-#### 1. Setup Database
-```bash
-make db-start db-create db-migrate
-```
-
-#### 2. Generate Code
-```bash
-make generate
-```
-
-#### 3. Run Application
-```bash
-make run
-```
-
-#### 4. Test API
-```bash
-make test-api
+make help      # Show all commands
+make clean     # Clean up everything
 ```
 
 Or test manually:
