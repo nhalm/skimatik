@@ -122,4 +122,50 @@ jobs:
       env:
         DATABASE_URL: postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable
 
+  example-app-integration:
+    name: Example App Integration Test
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: blog
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+    
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-1.23-${{ hashFiles('**/go.sum') }}-v2
+        restore-keys: |
+          ${{ runner.os }}-go-1.23-v2-
+    
+    - name: Download dependencies
+      run: go mod download
+    
+    - name: Install coreutils for timeout command
+      run: sudo apt-get update && sudo apt-get install -y coreutils
+    
+    - name: Run example app integration test
+      run: make example-app-test
+
  

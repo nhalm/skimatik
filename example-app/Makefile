@@ -3,7 +3,7 @@
 # Configuration
 DATABASE_URL = postgres://postgres:password@localhost:5432/blog?sslmode=disable
 
-.PHONY: help setup generate run clean
+.PHONY: help setup generate test run clean
 
 help: ## Show available commands
 	@echo "Example Blog Application"
@@ -11,10 +11,11 @@ help: ## Show available commands
 	@echo "Commands:"
 	@echo "  make setup     - Start database and apply schema"
 	@echo "  make generate  - Generate Go code with skimatik"
+	@echo "  make test      - Run integration tests"
 	@echo "  make run       - Run the application"
 	@echo "  make clean     - Clean generated code"
 	@echo ""
-	@echo "Quick start: make setup && make generate && make run"
+	@echo "Quick start: make setup && make generate && make test && make run"
 
 setup: ## Start database and apply schema
 	@echo "🐘 Setting up database..."
@@ -32,6 +33,11 @@ generate: ## Generate Go code with skimatik
 	@echo "⚡ Generating code..."
 	@skimatik
 	@echo "✅ Code generated"
+
+test: ## Run integration tests for the application
+	@echo "🧪 Testing application..."
+	@go test -v -tags=integration .
+	@echo "✅ Application tests passed"
 
 run: ## Run the application
 	@echo "🚀 Starting server..."
