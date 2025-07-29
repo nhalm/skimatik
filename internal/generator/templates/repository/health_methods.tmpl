@@ -1,7 +1,7 @@
 // HealthCheck performs a basic health check for the {{.StructName}} repository
 func (r *{{.RepositoryName}}) HealthCheck(ctx context.Context) error {
-	// Check basic database connectivity
-	if err := r.db.Ping(ctx); err != nil {
+	// Check basic database connectivity using pgxkit's HealthCheck
+	if err := r.db.HealthCheck(ctx); err != nil {
 		return fmt.Errorf("database connection failed for {{.StructName}}: %w", err)
 	}
 
@@ -26,8 +26,8 @@ func (r *{{.RepositoryName}}) HealthCheckDetailed(ctx context.Context) (*{{.Stru
 		Checks:        make(map[string]string),
 	}
 
-	// Test database connection
-	if err := r.db.Ping(ctx); err != nil {
+	// Test database connection using pgxkit's HealthCheck
+	if err := r.db.HealthCheck(ctx); err != nil {
 		status.Healthy = false
 		status.Checks["connection"] = fmt.Sprintf("FAILED: %v", err)
 		status.Error = err.Error()
@@ -76,9 +76,9 @@ func (r *{{.RepositoryName}}) HealthCheckDetailed(ctx context.Context) (*{{.Stru
 		tx.Rollback(ctx)
 	}
 
-	// Measure response time for a simple query
+	// Measure response time for database health check
 	start := time.Now()
-	if err := r.db.QueryRow(ctx, `SELECT 1`).Scan(new(int)); err != nil {
+	if err := r.db.HealthCheck(ctx); err != nil {
 		status.Checks["response_time"] = fmt.Sprintf("FAILED: %v", err)
 	} else {
 		duration := time.Since(start)

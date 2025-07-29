@@ -34,7 +34,6 @@ const (
 	// Repository templates
 	TemplateRepositoryStruct = "templates/repository/repository_struct.tmpl"
 	TemplateRepositoryRetry  = "templates/repository/retry_methods.tmpl"
-	TemplateRepositoryHealth = "templates/repository/health_methods.tmpl"
 
 	// Shared templates
 	TemplateStruct             = "templates/shared/struct.tmpl"

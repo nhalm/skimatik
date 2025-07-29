@@ -30,11 +30,7 @@ setup: ## Start database and apply schema
 
 generate: ## Generate Go code with skimatik
 	@echo "⚡ Generating code..."
-	@skimatik \
-		--database-url="$(DATABASE_URL)" \
-		--queries-dir="database/queries" \
-		--output-dir="repository/generated" \
-		--package-name="generated"
+	@skimatik
 	@echo "✅ Code generated"
 
 run: ## Run the application

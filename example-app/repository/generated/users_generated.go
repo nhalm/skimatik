@@ -5,15 +5,12 @@ package generated
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"time"
+
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/nhalm/pgxkit"
-	"strings"
-	"time"
 )
 
 // Users represents a row from the users table
@@ -250,9 +247,9 @@ func (r *UsersRepository) GetWithRetry(ctx context.Context, id uuid.UUID) (*User
 }
 
 // UpdateWithRetry updates an existing Users with retry logic
-func (r *UsersRepository) UpdateWithRetry(ctx context.Context, params UpdateUsersParams) (*Users, error) {
+func (r *UsersRepository) UpdateWithRetry(ctx context.Context, id uuid.UUID, params UpdateUsersParams) (*Users, error) {
 	return RetryOperation(ctx, DefaultRetryConfig, "update", func(ctx context.Context) (*Users, error) {
-		return r.Update(ctx, params)
+		return r.Update(ctx, id, params)
 	})
 }
 
@@ -261,107 +258,4 @@ func (r *UsersRepository) ListWithRetry(ctx context.Context) ([]Users, error) {
 	return RetryOperationSlice(ctx, DefaultRetryConfig, "list", func(ctx context.Context) ([]Users, error) {
 		return r.List(ctx)
 	})
-}
-
-// HealthCheck performs a basic health check for the Users repository
-func (r *UsersRepository) HealthCheck(ctx context.Context) error {
-	// Check basic database connectivity
-	if err := r.db.Ping(ctx); err != nil {
-		return fmt.Errorf("database connection failed for Users: %w", err)
-	}
-
-	// Check if table is accessible with a simple count query
-	query := `SELECT COUNT(*) FROM users LIMIT 1`
-	var count int64
-	err := r.db.QueryRow(ctx, query).Scan(&count)
-	if err != nil {
-		return fmt.Errorf("table users is not accessible: %w", err)
-	}
-
-	return nil
-}
-
-// HealthCheckDetailed performs a comprehensive health check for the Users repository
-func (r *UsersRepository) HealthCheckDetailed(ctx context.Context) (*UsersHealthStatus, error) {
-	status := &UsersHealthStatus{
-		TableName:  "users",
-		Repository: "UsersRepository",
-		CheckTime:  time.Now(),
-		Healthy:    true,
-		Checks:     make(map[string]string),
-	}
-
-	// Test database connection
-	if err := r.db.Ping(ctx); err != nil {
-		status.Healthy = false
-		status.Checks["connection"] = fmt.Sprintf("FAILED: %v", err)
-		status.Error = err.Error()
-		return status, err
-	}
-	status.Checks["connection"] = "OK"
-
-	// Test table accessibility
-	countQuery := `SELECT COUNT(*) FROM users`
-	var totalRecords int64
-	if err := r.db.QueryRow(ctx, countQuery).Scan(&totalRecords); err != nil {
-		status.Healthy = false
-		status.Checks["table_access"] = fmt.Sprintf("FAILED: %v", err)
-		status.Error = err.Error()
-		return status, err
-	}
-	status.Checks["table_access"] = "OK"
-	status.TotalRecords = totalRecords
-
-	// Test table structure by attempting to select from all expected columns
-	structQuery := `SELECT id, name, email, bio, is_active, created_at, updated_at FROM users LIMIT 1`
-	rows, err := r.db.Query(ctx, structQuery)
-	if err != nil {
-		status.Healthy = false
-		status.Checks["table_structure"] = fmt.Sprintf("FAILED: %v", err)
-		status.Error = err.Error()
-		return status, err
-	}
-	rows.Close()
-	status.Checks["table_structure"] = "OK"
-
-	// Test write permissions (if applicable) with a transaction that gets rolled back
-	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		status.Checks["write_permissions"] = fmt.Sprintf("FAILED: cannot begin transaction: %v", err)
-	} else {
-		// Try to perform a read-only operation in the transaction
-		var exists bool
-		checkQuery := `SELECT EXISTS(SELECT 1 FROM users LIMIT 1)`
-		if err := tx.QueryRow(ctx, checkQuery).Scan(&exists); err != nil {
-			status.Checks["write_permissions"] = fmt.Sprintf("FAILED: %v", err)
-		} else {
-			status.Checks["write_permissions"] = "OK"
-		}
-		// Always rollback the test transaction
-		tx.Rollback(ctx)
-	}
-
-	// Measure response time for a simple query
-	start := time.Now()
-	if err := r.db.QueryRow(ctx, `SELECT 1`).Scan(new(int)); err != nil {
-		status.Checks["response_time"] = fmt.Sprintf("FAILED: %v", err)
-	} else {
-		duration := time.Since(start)
-		status.ResponseTime = duration
-		status.Checks["response_time"] = fmt.Sprintf("OK (%v)", duration)
-	}
-
-	return status, nil
-}
-
-// UsersHealthStatus represents the health status of the Users repository
-type UsersHealthStatus struct {
-	TableName    string            `json:"table_name"`
-	Repository   string            `json:"repository"`
-	CheckTime    time.Time         `json:"check_time"`
-	Healthy      bool              `json:"healthy"`
-	Error        string            `json:"error,omitempty"`
-	TotalRecords int64             `json:"total_records"`
-	ResponseTime time.Duration     `json:"response_time"`
-	Checks       map[string]string `json:"checks"`
 }
