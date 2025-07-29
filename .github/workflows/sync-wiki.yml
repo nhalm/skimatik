@@ -36,7 +36,7 @@ jobs:
           cp docs/*.md wiki/
           
           # List files for verification
-          echo "📁 Wiki files synchronized:"
+          echo "Wiki files synchronized:"
           ls -la wiki/ | grep -E "\.(md)$" | sort
 
       - name: Commit and push to wiki
