@@ -12,32 +12,31 @@ import (
 // This demonstrates the recommended pattern for extending generated functionality
 type PostRepository struct {
 	// Embed the generated queries for basic operations
-	*generated.PostQueries
+	*generated.PostsQueries
 }
 
 // NewPostRepository creates a new post repository with the generated queries
-func NewPostRepository(queries *generated.PostQueries) *PostRepository {
+func NewPostRepository(queries *generated.PostsQueries) *PostRepository {
 	return &PostRepository{
-		PostQueries: queries,
+		PostsQueries: queries,
 	}
 }
 
 // Custom business logic methods that build on the generated foundation
 
 // GetFeaturedPosts returns posts marked as featured with custom business logic
-func (r *PostRepository) GetFeaturedPosts(ctx context.Context, limit int) ([]generated.GetPublishedPostsRow, error) {
+func (r *PostRepository) GetFeaturedPosts(ctx context.Context, limit int) ([]generated.GetPublishedPostsResult, error) {
 	// Use the generated GetPublishedPosts as a base, then filter
-	posts, err := r.PostQueries.GetPublishedPosts(ctx, int32(limit*2)) // Get more to filter
+	posts, err := r.GetPublishedPosts(ctx, fmt.Sprintf("%d", limit*2)) // Get more to filter
 	if err != nil {
 		return nil, fmt.Errorf("failed to get published posts: %w", err)
 	}
 
-	// Custom business logic: filter for "featured" posts
-	// (In a real app, this might be a database field, but here we'll demo with title logic)
-	var featured []generated.GetPublishedPostsRow
+	// Custom filtering logic - in a real app this would check a featured flag
+	var featured []generated.GetPublishedPostsResult
 	for _, post := range posts {
-		// Example: consider posts with "featured" in title or first 3 posts as featured
-		if len(featured) < limit {
+		// Simple logic: featured posts have titles longer than 20 characters
+		if len(post.Title.String) > 20 && len(featured) < limit {
 			featured = append(featured, post)
 		}
 	}
@@ -45,17 +44,65 @@ func (r *PostRepository) GetFeaturedPosts(ctx context.Context, limit int) ([]gen
 	return featured, nil
 }
 
+// GetTrendingPosts returns posts with high engagement with custom business logic
+func (r *PostRepository) GetTrendingPosts(ctx context.Context, limit int) ([]generated.GetPublishedPostsResult, error) {
+	// Use the generated GetPublishedPosts as a base, then apply trending logic
+	posts, err := r.GetPublishedPosts(ctx, fmt.Sprintf("%d", limit*3))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get published posts: %w", err)
+	}
+
+	// Custom trending logic - in a real app this would check engagement metrics
+	var trending []generated.GetPublishedPostsResult
+	for _, post := range posts {
+		// Simple logic: trending posts were published recently
+		// In a real app, you'd check views, comments, likes, etc.
+		if len(trending) < limit {
+			trending = append(trending, post)
+		}
+	}
+
+	return trending, nil
+}
+
+// GetPostSummary returns a summary of a post with custom formatting
+func (r *PostRepository) GetPostSummary(ctx context.Context, id uuid.UUID) (string, error) {
+	// This would use a generated GetPost function
+	// For now, return a placeholder
+	return fmt.Sprintf("Summary for post %s", id), nil
+}
+
+// Custom domain conversion methods
+
+// Example of how you might extend generated functionality:
+//
+// func (r *PostRepository) CreatePostWithValidation(ctx context.Context, title, content string, authorId uuid.UUID) (*generated.Posts, error) {
+//     // Custom validation logic
+//     if len(title) < 3 {
+//         return nil, fmt.Errorf("title too short")
+//     }
+//
+//     // Use generated Create method (this would need to be implemented in the generator)
+//     // return r.PostsQueries.CreatePost(ctx, generated.CreatePostParams{
+//     //     Title: title,
+//     //     Content: content,
+//     //     AuthorId: authorId,
+//     // })
+//
+//     return nil, fmt.Errorf("not implemented")
+// }
+
 // GetPostsByTag demonstrates custom query logic building on generated methods
-func (r *PostRepository) GetPostsByTag(ctx context.Context, tagName string, limit int) ([]generated.GetPublishedPostsRow, error) {
+func (r *PostRepository) GetPostsByTag(ctx context.Context, tagName string, limit int) ([]generated.GetPublishedPostsResult, error) {
 	// In a real implementation, this would use a proper SQL query
 	// For demo purposes, we'll use the generated method and filter
-	posts, err := r.PostQueries.GetPublishedPosts(ctx, int32(limit*3))
+	posts, err := r.GetPublishedPosts(ctx, fmt.Sprintf("%d", limit*3))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get posts for tag filtering: %w", err)
 	}
 
 	// Custom filtering logic (in reality, this would be in the SQL query)
-	var tagged []generated.GetPublishedPostsRow
+	var tagged []generated.GetPublishedPostsResult
 	for _, post := range posts {
 		// Demo: filter posts that might contain the tag in content
 		// In a real app, you'd have a proper tags table and join
@@ -81,7 +128,7 @@ func (r *PostRepository) ArchiveOldPosts(ctx context.Context, daysOld int) (int,
 }
 
 // Custom validation that wraps generated methods
-func (r *PostRepository) CreatePostWithValidation(ctx context.Context, title, content string, authorID uuid.UUID) (*generated.Post, error) {
+func (r *PostRepository) CreatePostWithValidation(ctx context.Context, title, content string, authorID uuid.UUID) (*generated.Posts, error) {
 	// Custom validation logic
 	if len(title) < 5 {
 		return nil, fmt.Errorf("title must be at least 5 characters")
@@ -92,7 +139,7 @@ func (r *PostRepository) CreatePostWithValidation(ctx context.Context, title, co
 
 	// Use generated method for the actual database operation
 	// Note: This assumes a CreatePost method exists in generated code
-	// return r.PostQueries.CreatePost(ctx, generated.CreatePostParams{
+	// return r.PostsQueries.CreatePost(ctx, generated.CreatePostParams{
 	// 	Title:    title,
 	// 	Content:  content,
 	// 	AuthorID: authorID,

@@ -56,7 +56,7 @@ jobs:
           echo "## What's Changed"
           echo "$CHANGELOG"
           echo ""
-          echo "**Full Changelog**: https://github.com/${{ github.repository }}/commits/${{ steps.changelog.outputs.tag_name }}"
+          echo "**Full Changelog**: https://github.com/${{ github.repository }}/commits/$TAG_NAME"
         } > changelog.md
         
         # Save to output for use in release

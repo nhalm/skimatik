@@ -2,10 +2,11 @@ package generator
 
 import (
 	"fmt"
-	"go/format"
 	"os"
 	"strings"
 	"text/template"
+
+	"golang.org/x/tools/imports"
 )
 
 // CodeGenerator handles generating Go code from database schema
@@ -48,24 +49,19 @@ func (cg *CodeGenerator) GenerateTableRepository(table Table) error {
 
 // generateTableCode generates the complete Go code for a table
 func (cg *CodeGenerator) generateTableCode(table Table) (string, error) {
-	// Get required imports
-	imports := cg.typeMapper.GetRequiredImports(table.Columns)
+	// Get required imports from column types
+	typeImports := cg.typeMapper.GetRequiredImports(table.Columns)
 
-	// Add standard imports (no inline pagination imports)
-	standardImports := []string{
+	// Add minimal imports required for table-specific operations
+	coreImports := []string{
 		"context",
-		"errors",
 		"fmt",
-		"strings",
-		"time",
-		"github.com/jackc/pgx/v5",
-		"github.com/jackc/pgx/v5/pgconn",
 		"github.com/nhalm/pgxkit",
 		"github.com/google/uuid",
 	}
 
 	// Combine and deduplicate imports
-	allImports := cg.combineImports(standardImports, imports)
+	allImports := cg.combineImports(coreImports, typeImports)
 
 	// Generate struct
 	structCode, err := cg.generateStruct(table)
@@ -101,7 +97,7 @@ func (cg *CodeGenerator) generateTableCode(table Table) (string, error) {
 	// Package declaration
 	code.WriteString(fmt.Sprintf("package %s\n\n", cg.config.PackageName))
 
-	// Imports
+	// Imports - include the predicted imports so imports.Process has them to work with
 	if len(allImports) > 0 {
 		code.WriteString("import (\n")
 		for _, imp := range allImports {
@@ -130,7 +126,64 @@ func (cg *CodeGenerator) generateTableCode(table Table) (string, error) {
 	return code.String(), nil
 }
 
-// generateEnhancedFeatures generates enhanced pgxkit features (retry, health checks)
+// combineImports combines and deduplicates import lists
+func (cg *CodeGenerator) combineImports(lists ...[]string) []string {
+	seen := make(map[string]bool)
+	var result []string
+
+	for _, list := range lists {
+		for _, imp := range list {
+			if !seen[imp] {
+				seen[imp] = true
+				result = append(result, imp)
+			}
+		}
+	}
+
+	return result
+}
+
+// getQueryImports returns the imports needed for all queries
+func (cg *CodeGenerator) getQueryImports(queries []Query) []string {
+	imports := make(map[string]bool)
+
+	for _, query := range queries {
+		// Get imports for result columns
+		queryImports := cg.typeMapper.GetRequiredImports(query.Columns)
+		for _, imp := range queryImports {
+			imports[imp] = true
+		}
+
+		// Get imports for parameters
+		paramImports := cg.typeMapper.GetRequiredImports(convertParametersToColumns(query.Parameters))
+		for _, imp := range paramImports {
+			imports[imp] = true
+		}
+	}
+
+	// Convert map to slice
+	var result []string
+	for imp := range imports {
+		result = append(result, imp)
+	}
+
+	return result
+}
+
+// convertParametersToColumns converts parameters to columns for import calculation
+func convertParametersToColumns(params []Parameter) []Column {
+	var columns []Column
+	for _, param := range params {
+		columns = append(columns, Column{
+			Name:   param.Name,
+			Type:   param.Type,
+			GoType: param.GoType,
+		})
+	}
+	return columns
+}
+
+// generateEnhancedFeatures generates enhanced pgxkit features (retry methods)
 func (cg *CodeGenerator) generateEnhancedFeatures(table Table) (string, error) {
 	var code strings.Builder
 
@@ -147,13 +200,7 @@ func (cg *CodeGenerator) generateEnhancedFeatures(table Table) (string, error) {
 	}
 	code.WriteString(retryCode)
 
-	// Generate health check methods
-	code.WriteString("\n\n")
-	healthCode, err := cg.templateMgr.ExecuteTemplate(TemplateRepositoryHealth, data)
-	if err != nil {
-		return "", fmt.Errorf("failed to generate health checks: %w", err)
-	}
-	code.WriteString(healthCode)
+	// Health check methods are not generated - left to implementor
 
 	return code.String(), nil
 }
@@ -356,23 +403,6 @@ func (cg *CodeGenerator) prepareCRUDTemplateData(table Table) (map[string]interf
 	}, nil
 }
 
-// combineImports combines and deduplicates import lists
-func (cg *CodeGenerator) combineImports(lists ...[]string) []string {
-	seen := make(map[string]bool)
-	var result []string
-
-	for _, list := range lists {
-		for _, imp := range list {
-			if !seen[imp] {
-				seen[imp] = true
-				result = append(result, imp)
-			}
-		}
-	}
-
-	return result
-}
-
 // GenerateSharedPaginationTypes generates the shared pagination types file
 func (cg *CodeGenerator) GenerateSharedPaginationTypes() error {
 	// Prepare template data
@@ -488,7 +518,7 @@ func (cg *CodeGenerator) GenerateSharedRetryOperations() error {
 // writeCodeToFile writes generated code to a file with proper formatting
 func (cg *CodeGenerator) writeCodeToFile(filename, code string) error {
 	// Format the code
-	formatted, err := format.Source([]byte(code))
+	formatted, err := imports.Process("", []byte(code), nil)
 	if err != nil {
 		return fmt.Errorf("failed to format generated code: %w", err)
 	}
@@ -599,7 +629,7 @@ func (cg *CodeGenerator) generateQueryCode(sourceFile string, queries []Query) (
 	// Package declaration
 	code.WriteString(fmt.Sprintf("package %s\n\n", cg.config.PackageName))
 
-	// Imports
+	// Imports - include the predicted imports so imports.Process has them to work with
 	if len(allImports) > 0 {
 		code.WriteString("import (\n")
 		for _, imp := range allImports {
@@ -726,46 +756,6 @@ func validatePaginationParams(params PaginationParams) error {
 
 // Query generation helper methods moved from query_templates.go
 
-// getQueryImports returns the imports needed for all queries
-func (cg *CodeGenerator) getQueryImports(queries []Query) []string {
-	imports := make(map[string]bool)
-
-	for _, query := range queries {
-		// Get imports for result columns
-		queryImports := cg.typeMapper.GetRequiredImports(query.Columns)
-		for _, imp := range queryImports {
-			imports[imp] = true
-		}
-
-		// Get imports for parameters
-		paramImports := cg.typeMapper.GetRequiredImports(convertParametersToColumns(query.Parameters))
-		for _, imp := range paramImports {
-			imports[imp] = true
-		}
-	}
-
-	// Convert map to slice
-	var result []string
-	for imp := range imports {
-		result = append(result, imp)
-	}
-
-	return result
-}
-
-// convertParametersToColumns converts parameters to columns for import calculation
-func convertParametersToColumns(params []Parameter) []Column {
-	var columns []Column
-	for _, param := range params {
-		columns = append(columns, Column{
-			Name:   param.Name,
-			Type:   param.Type,
-			GoType: param.GoType,
-		})
-	}
-	return columns
-}
-
 // needsResultStruct determines if a query needs a custom result struct
 func (cg *CodeGenerator) needsResultStruct(query Query) bool {
 	// Only SELECT queries (:one, :many, :paginated) need result structs
@@ -824,7 +814,7 @@ func (cg *CodeGenerator) generateQueryResultStruct(query Query) (string, error) 
 }
 
 // generateQueryRepository generates the repository struct and constructor for queries
-func (cg *CodeGenerator) generateQueryRepository(sourceFile string, queries []Query) (string, error) {
+func (cg *CodeGenerator) generateQueryRepository(sourceFile string, _ []Query) (string, error) {
 	// Extract base name from source file path for repository name
 	parts := strings.Split(sourceFile, "/")
 	filename := parts[len(parts)-1]

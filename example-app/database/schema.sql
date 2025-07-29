@@ -6,7 +6,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Users table
 CREATE TABLE users (
-    id          UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name        TEXT NOT NULL CHECK (length(name) >= 2),
     email       TEXT NOT NULL UNIQUE CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'),
     bio         TEXT,
@@ -17,7 +17,7 @@ CREATE TABLE users (
 
 -- Posts table  
 CREATE TABLE posts (
-    id          UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     title       TEXT NOT NULL CHECK (length(title) >= 1),
     content     TEXT NOT NULL CHECK (length(content) >= 1),
     author_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -29,7 +29,7 @@ CREATE TABLE posts (
 
 -- Comments table
 CREATE TABLE comments (
-    id          UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     post_id     UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
     author_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     content     TEXT NOT NULL CHECK (length(content) >= 1),
@@ -40,7 +40,7 @@ CREATE TABLE comments (
 
 -- Tags table (many-to-many example)
 CREATE TABLE tags (
-    id          UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name        TEXT NOT NULL UNIQUE CHECK (length(name) >= 1),
     description TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()

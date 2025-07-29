@@ -197,13 +197,3 @@ func (h *UserHandler) DeactivateUser(w http.ResponseWriter, r *http.Request) {
 		"message": "User deactivated successfully",
 	})
 }
-
-// writeJSON writes a JSON response
-func (h *UserHandler) writeJSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-
-	if err := json.NewEncoder(w).Encode(data); err != nil {
-		http.Error(w, "Failed to encode JSON", http.StatusInternalServerError)
-	}
-}

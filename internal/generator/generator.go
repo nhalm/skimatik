@@ -75,6 +75,10 @@ func (g *Generator) Generate(ctx context.Context) error {
 		}
 	}
 
+	if g.config.Verbose {
+		log.Printf("Successfully generated code in %s", g.config.OutputDir)
+	}
+
 	return nil
 }
 

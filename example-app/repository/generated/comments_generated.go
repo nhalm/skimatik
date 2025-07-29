@@ -5,14 +5,11 @@ package generated
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/nhalm/pgxkit"
-	"strings"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/nhalm/pgxkit"
 )
 
 // Comments represents a row from the comments table
@@ -249,9 +246,9 @@ func (r *CommentsRepository) GetWithRetry(ctx context.Context, id uuid.UUID) (*C
 }
 
 // UpdateWithRetry updates an existing Comments with retry logic
-func (r *CommentsRepository) UpdateWithRetry(ctx context.Context, params UpdateCommentsParams) (*Comments, error) {
+func (r *CommentsRepository) UpdateWithRetry(ctx context.Context, id uuid.UUID, params UpdateCommentsParams) (*Comments, error) {
 	return RetryOperation(ctx, DefaultRetryConfig, "update", func(ctx context.Context) (*Comments, error) {
-		return r.Update(ctx, params)
+		return r.Update(ctx, id, params)
 	})
 }
 
@@ -260,107 +257,4 @@ func (r *CommentsRepository) ListWithRetry(ctx context.Context) ([]Comments, err
 	return RetryOperationSlice(ctx, DefaultRetryConfig, "list", func(ctx context.Context) ([]Comments, error) {
 		return r.List(ctx)
 	})
-}
-
-// HealthCheck performs a basic health check for the Comments repository
-func (r *CommentsRepository) HealthCheck(ctx context.Context) error {
-	// Check basic database connectivity
-	if err := r.db.Ping(ctx); err != nil {
-		return fmt.Errorf("database connection failed for Comments: %w", err)
-	}
-
-	// Check if table is accessible with a simple count query
-	query := `SELECT COUNT(*) FROM comments LIMIT 1`
-	var count int64
-	err := r.db.QueryRow(ctx, query).Scan(&count)
-	if err != nil {
-		return fmt.Errorf("table comments is not accessible: %w", err)
-	}
-
-	return nil
-}
-
-// HealthCheckDetailed performs a comprehensive health check for the Comments repository
-func (r *CommentsRepository) HealthCheckDetailed(ctx context.Context) (*CommentsHealthStatus, error) {
-	status := &CommentsHealthStatus{
-		TableName:  "comments",
-		Repository: "CommentsRepository",
-		CheckTime:  time.Now(),
-		Healthy:    true,
-		Checks:     make(map[string]string),
-	}
-
-	// Test database connection
-	if err := r.db.Ping(ctx); err != nil {
-		status.Healthy = false
-		status.Checks["connection"] = fmt.Sprintf("FAILED: %v", err)
-		status.Error = err.Error()
-		return status, err
-	}
-	status.Checks["connection"] = "OK"
-
-	// Test table accessibility
-	countQuery := `SELECT COUNT(*) FROM comments`
-	var totalRecords int64
-	if err := r.db.QueryRow(ctx, countQuery).Scan(&totalRecords); err != nil {
-		status.Healthy = false
-		status.Checks["table_access"] = fmt.Sprintf("FAILED: %v", err)
-		status.Error = err.Error()
-		return status, err
-	}
-	status.Checks["table_access"] = "OK"
-	status.TotalRecords = totalRecords
-
-	// Test table structure by attempting to select from all expected columns
-	structQuery := `SELECT id, post_id, author_id, content, is_approved, created_at, updated_at FROM comments LIMIT 1`
-	rows, err := r.db.Query(ctx, structQuery)
-	if err != nil {
-		status.Healthy = false
-		status.Checks["table_structure"] = fmt.Sprintf("FAILED: %v", err)
-		status.Error = err.Error()
-		return status, err
-	}
-	rows.Close()
-	status.Checks["table_structure"] = "OK"
-
-	// Test write permissions (if applicable) with a transaction that gets rolled back
-	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		status.Checks["write_permissions"] = fmt.Sprintf("FAILED: cannot begin transaction: %v", err)
-	} else {
-		// Try to perform a read-only operation in the transaction
-		var exists bool
-		checkQuery := `SELECT EXISTS(SELECT 1 FROM comments LIMIT 1)`
-		if err := tx.QueryRow(ctx, checkQuery).Scan(&exists); err != nil {
-			status.Checks["write_permissions"] = fmt.Sprintf("FAILED: %v", err)
-		} else {
-			status.Checks["write_permissions"] = "OK"
-		}
-		// Always rollback the test transaction
-		tx.Rollback(ctx)
-	}
-
-	// Measure response time for a simple query
-	start := time.Now()
-	if err := r.db.QueryRow(ctx, `SELECT 1`).Scan(new(int)); err != nil {
-		status.Checks["response_time"] = fmt.Sprintf("FAILED: %v", err)
-	} else {
-		duration := time.Since(start)
-		status.ResponseTime = duration
-		status.Checks["response_time"] = fmt.Sprintf("OK (%v)", duration)
-	}
-
-	return status, nil
-}
-
-// CommentsHealthStatus represents the health status of the Comments repository
-type CommentsHealthStatus struct {
-	TableName    string            `json:"table_name"`
-	Repository   string            `json:"repository"`
-	CheckTime    time.Time         `json:"check_time"`
-	Healthy      bool              `json:"healthy"`
-	Error        string            `json:"error,omitempty"`
-	TotalRecords int64             `json:"total_records"`
-	ResponseTime time.Duration     `json:"response_time"`
-	Checks       map[string]string `json:"checks"`
 }

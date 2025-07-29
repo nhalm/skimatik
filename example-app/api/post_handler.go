@@ -7,11 +7,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/nhalm/skimatik/example-app/domain"
 )
 
 // PostHandler handles HTTP requests for post operations
 type PostHandler struct {
-	postService PostService
+	postService PostService // Use service interface, not API interface
 }
 
 // NewPostHandler creates a new post handler
@@ -32,16 +33,16 @@ func (h *PostHandler) GetPublishedPosts(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	domainPosts, err := h.postService.GetPublishedPosts(r.Context(), limit)
+	servicePosts, err := h.postService.GetPublishedPosts(r.Context(), limit)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// Convert domain types to API response types
-	apiPosts := make([]PostSummaryResponse, len(domainPosts))
-	for i, post := range domainPosts {
-		apiPosts[i] = PostSummaryResponse{
+	// Convert service types to API types
+	apiPosts := make([]domain.PostSummary, len(servicePosts))
+	for i, post := range servicePosts {
+		apiPosts[i] = domain.PostSummary{
 			ID:          post.ID,
 			Title:       post.Title,
 			Content:     post.Content,
@@ -68,23 +69,23 @@ func (h *PostHandler) GetPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	domainPost, err := h.postService.GetPostWithAuthor(r.Context(), postID)
+	servicePost, err := h.postService.GetPostWithAuthor(r.Context(), postID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
-	// Convert domain type to API response type
-	apiPost := PostDetailResponse{
-		ID:          domainPost.ID,
-		Title:       domainPost.Title,
-		Content:     domainPost.Content,
-		AuthorID:    domainPost.AuthorID,
-		AuthorName:  domainPost.AuthorName,
-		AuthorEmail: domainPost.AuthorEmail,
-		IsPublished: domainPost.IsPublished,
-		PublishedAt: domainPost.PublishedAt,
-		CreatedAt:   domainPost.CreatedAt,
+	// Convert service type to API type
+	apiPost := domain.PostDetail{
+		ID:          servicePost.ID,
+		Title:       servicePost.Title,
+		Content:     servicePost.Content,
+		AuthorID:    servicePost.AuthorID,
+		AuthorName:  servicePost.AuthorName,
+		AuthorEmail: servicePost.AuthorEmail,
+		IsPublished: servicePost.IsPublished,
+		PublishedAt: servicePost.PublishedAt,
+		CreatedAt:   servicePost.CreatedAt,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -101,16 +102,16 @@ func (h *PostHandler) GetUserPosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	domainPosts, err := h.postService.GetUserPosts(r.Context(), userID)
+	servicePosts, err := h.postService.GetUserPosts(r.Context(), userID)
 	if err != nil {
 		http.Error(w, "Failed to get user posts", http.StatusInternalServerError)
 		return
 	}
 
-	// Convert domain types to API response types
-	apiPosts := make([]PostSummaryResponse, len(domainPosts))
-	for i, post := range domainPosts {
-		apiPosts[i] = PostSummaryResponse{
+	// Convert service types to API types
+	apiPosts := make([]domain.PostSummary, len(servicePosts))
+	for i, post := range servicePosts {
+		apiPosts[i] = domain.PostSummary{
 			ID:          post.ID,
 			Title:       post.Title,
 			Content:     post.Content,
@@ -139,16 +140,16 @@ func (h *PostHandler) GetPostsWithStats(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	domainStats, err := h.postService.GetPostsWithStats(r.Context(), limit)
+	serviceStats, err := h.postService.GetPostsWithStats(r.Context(), limit)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// Convert domain types to API response types
-	apiStats := make([]PostWithStatsResponse, len(domainStats))
-	for i, stat := range domainStats {
-		apiStats[i] = PostWithStatsResponse{
+	// Convert service types to API types
+	apiStats := make([]domain.PostWithStats, len(serviceStats))
+	for i, stat := range serviceStats {
+		apiStats[i] = domain.PostWithStats{
 			ID:           stat.ID,
 			Title:        stat.Title,
 			AuthorID:     stat.AuthorID,
@@ -178,16 +179,16 @@ func (h *PostHandler) GetFeaturedPosts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	domainPosts, err := h.postService.GetFeaturedPosts(r.Context(), limit)
+	servicePosts, err := h.postService.GetFeaturedPosts(r.Context(), limit)
 	if err != nil {
 		http.Error(w, "Failed to get featured posts", http.StatusInternalServerError)
 		return
 	}
 
-	// Convert domain types to API response types
-	apiPosts := make([]PostSummaryResponse, len(domainPosts))
-	for i, post := range domainPosts {
-		apiPosts[i] = PostSummaryResponse{
+	// Convert service types to API types
+	apiPosts := make([]domain.PostSummary, len(servicePosts))
+	for i, post := range servicePosts {
+		apiPosts[i] = domain.PostSummary{
 			ID:          post.ID,
 			Title:       post.Title,
 			Content:     post.Content,
@@ -222,16 +223,16 @@ func (h *PostHandler) GetPostsByTag(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	domainPosts, err := h.postService.GetPostsByTag(r.Context(), tag, limit)
+	servicePosts, err := h.postService.GetPostsByTag(r.Context(), tag, limit)
 	if err != nil {
 		http.Error(w, "Failed to get posts by tag", http.StatusInternalServerError)
 		return
 	}
 
-	// Convert domain types to API response types
-	apiPosts := make([]PostSummaryResponse, len(domainPosts))
-	for i, post := range domainPosts {
-		apiPosts[i] = PostSummaryResponse{
+	// Convert service types to API types
+	apiPosts := make([]domain.PostSummary, len(servicePosts))
+	for i, post := range servicePosts {
+		apiPosts[i] = domain.PostSummary{
 			ID:          post.ID,
 			Title:       post.Title,
 			Content:     post.Content,
@@ -252,17 +253,17 @@ func (h *PostHandler) GetPostsByTag(w http.ResponseWriter, r *http.Request) {
 
 // GetPostStatistics handles GET /api/posts/statistics
 func (h *PostHandler) GetPostStatistics(w http.ResponseWriter, r *http.Request) {
-	domainStats, err := h.postService.GetPostStatistics(r.Context())
+	serviceStats, err := h.postService.GetPostStatistics(r.Context())
 	if err != nil {
 		http.Error(w, "Failed to get post statistics", http.StatusInternalServerError)
 		return
 	}
 
-	// Convert domain type to API response type
-	apiStats := PostStatsResponse{
-		TotalPosts:     domainStats.TotalPosts,
-		PublishedPosts: domainStats.PublishedPosts,
-		DraftPosts:     domainStats.DraftPosts,
+	// Convert service type to API type
+	apiStats := domain.PostStats{
+		TotalPosts:     serviceStats.TotalPosts,
+		PublishedPosts: serviceStats.PublishedPosts,
+		DraftPosts:     serviceStats.DraftPosts,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

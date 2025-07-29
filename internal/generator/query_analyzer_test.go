@@ -421,7 +421,7 @@ func TestQueryAnalyzer_GetDummyValueForParameter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := analyzer.getDummyValueForParameter(tt.index)
+			result := analyzer.getDummyValueForParameter()
 			if result != tt.expected {
 				t.Errorf("getDummyValueForParameter(%d) = %v, want %v", tt.index, result, tt.expected)
 			}

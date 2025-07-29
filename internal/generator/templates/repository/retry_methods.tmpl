@@ -13,9 +13,9 @@ func (r *{{.RepositoryName}}) GetWithRetry(ctx context.Context, id uuid.UUID) (*
 }
 
 // UpdateWithRetry updates an existing {{.StructName}} with retry logic
-func (r *{{.RepositoryName}}) UpdateWithRetry(ctx context.Context, params Update{{.StructName}}Params) (*{{.StructName}}, error) {
+func (r *{{.RepositoryName}}) UpdateWithRetry(ctx context.Context, id uuid.UUID, params Update{{.StructName}}Params) (*{{.StructName}}, error) {
 	return RetryOperation(ctx, DefaultRetryConfig, "update", func(ctx context.Context) (*{{.StructName}}, error) {
-		return r.Update(ctx, params)
+		return r.Update(ctx, id, params)
 	})
 }
 

@@ -1,5 +1,5 @@
 database:
-  dsn: "postgres://dbutil:dbutil_test_password@localhost:5432/blog?sslmode=disable"
+  dsn: "postgres://postgres:password@localhost:5432/blog?sslmode=disable"
   schema: "public"
 
 output:

@@ -159,7 +159,7 @@ func (qa *QueryAnalyzer) replaceParametersForExplain(sql string, parameters []Pa
 	// Replace parameters in reverse order to avoid issues with $1 vs $10
 	for i := len(parameters); i >= 1; i-- {
 		placeholder := fmt.Sprintf("$%d", i)
-		dummyValue := qa.getDummyValueForParameter(i)
+		dummyValue := qa.getDummyValueForParameter()
 
 		// Use a more sophisticated replacement that avoids string literals
 		// For now, we'll use a simple approach but this could be enhanced
@@ -188,8 +188,8 @@ func (qa *QueryAnalyzer) replaceParameterOutsideQuotes(sql, placeholder, replace
 	return result
 }
 
-// getDummyValueForParameter returns a dummy value for a parameter based on its index
-func (qa *QueryAnalyzer) getDummyValueForParameter(paramIndex int) string {
+// getDummyValueForParameter returns a dummy value for a parameter
+func (qa *QueryAnalyzer) getDummyValueForParameter() string {
 	// Use NULL which works with all types and avoids type conversion issues
 	return "NULL"
 }

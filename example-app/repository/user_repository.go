@@ -117,7 +117,7 @@ func (r *UserRepository) DeactivateUser(ctx context.Context, userID uuid.UUID) e
 
 func (r *UserRepository) GetUser(ctx context.Context, userID uuid.UUID) (*domain.UserDetail, error) {
 	// Use the generated Get method from UsersRepository
-	user, err := r.UsersRepository.Get(ctx, userID)
+	user, err := r.Get(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
