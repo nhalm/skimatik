@@ -14,6 +14,8 @@ A database-first code generator for PostgreSQL that creates type-safe Go reposit
 - **Type-Safe**: Generates fully typed Go code using pgx with comprehensive PostgreSQL type support
 - **Built-in Pagination**: Every list operation includes efficient cursor-based pagination using UUID v7
 - **Zero Dependencies**: Generated code only requires pgx - no external pagination or ORM dependencies
+- **Shared Utilities**: Eliminates code duplication with reusable database operation and retry patterns
+- **Repository Embedding**: Generated repositories designed for clean composition and extension
 - **Table-Based Generation**: Complete CRUD repositories for all database tables
 - **Query-Based Generation**: Custom functions from SQL files with sqlc-style annotations
 - **UUID v7 Optimized**: Time-ordered pagination with consistent performance
@@ -56,6 +58,8 @@ func (r *UsersRepository) ListPaginated(ctx context.Context, params PaginationPa
 ```
 
 3. **Use in your application:**
+
+#### **Basic Usage**
 ```go
 package main
 
@@ -77,11 +81,11 @@ func main() {
     }
     defer conn.Close()
     
-    // Use generated repository
+    // Use generated repository with shared utilities
     userRepo := repositories.NewUsersRepository(conn)
     
-    // Create a user
-    user, err := userRepo.Create(ctx, repositories.CreateUsersParams{
+    // Create a user with retry support
+    user, err := userRepo.CreateWithRetry(ctx, repositories.CreateUsersParams{
         Name:  "John Doe",
         Email: "john@example.com",
     })
@@ -98,6 +102,59 @@ func main() {
     }
     
     log.Printf("Found %d users, has more: %v", len(result.Items), result.HasMore)
+}
+```
+
+#### **Repository Embedding Pattern**
+```go
+package services
+
+import (
+    "context"
+    "your-project/repositories"
+)
+
+// Define interface based on your domain
+type UserService interface {
+    CreateUser(ctx context.Context, params repositories.CreateUsersParams) (*repositories.Users, error)
+    GetActiveUsers(ctx context.Context) ([]repositories.Users, error)
+}
+
+// Embed generated repository and extend with business logic
+type userService struct {
+    *repositories.UsersRepository  // All generated methods available
+}
+
+func NewUserService(userRepo *repositories.UsersRepository) UserService {
+    return &userService{
+        UsersRepository: userRepo,
+    }
+}
+
+// Custom business logic using shared utilities
+func (s *userService) GetActiveUsers(ctx context.Context) ([]repositories.Users, error) {
+    return repositories.RetryOperationSlice(ctx, repositories.DefaultRetryConfig, "get_active_users", func(ctx context.Context) ([]repositories.Users, error) {
+        query := `SELECT id, name, email, created_at FROM users WHERE is_active = true ORDER BY created_at DESC`
+        
+        // Using shared database utilities
+        rows, err := repositories.ExecuteQuery(ctx, s.db, "get_active_users", "Users", query)
+        if err != nil {
+            return nil, err
+        }
+        defer rows.Close()
+        
+        var results []repositories.Users
+        for rows.Next() {
+            var user repositories.Users
+            err := rows.Scan(&user.Id, &user.Name, &user.Email, &user.CreatedAt)
+            if err != nil {
+                return nil, repositories.HandleDatabaseError("scan", "Users", err)
+            }
+            results = append(results, user)
+        }
+        
+        return results, repositories.HandleRowsResult("Users", rows)
+    })
 }
 ```
 
@@ -292,6 +349,72 @@ tables:
 - 🔄 **Backward Compatible**: Existing configurations continue to work
 - 🎯 **Override When Needed**: Easily customize specific tables
 - 🚀 **Faster Setup**: New projects get started quickly
+
+## 🔧 Shared Utilities
+
+Generated repositories include shared utility functions that eliminate code duplication while maintaining full type safety:
+
+### Database Operation Utilities
+
+Every generated package includes these utilities for consistent database operations:
+
+```go
+// Single-row operations (CREATE, GET, UPDATE)
+row := ExecuteQueryRow(ctx, db, "create", "Users", query, args...)
+var user Users
+err := row.Scan(&user.Id, &user.Name, &user.Email)
+return &user, HandleQueryRowError("create", "Users", err)
+
+// Multi-row operations (LIST, custom queries)
+rows, err := ExecuteQuery(ctx, db, "list", "Users", query, args...)
+if err != nil {
+    return nil, err
+}
+defer rows.Close()
+// ... scan results
+return results, HandleRowsResult("Users", rows)
+```
+
+### Retry Operation Utilities
+
+Built-in retry logic for resilient database operations:
+
+```go
+// Single result operations
+user, err := RetryOperation(ctx, DefaultRetryConfig, "create_user", func(ctx context.Context) (*Users, error) {
+    return userRepo.Create(ctx, params)
+})
+
+// Slice result operations  
+users, err := RetryOperationSlice(ctx, DefaultRetryConfig, "list_users", func(ctx context.Context) ([]Users, error) {
+    return userRepo.List(ctx)
+})
+
+// Custom retry configuration
+customConfig := RetryConfig{
+    MaxRetries: 5,
+    BaseDelay:  500 * time.Millisecond,
+}
+```
+
+### Cross-Package Usage
+
+These utilities are **public functions** available for custom repository extensions:
+
+```go
+// Your custom repository using shared utilities
+func (s *UserService) CreateUserWithProfile(ctx context.Context, userData CreateUsersParams, bio string) (*Users, error) {
+    return repositories.RetryOperation(ctx, repositories.DefaultRetryConfig, "create_user_with_profile", func(ctx context.Context) (*Users, error) {
+        // Custom business logic using shared database utilities
+        query := `WITH new_user AS (...) SELECT ... FROM new_user`
+        row := repositories.ExecuteQueryRow(ctx, s.db, "create_user_with_profile", "Users", query, userData.Name, userData.Email, bio)
+        
+        var user repositories.Users
+        err := row.Scan(&user.Id, &user.Name, &user.Email, &user.CreatedAt)
+        return &user, repositories.HandleQueryRowError("create_user_with_profile", "Users", err)
+    })
+}
+```
 
 ## 🔄 Pagination
 

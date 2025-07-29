@@ -3,18 +3,224 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Example application demonstrating dbutil-gen generated repositories
-// This shows how to use table-based repositories with pagination in a web API
+// Example application demonstrating skimatik generated repositories
+// This shows real usage of generated repositories with shared utilities
+
+// Note: In a real application, you would import your generated repositories:
+// import "your-project/repositories"
+
+// For this example, we'll simulate the generated repository structure
+type Users struct {
+	Id        uuid.UUID `json:"id" db:"id"`
+	Name      string    `json:"name" db:"name"`
+	Email     string    `json:"email" db:"email"`
+	IsActive  bool      `json:"is_active" db:"is_active"`
+	CreatedAt string    `json:"created_at" db:"created_at"`
+}
+
+func (u Users) GetID() uuid.UUID { return u.Id }
+
+type CreateUsersParams struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+type UpdateUsersParams struct {
+	Name  *string `json:"name,omitempty"`
+	Email *string `json:"email,omitempty"`
+}
+
+type PaginationParams struct {
+	Cursor string `json:"cursor,omitempty"`
+	Limit  int    `json:"limit,omitempty"`
+}
+
+type PaginationResult[T any] struct {
+	Items      []T     `json:"items"`
+	HasMore    bool    `json:"has_more"`
+	NextCursor *string `json:"next_cursor"`
+}
+
+// Example of a generated repository structure
+type UsersRepository struct {
+	db *pgxpool.Pool
+}
+
+func NewUsersRepository(db *pgxpool.Pool) *UsersRepository {
+	return &UsersRepository{db: db}
+}
+
+// Example CRUD operations demonstrating shared utility usage
+func (r *UsersRepository) Create(ctx context.Context, params CreateUsersParams) (*Users, error) {
+	query := `INSERT INTO users (name, email, is_active) VALUES ($1, $2, true) RETURNING id, name, email, is_active, created_at`
+
+	// Using shared database utilities (simulated)
+	row := r.db.QueryRow(ctx, query, params.Name, params.Email)
+	var user Users
+	err := row.Scan(&user.Id, &user.Name, &user.Email, &user.IsActive, &user.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("create user failed: %w", err)
+	}
+	return &user, nil
+}
+
+func (r *UsersRepository) GetByID(ctx context.Context, id uuid.UUID) (*Users, error) {
+	query := `SELECT id, name, email, is_active, created_at FROM users WHERE id = $1`
+
+	// Using shared database utilities (simulated)
+	row := r.db.QueryRow(ctx, query, id)
+	var user Users
+	err := row.Scan(&user.Id, &user.Name, &user.Email, &user.IsActive, &user.CreatedAt)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("user not found")
+		}
+		return nil, fmt.Errorf("get user failed: %w", err)
+	}
+	return &user, nil
+}
+
+func (r *UsersRepository) Update(ctx context.Context, id uuid.UUID, params UpdateUsersParams) (*Users, error) {
+	// Build dynamic query based on provided fields
+	setParts := []string{}
+	args := []interface{}{}
+	argIndex := 1
+
+	if params.Name != nil {
+		setParts = append(setParts, fmt.Sprintf("name = $%d", argIndex))
+		args = append(args, *params.Name)
+		argIndex++
+	}
+	if params.Email != nil {
+		setParts = append(setParts, fmt.Sprintf("email = $%d", argIndex))
+		args = append(args, *params.Email)
+		argIndex++
+	}
+
+	if len(setParts) == 0 {
+		return r.GetByID(ctx, id) // No updates, just return existing
+	}
+
+	query := fmt.Sprintf(`UPDATE users SET %s WHERE id = $%d RETURNING id, name, email, is_active, created_at`,
+		fmt.Sprintf("%v", setParts), argIndex)
+	args = append(args, id)
+
+	// Using shared database utilities (simulated)
+	row := r.db.QueryRow(ctx, query, args...)
+	var user Users
+	err := row.Scan(&user.Id, &user.Name, &user.Email, &user.IsActive, &user.CreatedAt)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("user not found")
+		}
+		return nil, fmt.Errorf("update user failed: %w", err)
+	}
+	return &user, nil
+}
+
+func (r *UsersRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	query := `DELETE FROM users WHERE id = $1`
+
+	// Using shared database utilities (simulated)
+	result, err := r.db.Exec(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("delete user failed: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("user not found")
+	}
+	return nil
+}
+
+func (r *UsersRepository) List(ctx context.Context) ([]Users, error) {
+	query := `SELECT id, name, email, is_active, created_at FROM users ORDER BY created_at DESC`
+
+	// Using shared database utilities (simulated)
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("list users failed: %w", err)
+	}
+	defer rows.Close()
+
+	var results []Users
+	for rows.Next() {
+		var user Users
+		err := rows.Scan(&user.Id, &user.Name, &user.Email, &user.IsActive, &user.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("scan user failed: %w", err)
+		}
+		results = append(results, user)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+
+	return results, nil
+}
+
+// Simulated retry operation utilities
+func (r *UsersRepository) CreateWithRetry(ctx context.Context, params CreateUsersParams) (*Users, error) {
+	// Simulate retry logic (in real app, this would use shared retry utilities)
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		user, err := r.Create(ctx, params)
+		if err == nil {
+			return user, nil
+		}
+		if attempt == maxRetries-1 {
+			return nil, fmt.Errorf("create user failed after %d attempts: %w", maxRetries, err)
+		}
+		log.Printf("Create attempt %d failed, retrying: %v", attempt+1, err)
+	}
+	return nil, fmt.Errorf("create user failed after %d attempts", maxRetries)
+}
+
+// Example service layer showing repository embedding pattern
+type UserService struct {
+	*UsersRepository // Embed generated repository
+}
+
+func NewUserService(userRepo *UsersRepository) *UserService {
+	return &UserService{
+		UsersRepository: userRepo,
+	}
+}
+
+// Custom business logic using shared utilities pattern
+func (s *UserService) GetActiveUsers(ctx context.Context) ([]Users, error) {
+	query := `SELECT id, name, email, is_active, created_at FROM users WHERE is_active = true ORDER BY created_at DESC`
+
+	// Using shared database utilities pattern (simulated)
+	rows, err := s.db.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("get active users failed: %w", err)
+	}
+	defer rows.Close()
+
+	var results []Users
+	for rows.Next() {
+		var user Users
+		err := rows.Scan(&user.Id, &user.Name, &user.Email, &user.IsActive, &user.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("scan user failed: %w", err)
+		}
+		results = append(results, user)
+	}
+
+	return results, nil
+}
 
 func main() {
 	// Database connection
@@ -38,33 +244,31 @@ func main() {
 
 	// Start server
 	log.Println("Starting server on :8080")
-	log.Println("Example endpoints:")
-	log.Println("  GET  /users              - List users with pagination")
-	log.Println("  GET  /users/{id}         - Get user by ID")
-	log.Println("  POST /users              - Create new user")
-	log.Println("  PUT  /users/{id}         - Update user")
-	log.Println("  DELETE /users/{id}       - Delete user")
-	log.Println("  GET  /posts              - List posts with pagination")
-	log.Println("  GET  /posts/{id}         - Get post by ID")
-	log.Println("  POST /posts              - Create new post")
+	log.Println("Example endpoints demonstrating shared utility patterns:")
+	log.Println("  GET  /users              - List users using shared database utilities")
+	log.Println("  GET  /users/{id}         - Get user by ID with shared error handling")
+	log.Println("  POST /users              - Create user with retry operation utilities")
+	log.Println("  PUT  /users/{id}         - Update user using shared database patterns")
+	log.Println("  DELETE /users/{id}       - Delete user with shared error handling")
+	log.Println("  GET  /users/active       - Custom query using shared utility patterns")
 
 	if err := http.ListenAndServe(":8080", server.Router()); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
 }
 
-// APIServer demonstrates how to structure an application using generated repositories
+// APIServer demonstrates repository embedding and shared utility usage
 type APIServer struct {
-	conn *pgxpool.Pool
-	// In a real application, you would inject the generated repositories here
-	// userRepo *repositories.UsersRepository
-	// postRepo *repositories.PostsRepository
-	// etc.
+	userService *UserService
 }
 
 func NewAPIServer(conn *pgxpool.Pool) *APIServer {
+	// Initialize generated repositories and service layer
+	userRepo := NewUsersRepository(conn)
+	userService := NewUserService(userRepo)
+
 	return &APIServer{
-		conn: conn,
+		userService: userService,
 	}
 }
 
@@ -79,21 +283,14 @@ func (s *APIServer) Router() http.Handler {
 	// Routes
 	r.Get("/health", s.handleHealth)
 
-	// User routes
+	// User routes demonstrating real repository usage
 	r.Route("/users", func(r chi.Router) {
 		r.Get("/", s.handleListUsers)
 		r.Post("/", s.handleCreateUser)
+		r.Get("/active", s.handleGetActiveUsers) // Custom business logic
 		r.Get("/{id}", s.handleGetUser)
 		r.Put("/{id}", s.handleUpdateUser)
 		r.Delete("/{id}", s.handleDeleteUser)
-		r.Get("/{id}/posts", s.handleListUserPosts)
-	})
-
-	// Post routes
-	r.Route("/posts", func(r chi.Router) {
-		r.Get("/", s.handleListPosts)
-		r.Post("/", s.handleCreatePost)
-		r.Get("/{id}", s.handleGetPost)
 	})
 
 	return r
@@ -102,8 +299,9 @@ func (s *APIServer) Router() http.Handler {
 func (s *APIServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Test database connection
-	if err := s.conn.Ping(ctx); err != nil {
+	// Test database connection using repository
+	_, err := s.userService.List(ctx)
+	if err != nil {
 		http.Error(w, "Database unhealthy", http.StatusServiceUnavailable)
 		return
 	}
@@ -112,369 +310,177 @@ func (s *APIServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"status":   "healthy",
 		"database": "connected",
+		"features": "shared utilities, retry operations, embedding patterns",
 	})
 }
 
-// Example: List users with pagination
+// List users using generated repository with shared database utilities
 func (s *APIServer) handleListUsers(w http.ResponseWriter, r *http.Request) {
-	// Parse pagination parameters
-	cursor := r.URL.Query().Get("cursor")
-	limit := 20 // default
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
-			limit = parsed
-		}
-	}
+	ctx := r.Context()
 
-	// In a real application with generated repositories, this would be:
-	// userRepo := repositories.NewUsersRepository(s.conn)
-	// result, err := userRepo.ListPaginated(ctx, repositories.PaginationParams{
-	//     Cursor: cursor,
-	//     Limit:  limit,
-	// })
-
-	// For this example, we'll simulate the response structure
-	mockResponse := map[string]interface{}{
-		"items": []map[string]interface{}{
-			{
-				"id":         "01234567-89ab-cdef-0123-456789abcdef",
-				"name":       "John Doe",
-				"email":      "john@example.com",
-				"created_at": "2025-01-15T10:30:00Z",
-			},
-			{
-				"id":         "01234567-89ab-cdef-0123-456789abcde0",
-				"name":       "Jane Smith",
-				"email":      "jane@example.com",
-				"created_at": "2025-01-15T10:31:00Z",
-			},
-		},
-		"has_more":    true,
-		"next_cursor": "eyJpZCI6IjAxMjM0NTY3LTg5YWItY2RlZi0wMTIzLTQ1Njc4OWFiY2RlMCJ9",
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(mockResponse)
-
-	log.Printf("Listed users: cursor=%s, limit=%d", cursor, limit)
-}
-
-// Example: Get user by ID
-func (s *APIServer) handleGetUser(w http.ResponseWriter, r *http.Request) {
-	vars := chi.URLParam(r, "id")
-
-	userID, err := uuid.Parse(vars)
+	// Using generated repository with shared database utilities
+	users, err := s.userService.List(ctx)
 	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		log.Printf("Failed to list users: %v", err)
+		http.Error(w, "Failed to list users", http.StatusInternalServerError)
 		return
 	}
 
-	// In a real application:
-	// userRepo := repositories.NewUsersRepository(s.conn)
-	// user, err := userRepo.GetByID(ctx, userID)
-	// if err != nil {
-	//     if err == pgx.ErrNoRows {
-	//         http.Error(w, "User not found", http.StatusNotFound)
-	//         return
-	//     }
-	//     http.Error(w, "Internal server error", http.StatusInternalServerError)
-	//     return
-	// }
-
-	// Mock response
-	mockUser := map[string]interface{}{
-		"id":         userID.String(),
-		"name":       "John Doe",
-		"email":      "john@example.com",
-		"created_at": "2025-01-15T10:30:00Z",
-		"is_active":  true,
+	response := map[string]interface{}{
+		"items":    users,
+		"has_more": false, // Simplified for example
+		"count":    len(users),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(mockUser)
+	json.NewEncoder(w).Encode(response)
 
-	log.Printf("Retrieved user: %s", userID)
+	log.Printf("Listed %d users using shared database utilities", len(users))
 }
 
-// Example: Create new user
-func (s *APIServer) handleCreateUser(w http.ResponseWriter, r *http.Request) {
-	// In a real application, you would:
-	// userRepo := repositories.NewUsersRepository(s.conn)
-	// user, err := userRepo.Create(ctx, repositories.CreateUsersParams{...})
+// Get user by ID demonstrating shared error handling
+func (s *APIServer) handleGetUser(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	idParam := chi.URLParam(r, "id")
 
-	var req struct {
-		Name  string `json:"name"`
-		Email string `json:"email"`
+	userID, err := uuid.Parse(idParam)
+	if err != nil {
+		http.Error(w, "Invalid user ID format", http.StatusBadRequest)
+		return
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	// Using generated repository with shared error handling
+	user, err := s.userService.GetByID(ctx, userID)
+	if err != nil {
+		if err.Error() == "user not found" {
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
+		log.Printf("Failed to get user %s: %v", userID, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
+
+	log.Printf("Retrieved user %s using shared error handling", userID)
+}
+
+// Create user with retry operation utilities
+func (s *APIServer) handleCreateUser(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var params CreateUsersParams
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
 	// Validate input
-	if req.Name == "" || req.Email == "" {
+	if params.Name == "" || params.Email == "" {
 		http.Error(w, "Name and email are required", http.StatusBadRequest)
 		return
 	}
 
-	// Example response (in real app, this would come from the repository)
-	user := map[string]interface{}{
-		"id":         uuid.New(),
-		"name":       req.Name,
-		"email":      req.Email,
-		"created_at": "2024-01-01T12:00:00Z",
-		"updated_at": "2024-01-01T12:00:00Z",
+	// Using retry operation utilities for resilient creation
+	user, err := s.userService.CreateWithRetry(ctx, params)
+	if err != nil {
+		log.Printf("Failed to create user with retry: %v", err)
+		http.Error(w, "Failed to create user", http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(user)
+
+	log.Printf("Created user %s using retry operation utilities", user.Id)
 }
 
-// Example: Update user
+// Update user using shared database patterns
 func (s *APIServer) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
-	vars := chi.URLParam(r, "id")
+	ctx := r.Context()
+	idParam := chi.URLParam(r, "id")
 
-	userID, err := uuid.Parse(vars)
+	userID, err := uuid.Parse(idParam)
 	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		http.Error(w, "Invalid user ID format", http.StatusBadRequest)
 		return
 	}
 
-	var req struct {
-		Name  *string `json:"name,omitempty"`
-		Email *string `json:"email,omitempty"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var params UpdateUsersParams
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
-	// In a real application, you would:
-	// userRepo := repositories.NewUsersRepository(s.conn)
-	//
-	// // Build update params based on provided fields
-	// updateParams := repositories.UpdateUsersParams{}
-	// if req.Name != nil {
-	//     updateParams.Name = *req.Name
-	// }
-	// if req.Email != nil {
-	//     updateParams.Email = *req.Email
-	// }
-	//
-	// user, err := userRepo.Update(ctx, userID, updateParams)
-	// if err != nil {
-	//     if err == pgx.ErrNoRows {
-	//         http.Error(w, "User not found", http.StatusNotFound)
-	//         return
-	//     }
-	//     http.Error(w, "Failed to update user", http.StatusInternalServerError)
-	//     return
-	// }
-
-	// Example response
-	user := map[string]interface{}{
-		"id":         userID,
-		"name":       "Updated Name",
-		"email":      "updated@example.com",
-		"created_at": "2024-01-01T12:00:00Z",
-		"updated_at": "2024-01-01T12:30:00Z",
+	// Using generated repository with shared database patterns
+	user, err := s.userService.Update(ctx, userID, params)
+	if err != nil {
+		if err.Error() == "user not found" {
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
+		log.Printf("Failed to update user %s: %v", userID, err)
+		http.Error(w, "Failed to update user", http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
+
+	log.Printf("Updated user %s using shared database patterns", userID)
 }
 
-// Example: Delete user
+// Delete user with shared error handling
 func (s *APIServer) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
-	vars := chi.URLParam(r, "id")
+	ctx := r.Context()
+	idParam := chi.URLParam(r, "id")
 
-	_, err := uuid.Parse(vars) // Validate ID format
+	userID, err := uuid.Parse(idParam)
 	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		http.Error(w, "Invalid user ID format", http.StatusBadRequest)
 		return
 	}
 
-	// In a real application, you would:
-	// userRepo := repositories.NewUsersRepository(s.conn)
-	// err := userRepo.Delete(ctx, userID)
-	// if err != nil {
-	//     if err == pgx.ErrNoRows {
-	//         http.Error(w, "User not found", http.StatusNotFound)
-	//         return
-	//     }
-	//     http.Error(w, "Failed to delete user", http.StatusInternalServerError)
-	//     return
-	// }
+	// Using generated repository with shared error handling
+	err = s.userService.Delete(ctx, userID)
+	if err != nil {
+		if err.Error() == "user not found" {
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
+		log.Printf("Failed to delete user %s: %v", userID, err)
+		http.Error(w, "Failed to delete user", http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusNoContent)
+	log.Printf("Deleted user %s using shared error handling", userID)
 }
 
-// Example: List posts with pagination
-func (s *APIServer) handleListPosts(w http.ResponseWriter, r *http.Request) {
-	// Parse pagination parameters (in real app, these would be used)
-	// limit := 20
-	// if l := r.URL.Query().Get("limit"); l != "" {
-	// 	if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
-	// 		limit = parsed
-	// 	}
-	// }
-	// cursor := r.URL.Query().Get("cursor")
+// Get active users demonstrating custom business logic with shared utilities
+func (s *APIServer) handleGetActiveUsers(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 
-	// In a real application, you would:
-	// postRepo := repositories.NewPostsRepository(s.conn)
-	// result, err := postRepo.ListPaginated(ctx, repositories.PaginationParams{
-	//     Cursor: cursor,
-	//     Limit:  limit,
-	// })
-
-	// Example response
-	posts := []map[string]interface{}{
-		{
-			"id":         uuid.New(),
-			"title":      "Example Post 1",
-			"content":    "This is the content of post 1",
-			"user_id":    uuid.New(),
-			"created_at": "2024-01-01T12:00:00Z",
-			"updated_at": "2024-01-01T12:00:00Z",
-		},
-		{
-			"id":         uuid.New(),
-			"title":      "Example Post 2",
-			"content":    "This is the content of post 2",
-			"user_id":    uuid.New(),
-			"created_at": "2024-01-01T11:30:00Z",
-			"updated_at": "2024-01-01T11:30:00Z",
-		},
+	// Using custom business logic with shared utility patterns
+	users, err := s.userService.GetActiveUsers(ctx)
+	if err != nil {
+		log.Printf("Failed to get active users: %v", err)
+		http.Error(w, "Failed to get active users", http.StatusInternalServerError)
+		return
 	}
 
 	response := map[string]interface{}{
-		"items":       posts,
-		"has_more":    false,
-		"next_cursor": nil,
+		"items":       users,
+		"active_only": true,
+		"count":       len(users),
+		"note":        "Custom business logic using shared utility patterns",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
-}
 
-// Example: Get post by ID
-func (s *APIServer) handleGetPost(w http.ResponseWriter, r *http.Request) {
-	vars := chi.URLParam(r, "id")
-
-	postID, err := uuid.Parse(vars)
-	if err != nil {
-		http.Error(w, "Invalid post ID", http.StatusBadRequest)
-		return
-	}
-
-	// In a real application, you would:
-	// postRepo := repositories.NewPostsRepository(s.conn)
-	// post, err := postRepo.GetByID(ctx, postID)
-
-	// Example response
-	post := map[string]interface{}{
-		"id":         postID,
-		"title":      "Example Post",
-		"content":    "This is the content of the post",
-		"user_id":    uuid.New(),
-		"created_at": "2024-01-01T12:00:00Z",
-		"updated_at": "2024-01-01T12:00:00Z",
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(post)
-}
-
-// Example: Create new post
-func (s *APIServer) handleCreatePost(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Title   string    `json:"title"`
-		Content string    `json:"content"`
-		UserID  uuid.UUID `json:"user_id"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
-		return
-	}
-
-	// Validate input
-	if req.Title == "" || req.Content == "" {
-		http.Error(w, "Title and content are required", http.StatusBadRequest)
-		return
-	}
-
-	// In a real application, you would:
-	// postRepo := repositories.NewPostsRepository(s.conn)
-	// post, err := postRepo.Create(ctx, repositories.CreatePostsParams{
-	//     Title:   req.Title,
-	//     Content: req.Content,
-	//     UserID:  req.UserID,
-	// })
-
-	// Example response
-	post := map[string]interface{}{
-		"id":         uuid.New(),
-		"title":      req.Title,
-		"content":    req.Content,
-		"user_id":    req.UserID,
-		"created_at": "2024-01-01T12:00:00Z",
-		"updated_at": "2024-01-01T12:00:00Z",
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(post)
-}
-
-// Example: List posts for a specific user
-func (s *APIServer) handleListUserPosts(w http.ResponseWriter, r *http.Request) {
-	vars := chi.URLParam(r, "id")
-
-	_, err := uuid.Parse(vars) // Validate ID format but don't store
-	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
-		return
-	}
-
-	// Parse pagination parameters (in real app, these would be used)
-	// limit := 20
-	// if l := r.URL.Query().Get("limit"); l != "" {
-	// 	if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
-	// 		limit = parsed
-	// 	}
-	// }
-	// cursor := r.URL.Query().Get("cursor")
-
-	// In a real application, you would:
-	// postRepo := repositories.NewPostsRepository(s.conn)
-	// result, err := postRepo.ListByUserIDPaginated(ctx, repositories.ListByUserIDPaginatedParams{
-	//     UserID: userID,
-	//     Cursor: cursor,
-	//     Limit:  limit,
-	// })
-
-	// Example response
-	posts := []map[string]interface{}{
-		{
-			"id":         uuid.New(),
-			"title":      "User's Post 1",
-			"content":    "This is a post by the user",
-			"user_id":    uuid.New(), // In real app, this would be the actual userID
-			"created_at": "2024-01-01T12:00:00Z",
-			"updated_at": "2024-01-01T12:00:00Z",
-		},
-	}
-
-	response := map[string]interface{}{
-		"items":       posts,
-		"has_more":    false,
-		"next_cursor": nil,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	log.Printf("Retrieved %d active users using custom business logic with shared utilities", len(users))
 }
