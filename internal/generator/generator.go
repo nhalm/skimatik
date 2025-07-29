@@ -214,7 +214,7 @@ func (g *Generator) validateTablePrimaryKey(table Table) error {
 
 	if !column.IsUUID() {
 		return fmt.Errorf("primary key column %s must be UUID type, got %s. "+
-			"dbutil-gen requires UUID v7 primary keys for consistent time-ordered pagination. "+
+			"skimatik requires UUID v7 primary keys for consistent time-ordered pagination. "+
 			"Please migrate your table to use UUID primary keys", pkColumn, column.Type)
 	}
 
