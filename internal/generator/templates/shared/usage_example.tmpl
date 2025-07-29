@@ -1,0 +1,152 @@
+// Usage Examples for Shared Error Handling
+//
+// This file demonstrates how to use the shared error handling utilities
+// in your own code. These examples show how implementers can easily 
+// extend generated repositories or create custom repositories.
+
+/*
+Example 1: Using shared error utilities in custom repository code
+
+type CustomUserService struct {
+	userRepo *UserRepository
+	db       *pgxkit.DB
+}
+
+func (s *CustomUserService) CreateUserWithProfile(ctx context.Context, userData CreateUserParams, profileData CreateProfileParams) (*User, error) {
+	// Use the shared error handling in custom transactions
+	user, err := s.userRepo.Create(ctx, userData)
+	if err != nil {
+		// Check for specific error types using the shared utilities
+		if IsAlreadyExists(err) {
+			return nil, fmt.Errorf("user with this email already exists")
+		}
+		if IsValidationError(err) {
+			return nil, fmt.Errorf("invalid user data: %w", err)
+		}
+		return nil, err
+	}
+	
+	// Handle your own database operations with the same error handling
+	_, err = s.db.Exec(ctx, "INSERT INTO user_profiles (...) VALUES (...)", profileData.Bio, user.ID)
+	if err != nil {
+		// Use the shared HandleDatabaseError function for consistent error handling
+		return nil, HandleDatabaseError("create_profile", "Profile", err)
+	}
+	
+	return user, nil
+}
+
+Example 2: Custom error checking in business logic
+
+func (s *CustomUserService) UpdateUserIfExists(ctx context.Context, id uuid.UUID, params UpdateUserParams) (*User, error) {
+	user, err := s.userRepo.Update(ctx, id, params)
+	if err != nil {
+		// Use shared error checking functions
+		if IsNotFound(err) {
+			// Handle not found case gracefully
+			log.Printf("Attempted to update non-existent user: %s", id)
+			return nil, fmt.Errorf("user not found: %s", id)
+		}
+		if IsAlreadyExists(err) {
+			// Handle constraint violations
+			return nil, fmt.Errorf("update would create duplicate: %w", err)
+		}
+		return nil, err
+	}
+	return user, nil
+}
+
+Example 3: Handling connection errors with retry logic
+
+func (s *CustomUserService) GetUserWithRetry(ctx context.Context, id uuid.UUID) (*User, error) {
+	user, err := s.userRepo.Get(ctx, id)
+	if err != nil {
+		// Check if it's a connection error that might benefit from retry
+		if IsConnectionError(err) {
+			log.Printf("Connection error, retrying operation: %v", err)
+			// Use the built-in retry method
+			return s.userRepo.GetWithRetry(ctx, id)
+		}
+		return nil, err
+	}
+	return user, nil
+}
+
+Example 4: Custom repository using shared error handling
+
+type CustomOrderRepository struct {
+	db *pgxkit.DB
+}
+
+func (r *CustomOrderRepository) CreateOrder(ctx context.Context, params CreateOrderParams) (*Order, error) {
+	query := `INSERT INTO orders (id, user_id, total) VALUES ($1, $2, $3) RETURNING id, user_id, total, created_at`
+	
+	var order Order
+	err := r.db.QueryRow(ctx, query, params.ID, params.UserID, params.Total).Scan(&order.ID, &order.UserID, &order.Total, &order.CreatedAt)
+	if err != nil {
+		// Use the shared error handling for consistent behavior
+		return nil, HandleDatabaseError("create", "Order", err)
+	}
+	
+	return &order, nil
+}
+
+func (r *CustomOrderRepository) GetOrdersByUser(ctx context.Context, userID uuid.UUID) ([]Order, error) {
+	query := `SELECT id, user_id, total, created_at FROM orders WHERE user_id = $1`
+	
+	rows, err := r.db.Query(ctx, query, userID)
+	if err != nil {
+		return nil, HandleDatabaseError("list", "Order", err)
+	}
+	defer rows.Close()
+	
+	var orders []Order
+	for rows.Next() {
+		var order Order
+		err := rows.Scan(&order.ID, &order.UserID, &order.Total, &order.CreatedAt)
+		if err != nil {
+			return nil, HandleDatabaseError("scan", "Order", err)
+		}
+		orders = append(orders, order)
+	}
+	
+	return orders, HandleRowsError("Order", rows.Err())
+}
+
+Example 5: Error type checking in HTTP handlers
+
+func handleCreateUser(w http.ResponseWriter, r *http.Request) {
+	// ... parse request ...
+	
+	user, err := userService.Create(ctx, params)
+	if err != nil {
+		// Use shared error checking for consistent HTTP responses
+		switch {
+		case IsAlreadyExists(err):
+			http.Error(w, "User already exists", http.StatusConflict)
+		case IsValidationError(err):
+			http.Error(w, "Invalid input: "+err.Error(), http.StatusBadRequest)
+		case IsTimeout(err):
+			http.Error(w, "Request timeout", http.StatusRequestTimeout)
+		case IsConnectionError(err):
+			http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
+		default:
+			log.Printf("Unexpected error creating user: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+	
+	// ... return success response ...
+}
+
+Key Benefits for Implementers:
+
+1. **Consistent Error Handling**: All repositories use the same error types and handling logic
+2. **Type-Safe Error Checking**: Use IsNotFound(), IsAlreadyExists(), etc. instead of string matching
+3. **Reusable Functions**: HandleDatabaseError() can be used in your own database operations
+4. **Structured Error Information**: DatabaseError provides operation, entity, and detail information
+5. **Standard Error Interfaces**: Works with errors.Is(), errors.As(), and error wrapping
+6. **Easy Testing**: Mock and test specific error conditions using the defined error types
+
+*/ 
