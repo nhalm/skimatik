@@ -109,6 +109,40 @@ skimatik follows a **database-first, composition-friendly** approach:
 
 This approach ensures that generated code integrates seamlessly into your architecture while providing maximum flexibility for domain-specific requirements.
 
+## 🏗️ Recommended Application Structure
+
+skimatik works best with a clean multi-layer architecture:
+
+```
+your-project/
+├── api/                    # HTTP handlers, routes, middleware
+│   ├── handlers/
+│   └── middleware/
+├── service/                # Business logic and workflows
+│   ├── user_service.go
+│   └── order_service.go
+├── repository/             # Generated data access layer
+│   └── generated/          # skimatik generated code
+│       ├── users_queries.go
+│       ├── orders_queries.go
+│       └── pagination.go
+├── database/               # Database schema and queries
+│   ├── schema.sql
+│   └── queries/            # SQL files with annotations
+│       ├── users.sql
+│       └── orders.sql
+└── main.go                 # Dependency injection & wiring
+```
+
+### Layer Responsibilities
+- **`api/`** - HTTP concerns, request/response handling
+- **`service/`** - Business rules, workflows, orchestration
+- **`repository/generated/`** - Type-safe data access (skimatik generates)
+- **`database/queries/`** - SQL files with annotations (you write)
+
+### Example Application
+See our complete [**example application**](https://github.com/nhalm/skimatik/tree/main/example-app) that demonstrates this architecture with a real blog application including users, posts, and comments.
+
 ---
 
-**Next Steps**: Start with the [Quick Start Guide](Quick-Start-Guide) or explore [Examples & Tutorials](Examples-and-Tutorials) for hands-on learning. 
+**Next Steps**: Start with the [Quick Start Guide](quick-start) or explore the [Example Application](https://github.com/nhalm/skimatik/tree/main/example-app) to see the full architecture in action. 
