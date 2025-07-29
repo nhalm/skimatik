@@ -67,7 +67,7 @@ import (
     "context"
     "log"
     
-    "github.com/jackc/pgx/v5/pgxpool"
+    "github.com/nhalm/pgxkit"
     "your-project/repositories"
 )
 
@@ -75,14 +75,14 @@ func main() {
     ctx := context.Background()
     
     // Connect to database
-    conn, err := pgxpool.New(ctx, "postgres://user:pass@localhost/mydb")
+    db, err := pgxkit.New(ctx, "postgres://user:pass@localhost/mydb")
     if err != nil {
         log.Fatal(err)
     }
-    defer conn.Close()
+    defer db.Shutdown(context.Background())
     
     // Use generated repository with shared utilities
-    userRepo := repositories.NewUsersRepository(conn)
+    userRepo := repositories.NewUsersRepository(db)
     
     // Create a user with retry support
     user, err := userRepo.CreateWithRetry(ctx, repositories.CreateUsersParams{
@@ -125,9 +125,9 @@ type userRepository struct {
     *repositories.UsersRepository  // All generated methods available
 }
 
-func NewUserRepository(conn *pgxpool.Pool) UserService {
+func NewUserRepository(db *pgxkit.DB) UserService {
     return &userRepository{
-        UsersRepository: repositories.NewUsersRepository(conn),
+        UsersRepository: repositories.NewUsersRepository(db),
     }
 }
 

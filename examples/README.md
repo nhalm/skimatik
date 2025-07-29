@@ -198,9 +198,9 @@ type UserRepository struct {
     *repositories.UsersRepository  // Embed for CRUD
 }
 
-func NewUserRepository(conn *pgxpool.Pool) *UserRepository {
+func NewUserRepository(db *pgxkit.DB) *UserRepository {
     return &UserRepository{
-        UsersRepository: repositories.NewUsersRepository(conn),
+        UsersRepository: repositories.NewUsersRepository(db),
     }
 }
 

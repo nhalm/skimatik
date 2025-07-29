@@ -178,6 +178,8 @@ import (
     "fmt"
     
     "github.com/google/uuid"
+    "github.com/nhalm/pgxkit"
+    "github.com/nhalm/pgxkit"
     "your-project/repositories"
 )
 
@@ -194,10 +196,10 @@ type UserRepository struct {
     profileRepo *repositories.ProfilesRepository
 }
 
-func NewUserRepository(conn *pgxpool.Pool) UserInterface {
+func NewUserRepository(db *pgxkit.DB) UserInterface {
     return &UserRepository{
-        UsersRepository: repositories.NewUsersRepository(conn),
-        profileRepo:     repositories.NewProfilesRepository(conn),
+        UsersRepository: repositories.NewUsersRepository(db),
+        profileRepo:     repositories.NewProfilesRepository(db),
     }
 }
 
@@ -289,10 +291,10 @@ func (s *UserService) GetUserDashboard(ctx context.Context) ([]repositories.User
 
 ```go
 func main() {
-    conn, _ := pgxpool.New(ctx, "postgres://...")
+    db, _ := pgxkit.New(ctx, "postgres://...")
     
     // Create repository that implements interface
-    userRepo := NewUserRepository(conn)
+    userRepo := NewUserRepository(db)
     
     // Service has property of interface type, fulfilled by repository
     userService := NewUserService(userRepo)
