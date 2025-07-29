@@ -11,7 +11,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nhalm/pgxkit"
 )
 
 // Example application demonstrating skimatik generated repositories
@@ -54,10 +54,10 @@ type PaginationResult[T any] struct {
 
 // Example of a generated repository structure
 type UsersRepository struct {
-	db *pgxpool.Pool
+	db *pgxkit.DB
 }
 
-func NewUsersRepository(db *pgxpool.Pool) *UsersRepository {
+func NewUsersRepository(db *pgxkit.DB) *UsersRepository {
 	return &UsersRepository{db: db}
 }
 
@@ -192,9 +192,9 @@ type UserRepository struct {
 	*UsersRepository // Embed generated repository
 }
 
-func NewUserRepository(conn *pgxpool.Pool) *UserRepository {
+func NewUserRepository(db *pgxkit.DB) *UserRepository {
 	return &UserRepository{
-		UsersRepository: NewUsersRepository(conn),
+		UsersRepository: NewUsersRepository(db),
 	}
 }
 
@@ -227,20 +227,20 @@ func main() {
 	ctx := context.Background()
 	dsn := "postgres://dbutil:dbutil_test_password@localhost:5432/dbutil_test?sslmode=disable"
 
-	conn, err := pgxpool.New(ctx, dsn)
+	db, err := pgxkit.New(ctx, dsn)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer conn.Close()
+	defer db.Shutdown(context.Background())
 
 	// Test connection
-	if err := conn.Ping(ctx); err != nil {
+	if err := db.HealthCheck(ctx); err != nil {
 		log.Fatalf("Failed to ping database: %v", err)
 	}
 	log.Println("Connected to database successfully")
 
 	// Create API server with generated repositories
-	server := NewAPIServer(conn)
+	server := NewAPIServer(db)
 
 	// Start server
 	log.Println("Starting server on :8080")
@@ -262,9 +262,9 @@ type APIServer struct {
 	userRepo *UserRepository
 }
 
-func NewAPIServer(conn *pgxpool.Pool) *APIServer {
+func NewAPIServer(db *pgxkit.DB) *APIServer {
 	// Initialize repository with embedded generated repository
-	userRepo := NewUserRepository(conn)
+	userRepo := NewUserRepository(db)
 
 	return &APIServer{
 		userRepo: userRepo,

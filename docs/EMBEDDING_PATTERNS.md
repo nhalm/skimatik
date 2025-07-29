@@ -21,6 +21,7 @@ package services
 
 import (
     "context"
+    "github.com/nhalm/pgxkit"
     "your-project/repositories"
 )
 
@@ -38,9 +39,9 @@ type UserRepository struct {
     *repositories.UsersRepository
 }
 
-func NewUserRepository(conn *pgxpool.Pool) UserManager {
+func NewUserRepository(db *pgxkit.DB) UserManager {
     return &UserRepository{
-        UsersRepository: repositories.NewUsersRepository(conn),
+        UsersRepository: repositories.NewUsersRepository(db),
     }
 }
 
@@ -81,6 +82,7 @@ package services
 import (
     "context"
     "fmt"
+    "github.com/nhalm/pgxkit"
     "your-project/repositories"
 )
 
@@ -101,10 +103,10 @@ type userRepository struct {
     profileRepo *repositories.ProfilesRepository
 }
 
-func NewUserRepository(conn *pgxpool.Pool) UserService {
+func NewUserRepository(db *pgxkit.DB) UserService {
     return &userRepository{
-        UsersRepository: repositories.NewUsersRepository(conn),
-        profileRepo:     repositories.NewProfilesRepository(conn),
+        UsersRepository: repositories.NewUsersRepository(db),
+        profileRepo:     repositories.NewProfilesRepository(db),
     }
 }
 
@@ -172,6 +174,7 @@ package services
 import (
     "context"
     "fmt"
+    "github.com/nhalm/pgxkit"
     "your-project/repositories"
 )
 
@@ -306,6 +309,7 @@ package adapters
 
 import (
     "context"
+    "github.com/nhalm/pgxkit"
     "your-project/repositories"
 )
 
@@ -437,6 +441,7 @@ package services_test
 import (
     "testing"
     "github.com/nhalm/pgxkit"
+    "github.com/nhalm/pgxkit"
     "your-project/repositories"
     "your-project/services"
 )
@@ -454,7 +459,7 @@ func TestUserService_Integration(t *testing.T) {
     )
     
     // Create repository with embedded generated repositories
-    userRepo := services.NewUserRepository(conn)  // This embeds generated repository internally
+    userRepo := services.NewUserRepository(db)  // This embeds generated repository internally
     
     // Test business logic
     user, err := userRepo.CreateUserWithProfile(context.Background(), 
