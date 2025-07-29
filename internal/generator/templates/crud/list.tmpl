@@ -8,7 +8,7 @@ func (r *{{.RepositoryName}}) List(ctx context.Context) ([]{{.StructName}}, erro
 	
 	rows, err := r.db.Query(ctx, query)
 	if err != nil {
-		return nil, err
+		return nil, HandleDatabaseError("list", "{{.StructName}}", err)
 	}
 	defer rows.Close()
 	
@@ -17,10 +17,10 @@ func (r *{{.RepositoryName}}) List(ctx context.Context) ([]{{.StructName}}, erro
 		var {{.ReceiverName}} {{.StructName}}
 		err := rows.Scan({{.ScanArgs}})
 		if err != nil {
-			return nil, err
+			return nil, HandleDatabaseError("scan", "{{.StructName}}", err)
 		}
 		results = append(results, {{.ReceiverName}})
 	}
 	
-	return results, rows.Err()
+	return results, HandleRowsError("{{.StructName}}", rows.Err())
 } 
