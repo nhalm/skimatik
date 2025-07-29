@@ -719,9 +719,25 @@ make build
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## 📚 Documentation
+
+For comprehensive documentation, examples, and guides, visit our **[GitHub Wiki](https://github.com/nhalm/skimatik/wiki)**:
+
+- **[Quick Start Guide](https://github.com/nhalm/skimatik/wiki/Quick-Start-Guide)** - Installation and basic usage
+- **[Examples & Tutorials](https://github.com/nhalm/skimatik/wiki/Examples-and-Tutorials)** - Hands-on learning with real applications
+- **[Shared Utilities Guide](https://github.com/nhalm/skimatik/wiki/Shared-Utilities-Guide)** - Database operations and retry patterns
+- **[Embedding Patterns](https://github.com/nhalm/skimatik/wiki/Embedding-Patterns)** - Repository composition patterns
+- **[Error Handling Guide](https://github.com/nhalm/skimatik/wiki/Error-Handling-Guide)** - Comprehensive error management
+- **[Configuration Reference](https://github.com/nhalm/skimatik/wiki/Configuration-Reference)** - Complete configuration options
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
 ## 🙏 Acknowledgments
 
 - [pgx](https://github.com/jackc/pgx) - PostgreSQL driver and toolkit
+- [pgxkit](https://github.com/nhalm/pgxkit) - Enhanced PostgreSQL toolkit with production features
 - [sqlc](https://github.com/kyleconroy/sqlc) - Inspiration for query-based generation
 - [UUID v7](https://uuid7.com/) - Time-ordered UUID specification
 
