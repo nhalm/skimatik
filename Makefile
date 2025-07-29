@@ -74,6 +74,28 @@ dev-setup:
 	@echo "✅ Development environment ready!"
 	@echo "Database URL: $(TEST_DB_URL)"
 
+# Example app integration test (validates end-to-end code generation)
+.PHONY: example-app-test
+example-app-test: build
+	@echo "🧪 Running example-app integration test..."
+	@echo "Setting up example app environment..."
+	@cd example-app && $(MAKE) clean && $(MAKE) setup
+	@echo "Generating code with skimatik..."
+	@cd example-app && ../bin/skimatik
+	@echo "Compiling generated code..."
+	@cd example-app && go mod tidy && go build -v ./...
+	@echo "Running application integration tests..."
+	@cd example-app && go test -v -tags=integration .
+	@echo "Testing application startup..."
+	@cd example-app && timeout 10s go run . || ([ $$? -eq 124 ] && echo "✅ App started successfully")
+	@echo "✅ Example app integration test completed successfully"
+
+# Clean example app (for use in CI)
+.PHONY: example-app-clean
+example-app-clean:
+	@echo "🧹 Cleaning example app..."
+	@cd example-app && $(MAKE) clean
+
 # Clean build artifacts
 .PHONY: clean
 clean:
@@ -98,6 +120,7 @@ help:
 	@echo "  build            Build the skimatik binary"
 	@echo "  test             Run unit tests only (no database required)"
 	@echo "  integration-test Run integration tests (auto-starts database)"
+	@echo "  example-app-test End-to-end test using example app (validates code generation)"
 	@echo "  test-all         Run all tests (unit + integration)"
 	@echo "  lint             Run linter and code formatter"
 	@echo "  dev-setup        Setup development environment with database"
