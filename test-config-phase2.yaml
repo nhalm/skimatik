@@ -1,0 +1,15 @@
+database:
+  dsn: "postgres://dbutil:dbutil_test_password@localhost:5432/dbutil_test?sslmode=disable"
+  schema: "public"
+
+output:
+  directory: "./test-output"
+  package: "generated"
+
+tables:
+  users:
+  posts:
+  comments:
+
+default_functions: "all"
+verbose: true 
