@@ -2,13 +2,13 @@
 func (r *{{.RepositoryName}}) Delete(ctx context.Context, id uuid.UUID) error {
 	query := `DELETE FROM {{.TableName}} WHERE {{.IDColumn}} = $1`
 	
-	result, err := r.db.Exec(ctx, query, id)
+	rowsAffected, err := ExecuteNonQueryWithRowsAffected(ctx, r.db, "delete", "{{.StructName}}", query, id)
 	if err != nil {
-		return HandleDatabaseError("delete", "{{.StructName}}", err)
+		return err
 	}
 	
 	// Check if any rows were affected
-	if result.RowsAffected() == 0 {
+	if rowsAffected == 0 {
 		return fmt.Errorf("{{.StructName}} not found")
 	}
 	

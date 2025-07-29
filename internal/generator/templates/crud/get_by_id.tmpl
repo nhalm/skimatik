@@ -7,9 +7,10 @@ func (r *{{.RepositoryName}}) Get(ctx context.Context, id uuid.UUID) (*{{.Struct
 	`
 	
 	var {{.ReceiverName}} {{.StructName}}
-	err := r.db.QueryRow(ctx, query, id).Scan({{.ScanArgs}})
-	if err != nil {
-		return nil, HandleDatabaseError("get", "{{.StructName}}", err)
+	row := ExecuteQueryRow(ctx, r.db, "get", "{{.StructName}}", query, id)
+	err := row.Scan({{.ScanArgs}})
+	if err := HandleQueryRowError("get", "{{.StructName}}", err); err != nil {
+		return nil, err
 	}
 	
 	return &{{.ReceiverName}}, nil

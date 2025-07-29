@@ -2,9 +2,9 @@
 func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterDeclarations}}) ([]{{.ResultType}}, error) {
 	query := `{{.SQL}}`
 	
-	rows, err := r.db.Query(ctx, query{{.ParameterArgs}})
+	rows, err := ExecuteQuery(ctx, r.db, "{{.QueryName}}", "{{.ResultType}}", query{{.ParameterArgs}})
 	if err != nil {
-		return nil, HandleDatabaseError("{{.QueryName}}", "{{.ResultType}}", err)
+		return nil, err
 	}
 	defer rows.Close()
 	
@@ -18,5 +18,5 @@ func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterD
 		results = append(results, result)
 	}
 	
-	return results, HandleRowsError("{{.ResultType}}", rows.Err())
+	return results, HandleRowsResult("{{.ResultType}}", rows)
 } 
