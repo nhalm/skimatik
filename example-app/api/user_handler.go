@@ -1,4 +1,4 @@
-package handlers
+package api
 
 import (
 	"encoding/json"
@@ -7,16 +7,15 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/nhalm/skimatik/example-app/service"
 )
 
 // UserHandler handles HTTP requests for user operations
 type UserHandler struct {
-	userService service.UserService
+	userService UserService
 }
 
 // NewUserHandler creates a new user handler
-func NewUserHandler(userService service.UserService) *UserHandler {
+func NewUserHandler(userService UserService) *UserHandler {
 	return &UserHandler{
 		userService: userService,
 	}
@@ -31,14 +30,25 @@ func (h *UserHandler) GetUserByEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.userService.GetUserByEmail(r.Context(), email)
+	domainUser, err := h.userService.GetUserByEmail(r.Context(), email)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
+	// Convert domain type to API response type
+	apiUser := UserDetailResponse{
+		ID:          domainUser.ID,
+		Name:        domainUser.Name,
+		Email:       domainUser.Email,
+		IsActive:    domainUser.IsActive,
+		PostCount:   domainUser.PostCount,
+		CreatedAt:   domainUser.CreatedAt,
+		LastLoginAt: domainUser.LastLoginAt,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
+	json.NewEncoder(w).Encode(apiUser)
 }
 
 // GetActiveUsers handles GET /api/users?limit=10
@@ -52,16 +62,27 @@ func (h *UserHandler) GetActiveUsers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	users, err := h.userService.GetActiveUsers(r.Context(), limit)
+	domainUsers, err := h.userService.GetActiveUsers(r.Context(), limit)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	// Convert domain types to API response types
+	apiUsers := make([]UserSummaryResponse, len(domainUsers))
+	for i, user := range domainUsers {
+		apiUsers[i] = UserSummaryResponse{
+			ID:       user.ID,
+			Name:     user.Name,
+			Email:    user.Email,
+			IsActive: user.IsActive,
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"users": users,
-		"count": len(users),
+		"users": apiUsers,
+		"count": len(apiUsers),
 	})
 }
 
@@ -74,18 +95,26 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.userService.GetUser(r.Context(), userID)
+	domainUser, err := h.userService.GetUser(r.Context(), userID)
 	if err != nil {
-		if err == service.ErrUserNotFound {
-			http.Error(w, "User not found", http.StatusNotFound)
-			return
-		}
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		// Note: We'll need to define domain errors later
+		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
 
+	// Convert domain type to API response type
+	apiUser := UserDetailResponse{
+		ID:          domainUser.ID,
+		Name:        domainUser.Name,
+		Email:       domainUser.Email,
+		IsActive:    domainUser.IsActive,
+		PostCount:   domainUser.PostCount,
+		CreatedAt:   domainUser.CreatedAt,
+		LastLoginAt: domainUser.LastLoginAt,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
+	json.NewEncoder(w).Encode(apiUser)
 }
 
 // GetUserStats handles GET /api/users/{id}/stats
@@ -97,17 +126,25 @@ func (h *UserHandler) GetUserStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stats, err := h.userService.GetUserStats(r.Context(), userID)
+	domainStats, err := h.userService.GetUserStats(r.Context(), userID)
 	if err != nil {
 		http.Error(w, "Failed to get user stats", http.StatusInternalServerError)
 		return
 	}
 
+	// Convert domain type to API response type
+	apiStats := UserStatsResponse{
+		UserID:       domainStats.UserID,
+		PostCount:    domainStats.PostCount,
+		CommentCount: domainStats.CommentCount,
+		LastActivity: domainStats.LastActivity,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	json.NewEncoder(w).Encode(apiStats)
 }
 
-// SearchUsers handles GET /api/users/search?q=query&limit=10
+// SearchUsers handles GET /api/users/search?q=query
 func (h *UserHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
 	if query == "" {
@@ -115,26 +152,28 @@ func (h *UserHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	limitStr := r.URL.Query().Get("limit")
-	limit := 10 // default
-
-	if limitStr != "" {
-		if parsedLimit, err := strconv.Atoi(limitStr); err == nil {
-			limit = parsedLimit
-		}
-	}
-
-	users, err := h.userService.SearchUsers(r.Context(), query, limit)
+	domainUsers, err := h.userService.SearchUsers(r.Context(), query)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	// Convert domain types to API response types
+	apiUsers := make([]UserSummaryResponse, len(domainUsers))
+	for i, user := range domainUsers {
+		apiUsers[i] = UserSummaryResponse{
+			ID:       user.ID,
+			Name:     user.Name,
+			Email:    user.Email,
+			IsActive: user.IsActive,
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"users": users,
+		"users": apiUsers,
 		"query": query,
-		"count": len(users),
+		"count": len(apiUsers),
 	})
 }
 

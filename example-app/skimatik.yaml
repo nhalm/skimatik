@@ -1,0 +1,22 @@
+database:
+  dsn: "postgres://dbutil:dbutil_test_password@localhost:5432/blog?sslmode=disable"
+  schema: "public"
+
+output:
+  directory: "./repository/generated"
+  package: "generated"
+
+# Generate all functions by default
+default_functions: "all"
+
+# Generate from SQL query files
+queries:
+  directory: "./database/queries"
+
+# Also generate from tables
+tables:
+  users:
+  posts:
+  comments:
+
+verbose: true 

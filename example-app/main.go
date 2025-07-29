@@ -10,9 +10,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
-	// "github.com/nhalm/skimatik/example-app/api/handlers"
-	// "github.com/nhalm/skimatik/example-app/repository/generated"
-	// "github.com/nhalm/skimatik/example-app/service"
+	"github.com/nhalm/skimatik/example-app/api"
+	"github.com/nhalm/skimatik/example-app/service"
 )
 
 func main() {
@@ -39,13 +38,13 @@ func main() {
 	// Initialize generated queries
 	// queries := generated.New(db)
 
-	// Initialize services
-	// userService := service.NewUserService(queries)
-	// postService := service.NewPostService(queries)
+	// Initialize services (using stub implementations until code generation)
+	userService := service.NewStubUserService()
+	postService := service.NewStubPostService()
 
 	// Initialize handlers
-	// userHandler := handlers.NewUserHandler(userService)
-	// postHandler := handlers.NewPostHandler(postService)
+	userHandler := api.NewUserHandler(userService)
+	postHandler := api.NewPostHandler(postService)
 
 	// Setup router with chi
 	r := chi.NewRouter()
@@ -81,31 +80,29 @@ func main() {
 			w.Write([]byte(`{"status":"healthy","timestamp":"` + time.Now().Format(time.RFC3339) + `"}`))
 		})
 
-		// TODO: These routes will be enabled after running 'make generate'
 		// User routes
-		// r.Route("/users", func(r chi.Router) {
-		// 	r.Get("/", userHandler.GetActiveUsers)
-		// 	r.Get("/search", userHandler.SearchUsers)
-		// 	r.Get("/{id}", userHandler.GetUser)
-		// 	r.Get("/{id}/stats", userHandler.GetUserStats)
-		// 	r.Get("/{id}/posts", postHandler.GetUserPosts)
-		// 	r.Delete("/{id}", userHandler.DeactivateUser)
-		// })
+		r.Route("/users", func(r chi.Router) {
+			r.Get("/", userHandler.GetActiveUsers)
+			r.Get("/search", userHandler.SearchUsers)
+			r.Get("/{id}", userHandler.GetUser)
+			r.Get("/{id}/stats", userHandler.GetUserStats)
+			r.Get("/{id}/posts", postHandler.GetUserPosts)
+			r.Delete("/{id}", userHandler.DeactivateUser)
+		})
 
 		// Post routes - demonstrates custom repository pattern
-		// These will be enabled after running 'make generate'
-		// r.Route("/posts", func(r chi.Router) {
-		// 	// Standard generated query methods
-		// 	r.Get("/", postHandler.GetPublishedPosts)
-		// 	r.Get("/with-stats", postHandler.GetPostsWithStats)
-		// 	r.Get("/{id}", postHandler.GetPost)
-		// 	r.Put("/{id}/publish", postHandler.PublishPost)
-		//
-		// 	// Custom repository methods that extend generated functionality
-		// 	r.Get("/featured", postHandler.GetFeaturedPosts)        // Custom business logic
-		// 	r.Get("/statistics", postHandler.GetPostStatistics)     // Aggregation across queries
-		// 	r.Get("/tag/{tag}", postHandler.GetPostsByTag)          // Custom filtering
-		// })
+		r.Route("/posts", func(r chi.Router) {
+			// Standard generated query methods
+			r.Get("/", postHandler.GetPublishedPosts)
+			r.Get("/with-stats", postHandler.GetPostsWithStats)
+			r.Get("/{id}", postHandler.GetPost)
+			r.Put("/{id}/publish", postHandler.PublishPost)
+
+			// Custom repository methods that extend generated functionality
+			r.Get("/featured", postHandler.GetFeaturedPosts)    // Custom business logic
+			r.Get("/statistics", postHandler.GetPostStatistics) // Aggregation across queries
+			r.Get("/tag/{tag}", postHandler.GetPostsByTag)      // Custom filtering
+		})
 	})
 
 	// Start server
