@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Migration runner for dbutil-gen test environment
+# Migration runner for skimatik test environment
 # This script runs all migration files in the test/migrations directory
 
 set -e

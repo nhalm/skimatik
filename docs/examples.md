@@ -112,12 +112,12 @@ func main() {
     queries := conn.Queries()
     
     // First page
-    params := dbutil.PaginationParams{
+    params := skimatik.PaginationParams{
         Limit: 20,
         Cursor: "", // Empty for first page
     }
     
-    result, err := dbutil.Paginate(ctx, params, func(ctx context.Context, cursor *uuid.UUID, limit int32) ([]User, error) {
+    result, err := skimatik.Paginate(ctx, params, func(ctx context.Context, cursor *uuid.UUID, limit int32) ([]User, error) {
         // Your sqlc query with cursor support
         rows, err := queries.GetUsersPaginated(ctx, sqlc.GetUsersPaginatedParams{
             Cursor: cursor,
@@ -147,12 +147,12 @@ func main() {
     
     // Next page if available
     if result.HasMore {
-        nextParams := dbutil.PaginationParams{
+        nextParams := skimatik.PaginationParams{
             Limit:  20,
             Cursor: result.NextCursor,
         }
         
-        nextResult, err := dbutil.Paginate(ctx, nextParams, func(ctx context.Context, cursor *uuid.UUID, limit int32) ([]User, error) {
+        nextResult, err := skimatik.Paginate(ctx, nextParams, func(ctx context.Context, cursor *uuid.UUID, limit int32) ([]User, error) {
             // Same query function as above
             rows, err := queries.GetUsersPaginated(ctx, sqlc.GetUsersPaginatedParams{
                 Cursor: cursor,

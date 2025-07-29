@@ -1,4 +1,4 @@
--- Test schema for dbutil-gen code generator
+-- Test schema for skimatik code generator
 -- This schema covers all PostgreSQL data types and edge cases
 
 -- Enable UUID extension for UUID support
@@ -177,7 +177,7 @@ CREATE TABLE data_types_test (
 
 -- Test table with non-UUID primary key (should be rejected by generator)
 CREATE TABLE invalid_pk_table (
-    id SERIAL PRIMARY KEY,  -- This should cause dbutil-gen to reject the table
+    id SERIAL PRIMARY KEY,  -- This should cause skimatik to reject the table
     name VARCHAR(255) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
