@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"github.com/nhalm/skimatik/example-app/service"
 )
 
@@ -24,8 +24,7 @@ func NewUserHandler(userService service.UserService) *UserHandler {
 
 // GetUserByEmail handles GET /api/users/email/{email}
 func (h *UserHandler) GetUserByEmail(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	email := vars["email"]
+	email := chi.URLParam(r, "email")
 
 	if email == "" {
 		http.Error(w, "Email parameter is required", http.StatusBadRequest)
@@ -38,7 +37,8 @@ func (h *UserHandler) GetUserByEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.writeJSON(w, http.StatusOK, user)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
 }
 
 // GetActiveUsers handles GET /api/users?limit=10
@@ -58,30 +58,53 @@ func (h *UserHandler) GetActiveUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.writeJSON(w, http.StatusOK, map[string]interface{}{
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
 		"users": users,
 		"count": len(users),
 	})
 }
 
+// GetUser handles GET /api/users/{id}
+func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	userID, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	user, err := h.userService.GetUser(r.Context(), userID)
+	if err != nil {
+		if err == service.ErrUserNotFound {
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
+}
+
 // GetUserStats handles GET /api/users/{id}/stats
 func (h *UserHandler) GetUserStats(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	userIDStr := vars["id"]
-
-	userID, err := uuid.Parse(userIDStr)
+	idStr := chi.URLParam(r, "id")
+	userID, err := uuid.Parse(idStr)
 	if err != nil {
-		http.Error(w, "Invalid user ID format", http.StatusBadRequest)
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
 		return
 	}
 
 	stats, err := h.userService.GetUserStats(r.Context(), userID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		http.Error(w, "Failed to get user stats", http.StatusInternalServerError)
 		return
 	}
 
-	h.writeJSON(w, http.StatusOK, stats)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
 }
 
 // SearchUsers handles GET /api/users/search?q=query&limit=10
@@ -107,7 +130,8 @@ func (h *UserHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.writeJSON(w, http.StatusOK, map[string]interface{}{
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
 		"users": users,
 		"query": query,
 		"count": len(users),
@@ -116,10 +140,8 @@ func (h *UserHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 
 // DeactivateUser handles DELETE /api/users/{id}
 func (h *UserHandler) DeactivateUser(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	userIDStr := vars["id"]
-
-	userID, err := uuid.Parse(userIDStr)
+	idStr := chi.URLParam(r, "id")
+	userID, err := uuid.Parse(idStr)
 	if err != nil {
 		http.Error(w, "Invalid user ID format", http.StatusBadRequest)
 		return
@@ -131,7 +153,8 @@ func (h *UserHandler) DeactivateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.writeJSON(w, http.StatusOK, map[string]string{
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
 		"message": "User deactivated successfully",
 	})
 }
