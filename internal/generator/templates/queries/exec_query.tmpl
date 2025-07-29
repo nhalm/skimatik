@@ -2,6 +2,5 @@
 func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterDeclarations}}) error {
 	query := `{{.SQL}}`
 	
-	_, err := r.db.Exec(ctx, query{{.ParameterArgs}})
-	return err
+	return ExecuteNonQuery(ctx, r.db, "{{.QueryName}}", "{{.QueryName}}", query{{.ParameterArgs}})
 } 

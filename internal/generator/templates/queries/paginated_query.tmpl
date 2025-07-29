@@ -33,7 +33,7 @@ func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterD
 		args = append(args, limit+1) // +1 to check if there are more results
 	}
 
-	rows, err := r.db.Query(ctx, query, args...)
+	rows, err := ExecuteQuery(ctx, r.db, "{{.QueryName}}", "{{.ResultType}}", query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +49,7 @@ func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterD
 		results = append(results, result)
 	}
 
-	if err := rows.Err(); err != nil {
+	if err := HandleRowsResult("{{.ResultType}}", rows); err != nil {
 		return nil, err
 	}
 

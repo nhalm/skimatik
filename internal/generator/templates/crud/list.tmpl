@@ -6,9 +6,9 @@ func (r *{{.RepositoryName}}) List(ctx context.Context) ([]{{.StructName}}, erro
 		ORDER BY {{.IDColumn}} ASC
 	`
 	
-	rows, err := r.db.Query(ctx, query)
+	rows, err := ExecuteQuery(ctx, r.db, "list", "{{.StructName}}", query)
 	if err != nil {
-		return nil, HandleDatabaseError("list", "{{.StructName}}", err)
+		return nil, err
 	}
 	defer rows.Close()
 	
@@ -22,5 +22,5 @@ func (r *{{.RepositoryName}}) List(ctx context.Context) ([]{{.StructName}}, erro
 		results = append(results, {{.ReceiverName}})
 	}
 	
-	return results, HandleRowsError("{{.StructName}}", rows.Err())
+	return results, HandleRowsResult("{{.StructName}}", rows)
 } 

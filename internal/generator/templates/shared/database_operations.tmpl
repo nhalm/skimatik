@@ -1,97 +1,47 @@
 // Shared database operation utilities
 // These functions eliminate duplication across repositories and provide consistent patterns
+// Available for both generated repositories and custom implementer extensions
 
 import (
 	"context"
-	"reflect"
+	"github.com/jackc/pgx/v5"
+	"github.com/nhalm/pgxkit"
 )
 
-// QueryRowAndScan executes a single-row query and scans the result
+// ExecuteQueryRow executes a single-row query and returns the row for scanning
 // This eliminates duplication across Create, Get, Update, and One query operations
-func QueryRowAndScan[T any](ctx context.Context, db DB, operation, entity, query string, result *T, args ...interface{}) error {
-	// Use reflection to get scan destinations from the result struct
-	resultValue := reflect.ValueOf(result).Elem()
-	scanArgs := make([]interface{}, resultValue.NumField())
-	
-	for i := 0; i < resultValue.NumField(); i++ {
-		scanArgs[i] = resultValue.Field(i).Addr().Interface()
-	}
-	
-	err := db.QueryRow(ctx, query, args...).Scan(scanArgs...)
-	if err != nil {
-		return HandleDatabaseError(operation, entity, err)
-	}
-	
-	return nil
+func ExecuteQueryRow(ctx context.Context, db *pgxkit.DB, operation, entity, query string, args ...interface{}) pgx.Row {
+	return db.QueryRow(ctx, query, args...)
 }
 
-// QueryRowAndScanWithCustomScan executes a single-row query with explicit scan arguments
-// For cases where reflection isn't suitable or scan args are complex
-func QueryRowAndScanWithCustomScan(ctx context.Context, db DB, operation, entity, query string, scanArgs []interface{}, args ...interface{}) error {
-	err := db.QueryRow(ctx, query, args...).Scan(scanArgs...)
-	if err != nil {
-		return HandleDatabaseError(operation, entity, err)
-	}
-	
-	return nil
-}
-
-// QueryAndScanSlice executes a multi-row query and scans results into a slice
+// ExecuteQuery executes a multi-row query and returns rows for scanning  
 // This eliminates duplication across List, Many queries, and paginated operations
-func QueryAndScanSlice[T any](ctx context.Context, db DB, operation, entity, query string, scanFunc func() (T, []interface{}), args ...interface{}) ([]T, error) {
+func ExecuteQuery(ctx context.Context, db *pgxkit.DB, operation, entity, query string, args ...interface{}) (pgx.Rows, error) {
 	rows, err := db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, HandleDatabaseError(operation, entity, err)
 	}
-	defer rows.Close()
-	
-	var results []T
-	for rows.Next() {
-		item, scanArgs := scanFunc()
-		err := rows.Scan(scanArgs...)
-		if err != nil {
-			return nil, HandleDatabaseError("scan", entity, err)
-		}
-		results = append(results, item)
-	}
-	
-	return results, HandleRowsError(entity, rows.Err())
+	return rows, nil
 }
 
-// QueryAndScanSliceWithLimit executes a paginated query with limit checking
-// Used for pagination where we query limit+1 to check for more items
-func QueryAndScanSliceWithLimit[T any](ctx context.Context, db DB, operation, entity, query string, limit int, scanFunc func() (T, []interface{}), args ...interface{}) ([]T, bool, error) {
-	rows, err := db.Query(ctx, query, args...)
+// HandleQueryRowError processes errors from single-row operations with consistent error handling
+func HandleQueryRowError(operation, entity string, err error) error {
 	if err != nil {
-		return nil, false, HandleDatabaseError(operation, entity, err)
+		return HandleDatabaseError(operation, entity, err)
 	}
-	defer rows.Close()
-	
-	var results []T
-	for rows.Next() {
-		item, scanArgs := scanFunc()
-		err := rows.Scan(scanArgs...)
-		if err != nil {
-			return nil, false, HandleDatabaseError("scan", entity, err)
-		}
-		results = append(results, item)
-	}
-	
-	if err := rows.Err(); err != nil {
-		return nil, false, HandleRowsError(entity, err)
-	}
-	
-	// Check if there are more items
-	hasMore := len(results) > limit
-	if hasMore {
-		results = results[:limit] // Remove the extra item
-	}
-	
-	return results, hasMore, nil
+	return nil
 }
 
-// ExecOperation executes a non-query operation (INSERT, UPDATE, DELETE without RETURNING)
-func ExecOperation(ctx context.Context, db DB, operation, entity, query string, args ...interface{}) error {
+// HandleRowsResult processes the final result from multi-row operations 
+func HandleRowsResult(entity string, rows pgx.Rows) error {
+	if err := rows.Err(); err != nil {
+		return HandleRowsError(entity, err)
+	}
+	return nil
+}
+
+// ExecuteNonQuery executes a non-query operation (INSERT, UPDATE, DELETE without RETURNING)
+func ExecuteNonQuery(ctx context.Context, db *pgxkit.DB, operation, entity, query string, args ...interface{}) error {
 	_, err := db.Exec(ctx, query, args...)
 	if err != nil {
 		return HandleDatabaseError(operation, entity, err)
@@ -99,8 +49,8 @@ func ExecOperation(ctx context.Context, db DB, operation, entity, query string, 
 	return nil
 }
 
-// ExecOperationWithRowsAffected executes a non-query operation and checks rows affected
-func ExecOperationWithRowsAffected(ctx context.Context, db DB, operation, entity, query string, args ...interface{}) (int64, error) {
+// ExecuteNonQueryWithRowsAffected executes a non-query operation and returns rows affected
+func ExecuteNonQueryWithRowsAffected(ctx context.Context, db *pgxkit.DB, operation, entity, query string, args ...interface{}) (int64, error) {
 	result, err := db.Exec(ctx, query, args...)
 	if err != nil {
 		return 0, HandleDatabaseError(operation, entity, err)

@@ -12,9 +12,10 @@ func (r *{{.RepositoryName}}) Create(ctx context.Context, params Create{{.Struct
 	`
 	
 	var {{.ReceiverName}} {{.StructName}}
-	err := r.db.QueryRow(ctx, query, {{.InsertArgs}}).Scan({{.ScanArgs}})
-	if err != nil {
-		return nil, HandleDatabaseError("create", "{{.StructName}}", err)
+	row := ExecuteQueryRow(ctx, r.db, "create", "{{.StructName}}", query, {{.InsertArgs}})
+	err := row.Scan({{.ScanArgs}})
+	if err := HandleQueryRowError("create", "{{.StructName}}", err); err != nil {
+		return nil, err
 	}
 	
 	return &{{.ReceiverName}}, nil

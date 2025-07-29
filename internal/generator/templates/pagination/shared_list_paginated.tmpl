@@ -33,7 +33,7 @@ func (r *{{.RepositoryName}}) ListPaginated(ctx context.Context, params Paginati
 		LIMIT $2
 	`
 	
-	rows, err := r.db.Query(ctx, query, cursor, int32(limit+1))
+	rows, err := ExecuteQuery(ctx, r.db, "list_paginated", "{{.StructName}}", query, cursor, int32(limit+1))
 	if err != nil {
 		return nil, fmt.Errorf("pagination query failed: %w", err)
 	}
@@ -49,7 +49,7 @@ func (r *{{.RepositoryName}}) ListPaginated(ctx context.Context, params Paginati
 		items = append(items, {{.ReceiverName}})
 	}
 	
-	if err := rows.Err(); err != nil {
+	if err := HandleRowsResult("{{.StructName}}", rows); err != nil {
 		return nil, err
 	}
 

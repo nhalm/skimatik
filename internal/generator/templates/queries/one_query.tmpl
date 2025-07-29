@@ -3,9 +3,10 @@ func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterD
 	query := `{{.SQL}}`
 	
 	var result {{.ResultType}}
-	err := r.db.QueryRow(ctx, query{{.ParameterArgs}}).Scan({{.ScanArgs}})
-	if err != nil {
-		return nil, HandleDatabaseError("{{.QueryName}}", "{{.ResultType}}", err)
+	row := ExecuteQueryRow(ctx, r.db, "{{.QueryName}}", "{{.ResultType}}", query{{.ParameterArgs}})
+	err := row.Scan({{.ScanArgs}})
+	if err := HandleQueryRowError("{{.QueryName}}", "{{.ResultType}}", err); err != nil {
+		return nil, err
 	}
 	
 	return &result, nil
