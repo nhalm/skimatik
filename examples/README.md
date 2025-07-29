@@ -1,8 +1,8 @@
-# skimatik Example Application
+# skimatik Shared Utilities & Repository Embedding Example
 
 ## Overview
 
-This example demonstrates **real usage** of skimatik generated repositories with **shared utility patterns** from the duplication reduction implementation. It showcases repository embedding, custom business logic, and practical integration patterns.
+This example demonstrates **real usage** of skimatik's shared utility patterns and repository embedding architecture. It focuses on the core value proposition - eliminating code duplication while enabling clean repository composition.
 
 ## Key Features Demonstrated
 
@@ -12,14 +12,14 @@ This example demonstrates **real usage** of skimatik generated repositories with
 - **Error Handling**: Consistent patterns across generated and custom code
 - **Zero Duplication**: Shared utilities eliminate code repetition
 
-### 🏗️ **Repository Embedding**
-- **Generated Repository**: Standard CRUD operations with shared utilities
-- **Service Layer**: Repository embedding with custom business logic
-- **Interface Design**: Teams define domain-specific interfaces
+### 🏗️ **Repository Embedding Architecture**
+- **Interface Definition**: Teams define domain-specific interfaces
+- **Repository Implementation**: Embeds generated repository and implements interface
+- **Service Layer**: Uses interface properties, fulfilled by repository implementations
 - **Type Safety**: Full compile-time checking maintained
 
 ### 📊 **Real Database Integration**
-- **Actual Queries**: No mock responses - real database operations
+- **Actual Operations**: No mock responses - real database operations
 - **Error Handling**: Production-ready error patterns
 - **Logging**: Comprehensive operation logging
 - **Health Checks**: Database connectivity verification
@@ -32,101 +32,107 @@ This example demonstrates **real usage** of skimatik generated repositories with
 make dev-setup      # Start PostgreSQL with test data
 ```
 
-### 2. Generate Repositories (if needed)
-```bash
-# Build the skimatik tool
-make build
-
-# Generate repositories using test configuration
-./bin/skimatik --config=configs/test-config.yaml
-```
-
-### 3. Run Example
+### 2. Run Example
 ```bash
 cd examples
 go run main.go
 ```
 
-## API Endpoints
+## What You'll See
 
-### **Standard CRUD with Shared Utilities**
+### **Architecture Demonstration**
 ```bash
-# List users (shared database utilities)
-curl http://localhost:8080/users
+✅ Connected to database successfully
 
-# Get user by ID (shared error handling)
-curl http://localhost:8080/users/{id}
+🔧 Demonstrating Repository Embedding Pattern:
+✅ Created UserRepository (embeds generated repository)
+✅ Created UserService (uses interface property)
 
-# Create user (retry operation utilities)
-curl -X POST http://localhost:8080/users \
-  -H "Content-Type: application/json" \
-  -d '{"name": "John Doe", "email": "john@example.com"}'
+🚀 Demonstrating Shared Utility Patterns:
+✅ Registered user: John Doe (ID: 01234567-89ab-cdef-0123-456789abcdef)
+✅ Listed 5 users using shared database utilities
+✅ Retrieved 3 active users using custom business logic
+✅ Created user with retry utilities: Jane Doe (ID: 01234567-89ab-cdef-0123-456789abcde0)
 
-# Update user (shared database patterns)
-curl -X PUT http://localhost:8080/users/{id} \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Updated Name"}'
-
-# Delete user (shared error handling)
-curl -X DELETE http://localhost:8080/users/{id}
-```
-
-### **Custom Business Logic**
-```bash
-# Get active users (custom query with shared utilities)
-curl http://localhost:8080/users/active
-```
-
-### **Health Check**
-```bash
-# Verify database connectivity and features
-curl http://localhost:8080/health
+🎉 Example completed - demonstrated:
+   • Repository embedding patterns
+   • Shared database operation utilities
+   • Retry operation utilities
+   • Interface-driven design
+   • Service layer with interface properties
 ```
 
 ## Code Structure
 
-### Generated Repository Pattern
+### **1. Interface Definition (by team)**
 ```go
-// Generated repository with shared utilities
-type UsersRepository struct {
-    db *pgxpool.Pool
-}
-
-func (r *UsersRepository) Create(ctx context.Context, params CreateUsersParams) (*Users, error) {
-    query := `INSERT INTO users (name, email) VALUES ($1, $2) RETURNING ...`
-    
-    // Using shared database utilities
-    row := ExecuteQueryRow(ctx, r.db, "create", "Users", query, params.Name, params.Email)
-    var user Users
-    err := row.Scan(&user.Id, &user.Name, &user.Email, &user.CreatedAt)
-    return &user, HandleQueryRowError("create", "Users", err)
+type UserManager interface {
+    CreateUser(ctx context.Context, params CreateUsersParams) (*Users, error)
+    GetUser(ctx context.Context, id uuid.UUID) (*Users, error)
+    GetActiveUsers(ctx context.Context) ([]Users, error)
+    // ... other domain-specific methods
 }
 ```
 
-### Service Layer with Embedding
+### **2. Repository Implementation (embeds generated repository)**
 ```go
-// Service embeds generated repository
-type UserService struct {
-    *UsersRepository  // All CRUD methods available
+type UserRepository struct {
+    *UsersRepository  // Embed generated repository
+}
+
+func NewUserRepository(db *pgxkit.DB) UserManager {
+    return &UserRepository{
+        UsersRepository: NewUsersRepository(db),
+    }
+}
+
+// Interface methods automatically satisfied by embedding
+func (r *UserRepository) CreateUser(ctx context.Context, params CreateUsersParams) (*Users, error) {
+    return r.UsersRepository.Create(ctx, params)
 }
 
 // Custom business logic using shared utilities
-func (s *UserService) GetActiveUsers(ctx context.Context) ([]Users, error) {
+func (r *UserRepository) GetActiveUsers(ctx context.Context) ([]Users, error) {
     query := `SELECT ... FROM users WHERE is_active = true`
     
     // Using shared database utilities
-    rows, err := ExecuteQuery(ctx, s.db, "get_active_users", "Users", query)
+    rows, err := ExecuteQuery(ctx, r.db, "get_active_users", "Users", query)
     // ... handle results with shared patterns
 }
 ```
 
-### Retry Operations
+### **3. Service Layer (uses interface property)**
 ```go
-// Retry with shared utilities
-func (r *UsersRepository) CreateWithRetry(ctx context.Context, params CreateUsersParams) (*Users, error) {
-    return RetryOperation(ctx, DefaultRetryConfig, "create", func(ctx context.Context) (*Users, error) {
-        return r.Create(ctx, params)
-    })
+type UserService struct {
+    userRepo UserManager  // Property of interface type
+}
+
+func NewUserService(userRepo UserManager) *UserService {
+    return &UserService{
+        userRepo: userRepo,
+    }
+}
+
+// Service methods delegate to repository through interface
+func (s *UserService) RegisterUser(ctx context.Context, name, email string) (*Users, error) {
+    params := CreateUsersParams{Name: name, Email: email}
+    return s.userRepo.CreateUser(ctx, params)
+}
+```
+
+### **4. Application Usage**
+```go
+func main() {
+    db, _ := pgxkit.New(ctx, "postgres://...")
+    
+    // Create repository that implements interface
+    userRepo := NewUserRepository(db)
+    
+    // Service has property of interface type, fulfilled by repository
+    userService := NewUserService(userRepo)
+    
+    // Use service for business operations
+    user, err := userService.RegisterUser(ctx, "John", "john@example.com")
 }
 ```
 
@@ -150,58 +156,18 @@ func (r *UsersRepository) CreateWithRetry(ctx context.Context, params CreateUser
 - **Performance**: No reflection, direct database operations
 - **Reliability**: Battle-tested error handling patterns
 
-## Real vs Mock Comparison
+## Architecture Patterns
 
-### Before (Mock Response)
+### **Pattern 1: Direct Repository Usage**
 ```go
-func handleListUsers(w http.ResponseWriter, r *http.Request) {
-    // Mock data - not real
-    mockResponse := map[string]interface{}{
-        "items": []map[string]interface{}{
-            {"id": "mock-id", "name": "Mock User"},
-        },
-    }
-    json.NewEncoder(w).Encode(mockResponse)
-}
+userRepo := NewUserRepository(db)
+user, err := userRepo.CreateUser(ctx, params)
 ```
 
-### After (Real Repository)
-```go
-func (s *APIServer) handleListUsers(w http.ResponseWriter, r *http.Request) {
-    // Real database operation with shared utilities
-    users, err := s.userService.List(ctx)
-    if err != nil {
-        log.Printf("Failed to list users: %v", err)
-        http.Error(w, "Failed to list users", http.StatusInternalServerError)
-        return
-    }
-    
-    response := map[string]interface{}{
-        "items": users,
-        "count": len(users),
-    }
-    json.NewEncoder(w).Encode(response)
-}
-```
-
-## Integration Patterns
-
-### 1. **Direct Repository Usage**
-```go
-userRepo := repositories.NewUsersRepository(conn)
-user, err := userRepo.Create(ctx, params)
-```
-
-### 2. **Repository Implementation with Embedding**
+### **Pattern 2: Repository Implementation with Embedding**
 ```go
 type UserRepository struct {
     *repositories.UsersRepository  // Embed for CRUD
-}
-
-func NewUserRepository(db *pgxkit.DB) *UserRepository {
-    return &UserRepository{
-        UsersRepository: repositories.NewUsersRepository(db),
-    }
 }
 
 func (r *UserRepository) CustomMethod() {
@@ -209,7 +175,7 @@ func (r *UserRepository) CustomMethod() {
 }
 ```
 
-### 3. **Interface-Driven Design**
+### **Pattern 3: Interface-Driven Design**
 ```go
 type UserManager interface {
     CreateUser(context.Context, CreateUsersParams) (*Users, error)
@@ -219,33 +185,28 @@ type UserManager interface {
 // Service implements interface via embedding + extensions
 ```
 
-## Testing the Example
+## Key Learnings
 
-### Manual Testing
-```bash
-# Start the application
-go run main.go
+### **What This Example Shows**
+- ✅ **Repository Embedding**: How to embed generated repositories correctly
+- ✅ **Interface Implementation**: How repositories implement domain interfaces
+- ✅ **Service Architecture**: How services use interface properties
+- ✅ **Shared Utilities**: How to leverage database and retry operation utilities
+- ✅ **Custom Business Logic**: How to extend repositories with domain-specific methods
 
-# In another terminal, test endpoints
-curl http://localhost:8080/health
-curl http://localhost:8080/users
-curl -X POST http://localhost:8080/users -d '{"name":"Test","email":"test@example.com"}' -H "Content-Type: application/json"
-```
-
-### Expected Output
-- Real database operations (not mocks)
-- Comprehensive error handling
-- Retry logic for creation operations
-- Custom business logic for active users
-- Consistent logging patterns
+### **What This Example Doesn't Show**
+- ❌ **HTTP APIs**: This focuses on data layer patterns, not web frameworks
+- ❌ **Complex Domain Logic**: Simplified for demonstration purposes
+- ❌ **Multiple Aggregates**: Single entity focus for clarity
 
 ## Next Steps
 
-This example demonstrates the foundation patterns. In a real application, you would:
+In a real application, you would:
 
 1. **Define Domain Interfaces**: Create interfaces that match your business needs
-2. **Implement Services**: Embed repositories and add business logic
-3. **Add Tests**: Mock interfaces for unit tests, use real repositories for integration tests
-4. **Scale Architecture**: Compose multiple repositories for complex operations
+2. **Implement Repository Layer**: Embed generated repositories and implement interfaces
+3. **Build Service Layer**: Use interface properties for business logic
+4. **Add Testing**: Mock interfaces for unit tests, use real repositories for integration tests
+5. **Scale Architecture**: Compose multiple repositories for complex operations
 
-The shared utility patterns ensure consistency across your entire codebase while maintaining the flexibility to implement complex business requirements. 
+The shared utility patterns ensure consistency across your entire codebase while maintaining the flexibility to implement complex business requirements - **without the overhead of HTTP routing, JSON marshaling, or web framework concerns**. 
