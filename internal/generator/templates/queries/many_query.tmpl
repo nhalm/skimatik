@@ -4,7 +4,7 @@ func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterD
 	
 	rows, err := r.db.Query(ctx, query{{.ParameterArgs}})
 	if err != nil {
-		return nil, err
+		return nil, HandleDatabaseError("{{.QueryName}}", "{{.ResultType}}", err)
 	}
 	defer rows.Close()
 	
@@ -13,10 +13,10 @@ func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterD
 		var result {{.ResultType}}
 		err := rows.Scan({{.ScanArgs}})
 		if err != nil {
-			return nil, err
+			return nil, HandleDatabaseError("scan", "{{.ResultType}}", err)
 		}
 		results = append(results, result)
 	}
 	
-	return results, rows.Err()
+	return results, HandleRowsError("{{.ResultType}}", rows.Err())
 } 

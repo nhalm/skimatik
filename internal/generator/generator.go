@@ -46,9 +46,13 @@ func (g *Generator) Generate(ctx context.Context) error {
 
 	// Generate table-based repositories
 	if g.config.Tables {
-		// Generate shared pagination types file first
+		// Generate shared files first
 		if err := g.generateSharedPaginationTypes(); err != nil {
 			return fmt.Errorf("shared pagination types generation failed: %w", err)
+		}
+
+		if err := g.generateSharedErrors(); err != nil {
+			return fmt.Errorf("shared error handling generation failed: %w", err)
 		}
 
 		if err := g.generateTables(ctx); err != nil {
@@ -130,6 +134,11 @@ func (g *Generator) generateTables(ctx context.Context) error {
 // generateSharedPaginationTypes generates the shared pagination types file
 func (g *Generator) generateSharedPaginationTypes() error {
 	return g.codegen.GenerateSharedPaginationTypes()
+}
+
+// generateSharedErrors generates the shared error handling utilities file
+func (g *Generator) generateSharedErrors() error {
+	return g.codegen.GenerateSharedErrors()
 }
 
 // generateQueries generates code from SQL query files

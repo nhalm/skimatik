@@ -1,0 +1,135 @@
+// CreateWithRetry creates a new {{.StructName}} with retry logic
+func (r *{{.RepositoryName}}) CreateWithRetry(ctx context.Context, params Create{{.StructName}}Params) (*{{.StructName}}, error) {
+	return r.retryOperation(ctx, "create", func(ctx context.Context) (*{{.StructName}}, error) {
+		return r.Create(ctx, params)
+	})
+}
+
+// GetWithRetry retrieves a {{.StructName}} by ID with retry logic
+func (r *{{.RepositoryName}}) GetWithRetry(ctx context.Context, id uuid.UUID) (*{{.StructName}}, error) {
+	return r.retryOperation(ctx, "get", func(ctx context.Context) (*{{.StructName}}, error) {
+		return r.Get(ctx, id)
+	})
+}
+
+// UpdateWithRetry updates an existing {{.StructName}} with retry logic
+func (r *{{.RepositoryName}}) UpdateWithRetry(ctx context.Context, params Update{{.StructName}}Params) (*{{.StructName}}, error) {
+	return r.retryOperation(ctx, "update", func(ctx context.Context) (*{{.StructName}}, error) {
+		return r.Update(ctx, params)
+	})
+}
+
+// ListWithRetry retrieves all {{.StructName}}s with retry logic
+func (r *{{.RepositoryName}}) ListWithRetry(ctx context.Context) ([]{{.StructName}}, error) {
+	var result []{{.StructName}}
+	err := r.retryOperationSlice(ctx, "list", func(ctx context.Context) ([]{{.StructName}}, error) {
+		return r.List(ctx)
+	}, &result)
+	return result, err
+}
+
+// retryOperation executes a single-result database operation with retry logic
+func (r *{{.RepositoryName}}) retryOperation(ctx context.Context, operation string, fn func(context.Context) (*{{.StructName}}, error)) (*{{.StructName}}, error) {
+	const maxRetries = 3
+	backoff := time.Millisecond * 100
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		result, err := fn(ctx)
+		if err == nil {
+			return result, nil
+		}
+
+		// Don't retry certain types of errors
+		if !shouldRetryError(err) {
+			return nil, err
+		}
+
+		// Don't retry on last attempt
+		if attempt == maxRetries-1 {
+			return nil, fmt.Errorf("operation %s failed after %d attempts: %w", operation, maxRetries, err)
+		}
+
+		// Wait with exponential backoff
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("operation %s cancelled during retry: %w", operation, ctx.Err())
+		case <-time.After(backoff):
+			backoff *= 2
+		}
+	}
+
+	return nil, fmt.Errorf("operation %s failed after %d attempts", operation, maxRetries)
+}
+
+// retryOperationSlice executes a slice-result database operation with retry logic
+func (r *{{.RepositoryName}}) retryOperationSlice(ctx context.Context, operation string, fn func(context.Context) ([]{{.StructName}}, error), result *[]{{.StructName}}) error {
+	const maxRetries = 3
+	backoff := time.Millisecond * 100
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		data, err := fn(ctx)
+		if err == nil {
+			*result = data
+			return nil
+		}
+
+		// Don't retry certain types of errors
+		if !shouldRetryError(err) {
+			return err
+		}
+
+		// Don't retry on last attempt
+		if attempt == maxRetries-1 {
+			return fmt.Errorf("operation %s failed after %d attempts: %w", operation, maxRetries, err)
+		}
+
+		// Wait with exponential backoff
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("operation %s cancelled during retry: %w", operation, ctx.Err())
+		case <-time.After(backoff):
+			backoff *= 2
+		}
+	}
+
+	return fmt.Errorf("operation %s failed after %d attempts", operation, maxRetries)
+}
+
+// shouldRetryError determines if an error is worth retrying
+func shouldRetryError(err error) bool {
+	// Retry on connection errors and timeouts
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+
+	// Check for PostgreSQL connection errors
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "40001": // serialization_failure
+			return true
+		case "40P01": // deadlock_detected
+			return true
+		case "53000": // insufficient_resources
+			return true
+		case "53100": // disk_full
+			return true
+		case "53200": // out_of_memory
+			return true
+		case "53300": // too_many_connections
+			return true
+		default:
+			return false
+		}
+	}
+
+	// Retry on connection-related errors
+	if strings.Contains(err.Error(), "connection") && 
+	   (strings.Contains(err.Error(), "closed") || 
+	    strings.Contains(err.Error(), "reset") ||
+	    strings.Contains(err.Error(), "timeout")) {
+		return true
+	}
+
+	return false
+} 

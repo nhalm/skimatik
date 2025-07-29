@@ -4,7 +4,7 @@ import "embed"
 
 // Embed all template files at build time
 //
-//go:embed templates/crud/* templates/pagination/* templates/repository/* templates/queries/* templates/shared/*
+//go:embed templates/crud/* templates/pagination/* templates/repository/* templates/queries/* templates/shared/* templates/tests/*
 var templateFS embed.FS
 
 // Template file paths (constants for type safety)
@@ -33,8 +33,15 @@ const (
 
 	// Repository templates
 	TemplateRepositoryStruct = "templates/repository/repository_struct.tmpl"
+	TemplateRepositoryRetry  = "templates/repository/retry_methods.tmpl"
+	TemplateRepositoryHealth = "templates/repository/health_methods.tmpl"
 
 	// Shared templates
-	TemplateStruct = "templates/shared/struct.tmpl"
-	TemplateHeader = "templates/shared/header.tmpl"
+	TemplateStruct        = "templates/shared/struct.tmpl"
+	TemplateHeader        = "templates/shared/header.tmpl"
+	TemplateErrorHandling = "templates/shared/error_handling.tmpl"
+	TemplateSharedErrors  = "templates/shared/errors.tmpl"
+
+	// Test templates
+	TemplateRepositoryTest = "templates/tests/repository_test.tmpl"
 )

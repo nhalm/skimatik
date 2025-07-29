@@ -5,7 +5,7 @@ func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterD
 	var result {{.ResultType}}
 	err := r.db.QueryRow(ctx, query{{.ParameterArgs}}).Scan({{.ScanArgs}})
 	if err != nil {
-		return nil, err
+		return nil, HandleDatabaseError("{{.QueryName}}", "{{.ResultType}}", err)
 	}
 	
 	return &result, nil

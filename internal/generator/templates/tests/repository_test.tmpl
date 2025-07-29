@@ -1,0 +1,230 @@
+// Test{{.StructName}}Repository provides comprehensive testing for {{.RepositoryName}}
+func Test{{.StructName}}Repository(t *testing.T) {
+	t.Parallel()
+	
+	// Set up test database using pgxkit
+	testDB := pgxkit.RequireDB(t)
+	repo := New{{.RepositoryName}}(testDB.DB)
+	
+	ctx := context.Background()
+	
+	t.Run("Create", func(t *testing.T) {
+		// Test data creation
+		params := Create{{.StructName}}Params{
+			{{range .CreateFields}}{{.Name}}: {{.TestValue}},
+			{{end}}
+		}
+		
+		created, err := repo.Create(ctx, params)
+		require.NoError(t, err)
+		require.NotNil(t, created)
+		{{range .CreateFields}}require.Equal(t, params.{{.Name}}, created.{{.Name}})
+		{{end}}
+	})
+	
+	t.Run("Get", func(t *testing.T) {
+		// First create a record
+		params := Create{{.StructName}}Params{
+			{{range .CreateFields}}{{.Name}}: {{.TestValue}},
+			{{end}}
+		}
+		
+		created, err := repo.Create(ctx, params)
+		require.NoError(t, err)
+		
+		// Then retrieve it
+		retrieved, err := repo.Get(ctx, created.{{.IDField}})
+		require.NoError(t, err)
+		require.NotNil(t, retrieved)
+		require.Equal(t, created.{{.IDField}}, retrieved.{{.IDField}})
+	})
+	
+	t.Run("GetNotFound", func(t *testing.T) {
+		// Test getting non-existent record
+		nonExistentID := uuid.New()
+		retrieved, err := repo.Get(ctx, nonExistentID)
+		require.Error(t, err)
+		require.Nil(t, retrieved)
+		require.Contains(t, err.Error(), "not found")
+	})
+	
+	t.Run("Update", func(t *testing.T) {
+		// First create a record
+		createParams := Create{{.StructName}}Params{
+			{{range .CreateFields}}{{.Name}}: {{.TestValue}},
+			{{end}}
+		}
+		
+		created, err := repo.Create(ctx, createParams)
+		require.NoError(t, err)
+		
+		// Then update it
+		updateParams := Update{{.StructName}}Params{
+			{{.IDField}}: created.{{.IDField}},
+			{{range .UpdateFields}}{{.Name}}: {{.UpdateTestValue}},
+			{{end}}
+		}
+		
+		updated, err := repo.Update(ctx, updateParams)
+		require.NoError(t, err)
+		require.NotNil(t, updated)
+		require.Equal(t, created.{{.IDField}}, updated.{{.IDField}})
+		{{range .UpdateFields}}require.Equal(t, updateParams.{{.Name}}, updated.{{.Name}})
+		{{end}}
+	})
+	
+	t.Run("Delete", func(t *testing.T) {
+		// First create a record
+		params := Create{{.StructName}}Params{
+			{{range .CreateFields}}{{.Name}}: {{.TestValue}},
+			{{end}}
+		}
+		
+		created, err := repo.Create(ctx, params)
+		require.NoError(t, err)
+		
+		// Then delete it
+		err = repo.Delete(ctx, created.{{.IDField}})
+		require.NoError(t, err)
+		
+		// Verify it's gone
+		retrieved, err := repo.Get(ctx, created.{{.IDField}})
+		require.Error(t, err)
+		require.Nil(t, retrieved)
+	})
+	
+	t.Run("List", func(t *testing.T) {
+		// Create multiple records
+		var created []{{.StructName}}
+		for i := 0; i < 3; i++ {
+			params := Create{{.StructName}}Params{
+				{{range .CreateFields}}{{.Name}}: {{.TestValueFunc}}(i),
+				{{end}}
+			}
+			
+			record, err := repo.Create(ctx, params)
+			require.NoError(t, err)
+			created = append(created, *record)
+		}
+		
+		// List all records
+		results, err := repo.List(ctx)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, len(results), 3)
+		
+		// Verify our created records are in the list
+		createdIDs := make(map[uuid.UUID]bool)
+		for _, record := range created {
+			createdIDs[record.{{.IDField}}] = true
+		}
+		
+		foundCount := 0
+		for _, result := range results {
+			if createdIDs[result.{{.IDField}}] {
+				foundCount++
+			}
+		}
+		require.Equal(t, 3, foundCount)
+	})
+	
+	t.Run("HealthCheck", func(t *testing.T) {
+		err := repo.HealthCheck(ctx)
+		require.NoError(t, err)
+	})
+	
+	t.Run("HealthCheckDetailed", func(t *testing.T) {
+		status, err := repo.HealthCheckDetailed(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, status)
+		require.True(t, status.Healthy)
+		require.Equal(t, "{{.TableName}}", status.TableName)
+		require.Equal(t, "{{.RepositoryName}}", status.Repository)
+		require.Contains(t, status.Checks, "connection")
+		require.Equal(t, "OK", status.Checks["connection"])
+	})
+	
+	t.Run("RetryMethods", func(t *testing.T) {
+		// Test retry methods work without errors under normal conditions
+		params := Create{{.StructName}}Params{
+			{{range .CreateFields}}{{.Name}}: {{.TestValue}},
+			{{end}}
+		}
+		
+		// Test CreateWithRetry
+		created, err := repo.CreateWithRetry(ctx, params)
+		require.NoError(t, err)
+		require.NotNil(t, created)
+		
+		// Test GetWithRetry
+		retrieved, err := repo.GetWithRetry(ctx, created.{{.IDField}})
+		require.NoError(t, err)
+		require.NotNil(t, retrieved)
+		require.Equal(t, created.{{.IDField}}, retrieved.{{.IDField}})
+		
+		// Test ListWithRetry
+		results, err := repo.ListWithRetry(ctx)
+		require.NoError(t, err)
+		require.NotEmpty(t, results)
+	})
+}
+
+// Test{{.StructName}}RepositoryTimeout tests timeout handling
+func Test{{.StructName}}RepositoryTimeout(t *testing.T) {
+	t.Parallel()
+	
+	testDB := pgxkit.RequireDB(t)
+	repo := New{{.RepositoryName}}(testDB.DB)
+	
+	// Create a context with a very short timeout
+	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
+	defer cancel()
+	
+	// Wait a moment to ensure timeout
+	time.Sleep(time.Millisecond)
+	
+	// All operations should fail with timeout
+	t.Run("CreateTimeout", func(t *testing.T) {
+		params := Create{{.StructName}}Params{
+			{{range .CreateFields}}{{.Name}}: {{.TestValue}},
+			{{end}}
+		}
+		
+		_, err := repo.Create(ctx, params)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "context")
+	})
+	
+	t.Run("GetTimeout", func(t *testing.T) {
+		id := uuid.New()
+		_, err := repo.Get(ctx, id)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "context")
+	})
+}
+
+// Test{{.StructName}}RepositoryConstraints tests database constraint handling
+func Test{{.StructName}}RepositoryConstraints(t *testing.T) {
+	t.Parallel()
+	
+	testDB := pgxkit.RequireDB(t)
+	repo := New{{.RepositoryName}}(testDB.DB)
+	ctx := context.Background()
+	
+	{{if .HasUniqueConstraints}}
+	t.Run("UniqueConstraint", func(t *testing.T) {
+		// Create first record
+		params := Create{{.StructName}}Params{
+			{{range .CreateFields}}{{.Name}}: {{.TestValue}},
+			{{end}}
+		}
+		
+		_, err := repo.Create(ctx, params)
+		require.NoError(t, err)
+		
+		// Try to create duplicate - should fail
+		_, err = repo.Create(ctx, params)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "already exists")
+	})
+	{{end}}
+} 

@@ -1,0 +1,109 @@
+// Shared database operation utilities
+// These functions eliminate duplication across repositories and provide consistent patterns
+
+import (
+	"context"
+	"reflect"
+)
+
+// QueryRowAndScan executes a single-row query and scans the result
+// This eliminates duplication across Create, Get, Update, and One query operations
+func QueryRowAndScan[T any](ctx context.Context, db DB, operation, entity, query string, result *T, args ...interface{}) error {
+	// Use reflection to get scan destinations from the result struct
+	resultValue := reflect.ValueOf(result).Elem()
+	scanArgs := make([]interface{}, resultValue.NumField())
+	
+	for i := 0; i < resultValue.NumField(); i++ {
+		scanArgs[i] = resultValue.Field(i).Addr().Interface()
+	}
+	
+	err := db.QueryRow(ctx, query, args...).Scan(scanArgs...)
+	if err != nil {
+		return HandleDatabaseError(operation, entity, err)
+	}
+	
+	return nil
+}
+
+// QueryRowAndScanWithCustomScan executes a single-row query with explicit scan arguments
+// For cases where reflection isn't suitable or scan args are complex
+func QueryRowAndScanWithCustomScan(ctx context.Context, db DB, operation, entity, query string, scanArgs []interface{}, args ...interface{}) error {
+	err := db.QueryRow(ctx, query, args...).Scan(scanArgs...)
+	if err != nil {
+		return HandleDatabaseError(operation, entity, err)
+	}
+	
+	return nil
+}
+
+// QueryAndScanSlice executes a multi-row query and scans results into a slice
+// This eliminates duplication across List, Many queries, and paginated operations
+func QueryAndScanSlice[T any](ctx context.Context, db DB, operation, entity, query string, scanFunc func() (T, []interface{}), args ...interface{}) ([]T, error) {
+	rows, err := db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, HandleDatabaseError(operation, entity, err)
+	}
+	defer rows.Close()
+	
+	var results []T
+	for rows.Next() {
+		item, scanArgs := scanFunc()
+		err := rows.Scan(scanArgs...)
+		if err != nil {
+			return nil, HandleDatabaseError("scan", entity, err)
+		}
+		results = append(results, item)
+	}
+	
+	return results, HandleRowsError(entity, rows.Err())
+}
+
+// QueryAndScanSliceWithLimit executes a paginated query with limit checking
+// Used for pagination where we query limit+1 to check for more items
+func QueryAndScanSliceWithLimit[T any](ctx context.Context, db DB, operation, entity, query string, limit int, scanFunc func() (T, []interface{}), args ...interface{}) ([]T, bool, error) {
+	rows, err := db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, false, HandleDatabaseError(operation, entity, err)
+	}
+	defer rows.Close()
+	
+	var results []T
+	for rows.Next() {
+		item, scanArgs := scanFunc()
+		err := rows.Scan(scanArgs...)
+		if err != nil {
+			return nil, false, HandleDatabaseError("scan", entity, err)
+		}
+		results = append(results, item)
+	}
+	
+	if err := rows.Err(); err != nil {
+		return nil, false, HandleRowsError(entity, err)
+	}
+	
+	// Check if there are more items
+	hasMore := len(results) > limit
+	if hasMore {
+		results = results[:limit] // Remove the extra item
+	}
+	
+	return results, hasMore, nil
+}
+
+// ExecOperation executes a non-query operation (INSERT, UPDATE, DELETE without RETURNING)
+func ExecOperation(ctx context.Context, db DB, operation, entity, query string, args ...interface{}) error {
+	_, err := db.Exec(ctx, query, args...)
+	if err != nil {
+		return HandleDatabaseError(operation, entity, err)
+	}
+	return nil
+}
+
+// ExecOperationWithRowsAffected executes a non-query operation and checks rows affected
+func ExecOperationWithRowsAffected(ctx context.Context, db DB, operation, entity, query string, args ...interface{}) (int64, error) {
+	result, err := db.Exec(ctx, query, args...)
+	if err != nil {
+		return 0, HandleDatabaseError(operation, entity, err)
+	}
+	return result.RowsAffected(), nil
+} 
