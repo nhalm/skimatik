@@ -192,13 +192,19 @@ userRepo := repositories.NewUsersRepository(conn)
 user, err := userRepo.Create(ctx, params)
 ```
 
-### 2. **Service Layer Embedding**
+### 2. **Repository Implementation with Embedding**
 ```go
-type UserService struct {
+type UserRepository struct {
     *repositories.UsersRepository  // Embed for CRUD
 }
 
-func (s *UserService) CustomMethod() {
+func NewUserRepository(conn *pgxpool.Pool) *UserRepository {
+    return &UserRepository{
+        UsersRepository: repositories.NewUsersRepository(conn),
+    }
+}
+
+func (r *UserRepository) CustomMethod() {
     // Add business logic using shared utilities
 }
 ```

@@ -187,23 +187,23 @@ func (r *UsersRepository) CreateWithRetry(ctx context.Context, params CreateUser
 	return nil, fmt.Errorf("create user failed after %d attempts", maxRetries)
 }
 
-// Example service layer showing repository embedding pattern
-type UserService struct {
+// Example repository implementation showing embedding pattern
+type UserRepository struct {
 	*UsersRepository // Embed generated repository
 }
 
-func NewUserService(userRepo *UsersRepository) *UserService {
-	return &UserService{
-		UsersRepository: userRepo,
+func NewUserRepository(conn *pgxpool.Pool) *UserRepository {
+	return &UserRepository{
+		UsersRepository: NewUsersRepository(conn),
 	}
 }
 
 // Custom business logic using shared utilities pattern
-func (s *UserService) GetActiveUsers(ctx context.Context) ([]Users, error) {
+func (r *UserRepository) GetActiveUsers(ctx context.Context) ([]Users, error) {
 	query := `SELECT id, name, email, is_active, created_at FROM users WHERE is_active = true ORDER BY created_at DESC`
 
 	// Using shared database utilities pattern (simulated)
-	rows, err := s.db.Query(ctx, query)
+	rows, err := r.db.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("get active users failed: %w", err)
 	}
@@ -259,16 +259,15 @@ func main() {
 
 // APIServer demonstrates repository embedding and shared utility usage
 type APIServer struct {
-	userService *UserService
+	userRepo *UserRepository
 }
 
 func NewAPIServer(conn *pgxpool.Pool) *APIServer {
-	// Initialize generated repositories and service layer
-	userRepo := NewUsersRepository(conn)
-	userService := NewUserService(userRepo)
+	// Initialize repository with embedded generated repository
+	userRepo := NewUserRepository(conn)
 
 	return &APIServer{
-		userService: userService,
+		userRepo: userRepo,
 	}
 }
 
@@ -300,7 +299,7 @@ func (s *APIServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Test database connection using repository
-	_, err := s.userService.List(ctx)
+	_, err := s.userRepo.List(ctx)
 	if err != nil {
 		http.Error(w, "Database unhealthy", http.StatusServiceUnavailable)
 		return
@@ -319,7 +318,7 @@ func (s *APIServer) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Using generated repository with shared database utilities
-	users, err := s.userService.List(ctx)
+	users, err := s.userRepo.List(ctx)
 	if err != nil {
 		log.Printf("Failed to list users: %v", err)
 		http.Error(w, "Failed to list users", http.StatusInternalServerError)
@@ -350,7 +349,7 @@ func (s *APIServer) handleGetUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Using generated repository with shared error handling
-	user, err := s.userService.GetByID(ctx, userID)
+	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		if err.Error() == "user not found" {
 			http.Error(w, "User not found", http.StatusNotFound)
@@ -384,7 +383,7 @@ func (s *APIServer) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Using retry operation utilities for resilient creation
-	user, err := s.userService.CreateWithRetry(ctx, params)
+	user, err := s.userRepo.CreateWithRetry(ctx, params)
 	if err != nil {
 		log.Printf("Failed to create user with retry: %v", err)
 		http.Error(w, "Failed to create user", http.StatusInternalServerError)
@@ -416,7 +415,7 @@ func (s *APIServer) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Using generated repository with shared database patterns
-	user, err := s.userService.Update(ctx, userID, params)
+	user, err := s.userRepo.Update(ctx, userID, params)
 	if err != nil {
 		if err.Error() == "user not found" {
 			http.Error(w, "User not found", http.StatusNotFound)
@@ -445,7 +444,7 @@ func (s *APIServer) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Using generated repository with shared error handling
-	err = s.userService.Delete(ctx, userID)
+	err = s.userRepo.Delete(ctx, userID)
 	if err != nil {
 		if err.Error() == "user not found" {
 			http.Error(w, "User not found", http.StatusNotFound)
@@ -465,7 +464,7 @@ func (s *APIServer) handleGetActiveUsers(w http.ResponseWriter, r *http.Request)
 	ctx := r.Context()
 
 	// Using custom business logic with shared utility patterns
-	users, err := s.userService.GetActiveUsers(ctx)
+	users, err := s.userRepo.GetActiveUsers(ctx)
 	if err != nil {
 		log.Printf("Failed to get active users: %v", err)
 		http.Error(w, "Failed to get active users", http.StatusInternalServerError)

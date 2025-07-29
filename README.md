@@ -120,24 +120,24 @@ type UserService interface {
     GetActiveUsers(ctx context.Context) ([]repositories.Users, error)
 }
 
-// Embed generated repository and extend with business logic
-type userService struct {
+// Create repository that implements interface and embeds generated repository
+type userRepository struct {
     *repositories.UsersRepository  // All generated methods available
 }
 
-func NewUserService(userRepo *repositories.UsersRepository) UserService {
-    return &userService{
-        UsersRepository: userRepo,
+func NewUserRepository(conn *pgxpool.Pool) UserService {
+    return &userRepository{
+        UsersRepository: repositories.NewUsersRepository(conn),
     }
 }
 
 // Custom business logic using shared utilities
-func (s *userService) GetActiveUsers(ctx context.Context) ([]repositories.Users, error) {
+func (r *userRepository) GetActiveUsers(ctx context.Context) ([]repositories.Users, error) {
     return repositories.RetryOperationSlice(ctx, repositories.DefaultRetryConfig, "get_active_users", func(ctx context.Context) ([]repositories.Users, error) {
         query := `SELECT id, name, email, created_at FROM users WHERE is_active = true ORDER BY created_at DESC`
         
         // Using shared database utilities
-        rows, err := repositories.ExecuteQuery(ctx, s.db, "get_active_users", "Users", query)
+        rows, err := repositories.ExecuteQuery(ctx, r.db, "get_active_users", "Users", query)
         if err != nil {
             return nil, err
         }
