@@ -37,10 +37,11 @@ const (
 	TemplateRepositoryHealth = "templates/repository/health_methods.tmpl"
 
 	// Shared templates
-	TemplateStruct        = "templates/shared/struct.tmpl"
-	TemplateHeader        = "templates/shared/header.tmpl"
-	TemplateErrorHandling = "templates/shared/error_handling.tmpl"
-	TemplateSharedErrors  = "templates/shared/errors.tmpl"
+	TemplateStruct             = "templates/shared/struct.tmpl"
+	TemplateHeader             = "templates/shared/header.tmpl"
+	TemplateErrorHandling      = "templates/shared/error_handling.tmpl"
+	TemplateSharedErrors       = "templates/shared/errors.tmpl"
+	TemplateDatabaseOperations = "templates/shared/database_operations.tmpl"
 
 	// Test templates
 	TemplateRepositoryTest = "templates/tests/repository_test.tmpl"

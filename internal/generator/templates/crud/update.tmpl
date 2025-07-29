@@ -13,9 +13,10 @@ func (r *{{.RepositoryName}}) Update(ctx context.Context, id uuid.UUID, params U
 	`
 	
 	var {{.ReceiverName}} {{.StructName}}
-	err := r.db.QueryRow(ctx, query, {{.UpdateArgs}}).Scan({{.ScanArgs}})
-	if err != nil {
-		return nil, HandleDatabaseError("update", "{{.StructName}}", err)
+	row := ExecuteQueryRow(ctx, r.db, "update", "{{.StructName}}", query, {{.UpdateArgs}})
+	err := row.Scan({{.ScanArgs}})
+	if err := HandleQueryRowError("update", "{{.StructName}}", err); err != nil {
+		return nil, err
 	}
 	
 	return &{{.ReceiverName}}, nil

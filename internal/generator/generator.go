@@ -55,6 +55,10 @@ func (g *Generator) Generate(ctx context.Context) error {
 			return fmt.Errorf("shared error handling generation failed: %w", err)
 		}
 
+		if err := g.generateSharedDatabaseOperations(); err != nil {
+			return fmt.Errorf("shared database operations generation failed: %w", err)
+		}
+
 		if err := g.generateTables(ctx); err != nil {
 			return fmt.Errorf("table generation failed: %w", err)
 		}
@@ -139,6 +143,11 @@ func (g *Generator) generateSharedPaginationTypes() error {
 // generateSharedErrors generates the shared error handling utilities file
 func (g *Generator) generateSharedErrors() error {
 	return g.codegen.GenerateSharedErrors()
+}
+
+// generateSharedDatabaseOperations generates the shared database operation utilities file
+func (g *Generator) generateSharedDatabaseOperations() error {
+	return g.codegen.GenerateSharedDatabaseOperations()
 }
 
 // generateQueries generates code from SQL query files
