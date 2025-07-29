@@ -37,44 +37,64 @@ example-app/
 
 ## 🚀 Quick Start
 
-### 1. Setup Database
-```bash
-# Start PostgreSQL (using Docker)
-docker run --name blog-db -e POSTGRES_PASSWORD=password -e POSTGRES_DB=blog -p 5432:5432 -d postgres:15
+### Automated Workflow (Recommended)
 
-# Apply schema
-psql -h localhost -U postgres -d blog -f database/schema.sql
+**Complete setup and run in one command:**
+```bash
+make dev
 ```
 
-### 2. Generate Code
+This will automatically:
+1. 🐘 Start PostgreSQL database in Docker
+2. 📋 Apply schema with sample data
+3. ⚡ Generate Go code with skimatik
+4. 🚀 Start the API server
+
+**Other useful commands:**
 ```bash
-# Generate code from SQL queries with skimatik
-skimatik --database-url="postgres://postgres:password@localhost:5432/blog" \
-         --queries-dir="database/queries" \
-         --output-dir="repository/generated" \
-         --package-name="generated"
+make setup     # Database + code generation only
+make test-api  # Test all API endpoints
+make demo      # Show complete workflow explanation
+make help      # See all available commands
 ```
 
-### 3. Run Application
+### Manual Setup (Step by Step)
+
+If you prefer to run each step manually:
+
+#### 1. Setup Database
 ```bash
-go mod tidy
-go run main.go
+make db-start db-create db-migrate
 ```
 
-### 4. Test API
+#### 2. Generate Code
 ```bash
-# Create a user
-curl -X POST http://localhost:8080/api/users \
-  -H "Content-Type: application/json" \
-  -d '{"name":"John Doe","email":"john@example.com"}'
+make generate
+```
 
-# Create a post
-curl -X POST http://localhost:8080/api/posts \
-  -H "Content-Type: application/json" \
-  -d '{"title":"My First Post","content":"Hello world!","author_id":"<user-id>"}'
+#### 3. Run Application
+```bash
+make run
+```
 
-# Get posts with pagination
-curl "http://localhost:8080/api/posts?limit=10"
+#### 4. Test API
+```bash
+make test-api
+```
+
+Or test manually:
+```bash
+# Get active users
+curl "http://localhost:8080/api/users"
+
+# Get published posts
+curl "http://localhost:8080/api/posts"
+
+# Search users
+curl "http://localhost:8080/api/users/search?q=alice"
+
+# Get user statistics
+curl "http://localhost:8080/api/users/{user-id}/stats"
 ```
 
 ## 📚 Layer Details
