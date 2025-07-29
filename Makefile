@@ -53,32 +53,6 @@ test-all:
 	$(GOTEST) -v -timeout $(TEST_TIMEOUT) ./...
 	@echo "✅ All tests completed"
 
-# Generate test output for development/testing
-.PHONY: test-generate
-test-generate: build dev-setup
-	@echo "Generating test output..."
-	@mkdir -p test-output
-	@echo "database:" > test-output/config.yaml
-	@echo "  dsn: \"$(TEST_DB_URL)\"" >> test-output/config.yaml
-	@echo "  schema: \"public\"" >> test-output/config.yaml
-	@echo "output:" >> test-output/config.yaml
-	@echo "  directory: \"./test-output\"" >> test-output/config.yaml
-	@echo "  package: \"testgen\"" >> test-output/config.yaml
-	@echo "default_functions: \"all\"" >> test-output/config.yaml
-	@echo "tables:" >> test-output/config.yaml
-	@echo "  users:" >> test-output/config.yaml
-	@echo "  posts:" >> test-output/config.yaml
-	@echo "  comments:" >> test-output/config.yaml
-	@echo "verbose: true" >> test-output/config.yaml
-	$(BINARY_PATH) --config=test-output/config.yaml
-	@echo "✅ Test generation completed"
-	@echo "📁 Generated files in: ./test-output/"
-	@echo "🔍 Key files to check:"
-	@echo "   - test-output/database_operations.go  # New shared utilities"
-	@echo "   - test-output/errors.go               # Shared error handling"
-	@echo "   - test-output/pagination.go           # Shared pagination types"
-	@echo "   - test-output/users_generated.go      # Example repository"
-
 # Run linter and formatter
 .PHONY: lint
 lint:
@@ -125,7 +99,6 @@ help:
 	@echo "  test             Run unit tests only (no database required)"
 	@echo "  integration-test Run integration tests (auto-starts database)"
 	@echo "  test-all         Run all tests (unit + integration)"
-	@echo "  test-generate    Generate test output for development/testing"
 	@echo "  lint             Run linter and code formatter"
 	@echo "  dev-setup        Setup development environment with database"
 	@echo "  clean            Remove build artifacts and stop services"
