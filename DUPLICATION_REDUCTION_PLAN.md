@@ -3,8 +3,8 @@
 ## 🚀 Implementation Status
 
 - ✅ **Phase 1: Database Operation Patterns** - **COMPLETED** (PR #24)
-- 🔄 **Phase 2: Shared Retry Utilities** - **NEXT**
-- ⏳ **Phase 3: Documentation & Examples** - Pending
+- ✅ **Phase 2: Shared Retry Utilities** - **COMPLETED** (PR #[number])
+- 🔄 **Phase 3: Documentation & Examples** - **NEXT**
 
 ## Overview
 
@@ -283,43 +283,51 @@ type UserService struct {
 
 ---
 
-### 🔄 **Phase 2: Shared Retry Utilities** - **NEXT AGENT START HERE**
-**Status**: 🔄 IN PROGRESS
-**Priority**: HIGH
-**Estimated effort**: 1-2 days
+### ✅ **Phase 2: Shared Retry Utilities** - **COMPLETED**
+**Status**: ✅ DONE (PR #[number])
+**Completed**: Jan 2025
+**Implementation**: Generated shared concrete retry utilities (no reflection)
 
-**Objective**: Create shared retry utility functions that both generated repositories and implementers can use, following the same concrete/public pattern established in Phase 1.
+**What was delivered:**
+- ✅ Created `retry_operations.go` with 3 public utility functions
+- ✅ Updated `retry_methods.tmpl` to use shared patterns (4 lines vs 135 lines)
+- ✅ Replaced reflection-based approach with concrete, type-safe utilities  
+- ✅ Generated code now uses: `RetryOperation()`, `RetryOperationSlice()`, `ShouldRetryError()`
+- ✅ All tests passing, generated code compiles correctly
+- ✅ Public functions available for cross-package implementer use
+- ✅ Complete elimination of retry logic duplication
 
-**Tasks for next agent:**
-1. **Create shared retry utilities** (follow Phase 1 pattern):
-   - Generate concrete retry functions in a shared file (e.g., `retry_operations.go`)
-   - Make functions PUBLIC (capitalized) for cross-package use
-   - Use the same `*pgxkit.DB` interface and error handling patterns
-   - NO reflection - concrete, type-safe functions only
-
-2. **Update retry method templates**:
-   - Simplify `retry_methods.tmpl` to use shared utilities
-   - Remove duplicated retry logic from every repository
-   - Ensure consistency with Phase 1 database operation patterns
-
-3. **Test integration**:
-   - Verify generated retry methods use shared utilities
-   - Test that implementers can use same utilities in custom code
-   - Ensure backward compatibility
-
-**Reference implementation from Phase 1**: Look at how `database_operations.go` is generated and used in templates.
+**Files changed**: 6 files (templates + generation integration)
+**Key insight**: Generic functions with concrete implementation - zero duplication achieved
 
 ---
 
-### ⏳ **Phase 3: Documentation & Examples** - Pending
-**Status**: ⏳ PENDING (after Phase 2)
+### 🔄 **Phase 3: Documentation & Examples** - **NEXT AGENT START HERE**
+**Status**: 🔄 READY TO START
+**Priority**: MEDIUM
 **Estimated effort**: 1 day
 
-**Tasks:**
-- Update usage examples with new shared utility patterns
-- Document embedding and extension patterns for implementers
-- Create migration guide for existing users
-- Update README with cross-package utility usage examples
+**Objective**: Update documentation and examples to showcase the new shared utility patterns from Phases 1 & 2.
+
+**Tasks for next agent:**
+1. **Update usage examples**:
+   - Showcase shared database operation utilities from Phase 1
+   - Demonstrate shared retry utilities from Phase 2
+   - Show cross-package utility usage patterns
+   - Include both generated and custom repository examples
+
+2. **Create comprehensive documentation**:
+   - Document embedding and extension patterns for implementers
+   - Show how teams can use shared utilities in custom code
+   - Update README with practical examples
+   - Create best practices guide
+
+3. **Migration guidance** (if needed):
+   - Document any breaking changes (minimal due to generated code)
+   - Provide upgrade guidance for existing users
+   - Highlight benefits of shared utility approach
+
+**Reference implementations**: Look at generated files in `test-output/` to see actual shared utility usage.
 
 ## Notes
 
