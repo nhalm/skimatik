@@ -78,30 +78,14 @@ dev-setup:
 .PHONY: example-app-test
 example-app-test: build
 	@echo "🧪 Running example-app integration test..."
-	@echo "Setting up example app environment..."
-	@cd example-app && $(MAKE) clean && $(MAKE) setup
-	@echo "Generating code with skimatik..."
-	@cd example-app && ../bin/skimatik
-	@echo "Compiling generated code..."
-	@cd example-app && go mod tidy && go build -v ./...
-	@echo "Running application integration tests..."
-	@cd example-app && go test -v -tags=integration .
-	@echo "Testing application startup..."
-	@cd example-app && timeout 10s go run . || ([ $$? -eq 124 ] && echo "✅ App started successfully")
+	@cd example-app && $(MAKE) clean && $(MAKE) setup && $(MAKE) generate && $(MAKE) test && $(MAKE) start-and-test
 	@echo "✅ Example app integration test completed successfully"
 
 # Example app integration test for CI (uses existing database)
 .PHONY: example-app-test-ci
 example-app-test-ci: build
 	@echo "🧪 Running example-app integration test (CI mode)..."
-	@echo "Generating code with skimatik..."
-	@cd example-app && ../bin/skimatik
-	@echo "Compiling generated code..."
-	@cd example-app && go mod tidy && go build -v ./...
-	@echo "Running application integration tests..."
-	@cd example-app && go test -v -tags=integration .
-	@echo "Testing application startup..."
-	@cd example-app && timeout 10s go run . || ([ $$? -eq 124 ] && echo "✅ App started successfully")
+	@cd example-app && $(MAKE) generate && $(MAKE) test && $(MAKE) start-and-test
 	@echo "✅ Example app integration test completed successfully"
 
 # Clean example app (for use in CI)
