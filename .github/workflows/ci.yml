@@ -155,9 +155,9 @@ jobs:
         path: |
           ~/.cache/go-build
           ~/go/pkg/mod
-        key: ${{ runner.os }}-go-1.23-${{ hashFiles('**/go.sum') }}-v2
+        key: ${{ runner.os }}-go-1.23-example-app-${{ hashFiles('**/go.sum') }}-v1
         restore-keys: |
-          ${{ runner.os }}-go-1.23-v2-
+          ${{ runner.os }}-go-1.23-example-app-v1-
     
     - name: Download dependencies
       run: go mod download
@@ -165,7 +165,17 @@ jobs:
     - name: Install coreutils for timeout command
       run: sudo apt-get update && sudo apt-get install -y coreutils
     
+    - name: Install PostgreSQL client
+      run: sudo apt-get install -y postgresql-client
+    
+    - name: Set up example app database schema
+      run: |
+        cd example-app
+        PGPASSWORD=password psql -h localhost -p 5432 -U postgres -d blog < database/schema.sql
+      env:
+        PGPASSWORD: password
+    
     - name: Run example app integration test
-      run: make example-app-test
+      run: make example-app-test-ci
 
  

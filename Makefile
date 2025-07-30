@@ -90,6 +90,20 @@ example-app-test: build
 	@cd example-app && timeout 10s go run . || ([ $$? -eq 124 ] && echo "✅ App started successfully")
 	@echo "✅ Example app integration test completed successfully"
 
+# Example app integration test for CI (uses existing database)
+.PHONY: example-app-test-ci
+example-app-test-ci: build
+	@echo "🧪 Running example-app integration test (CI mode)..."
+	@echo "Generating code with skimatik..."
+	@cd example-app && ../bin/skimatik
+	@echo "Compiling generated code..."
+	@cd example-app && go mod tidy && go build -v ./...
+	@echo "Running application integration tests..."
+	@cd example-app && go test -v -tags=integration .
+	@echo "Testing application startup..."
+	@cd example-app && timeout 10s go run . || ([ $$? -eq 124 ] && echo "✅ App started successfully")
+	@echo "✅ Example app integration test completed successfully"
+
 # Clean example app (for use in CI)
 .PHONY: example-app-clean
 example-app-clean:
@@ -117,14 +131,15 @@ help:
 	@echo "  make             Show this help message"
 	@echo ""
 	@echo "🚀 ESSENTIAL TARGETS:"
-	@echo "  build            Build the skimatik binary"
-	@echo "  test             Run unit tests only (no database required)"
-	@echo "  integration-test Run integration tests (auto-starts database)"
-	@echo "  example-app-test End-to-end test using example app (validates code generation)"
-	@echo "  test-all         Run all tests (unit + integration)"
-	@echo "  lint             Run linter and code formatter"
-	@echo "  dev-setup        Setup development environment with database"
-	@echo "  clean            Remove build artifacts and stop services"
+	@echo "  build              Build the skimatik binary"
+	@echo "  test               Run unit tests only (no database required)"
+	@echo "  integration-test   Run integration tests (auto-starts database)"
+	@echo "  example-app-test   End-to-end test using example app (validates code generation)"
+	@echo "  example-app-test-ci  CI version of example app test (uses existing database)"
+	@echo "  test-all           Run all tests (unit + integration)"
+	@echo "  lint               Run linter and code formatter"
+	@echo "  dev-setup          Setup development environment with database"
+	@echo "  clean              Remove build artifacts and stop services"
 	@echo ""
 	@echo "💡 QUICK START:"
 	@echo "  make build       # Build the tool"
