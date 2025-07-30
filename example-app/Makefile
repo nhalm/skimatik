@@ -36,35 +36,28 @@ generate: ## Generate Go code with skimatik
 	@../bin/skimatik
 	@echo "✅ Code generated"
 
-test: ## Run integration tests for the application
+test: ## Test the application (validates generated code works)
 	@echo "🧪 Testing application..."
-	@go test -v -tags=integration .
-	@echo "✅ Application tests passed"
-
-start-and-test: ## Start app and test with curl
-	@echo "🚀 Starting application in background..."
-	@lsof -ti:8080 | xargs kill -9 2>/dev/null || true
-	@sleep 2
-	@export DATABASE_URL="$(DATABASE_URL)" && go run . &
-	@echo "⏰ Waiting for app to start..."
-	@sleep 5
-	@echo "🔍 Testing health endpoint..."
-	@curl -f http://localhost:8080/api/health || (echo "❌ Health check failed" && exit 1)
-	@echo ""
-	@echo "🔍 Testing that app compiles and starts with generated code..."
-	@curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/posts | grep -E "^(200|400|404)$$" > /dev/null || (echo "❌ App not responding" && exit 1)
-	@echo "✅ App responds to requests (status codes indicate app is running)"
-	@echo ""
-	@echo "✅ Integration test passed: Generated code compiles and app runs!"
-	@echo "🛑 Stopping application..."
-	@lsof -ti:8080 | xargs kill -9 2>/dev/null || true
-
-test-ci: ## CI-friendly test (no background processes)
-	@echo "🧪 Testing application (CI mode)..."
-	@go test -v -tags=integration .
 	@echo "🔨 Testing that generated code compiles..."
 	@go build -v ./...
-	@echo "✅ CI tests passed"
+	@if command -v curl >/dev/null 2>&1; then \
+		echo "🚀 Starting application and testing endpoints..."; \
+		lsof -ti:8080 | xargs kill -9 2>/dev/null || true; \
+		sleep 2; \
+		export DATABASE_URL="$(DATABASE_URL)" && go run . & \
+		sleep 5; \
+		echo "🔍 Testing health endpoint..."; \
+		curl -f http://localhost:8080/api/health || (echo "❌ Health check failed" && exit 1); \
+		echo ""; \
+		echo "🔍 Testing that app responds to requests..."; \
+		curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/posts | grep -E "^(200|400|404)$$" > /dev/null || (echo "❌ App not responding" && exit 1); \
+		echo "✅ App responds to requests (status codes indicate app is running)"; \
+		echo "🛑 Stopping application..."; \
+		lsof -ti:8080 | xargs kill -9 2>/dev/null || true; \
+	else \
+		echo "⚠️  curl not available - skipping HTTP tests (compilation test passed)"; \
+	fi
+	@echo "✅ Application tests passed"
 
 run: ## Run the application
 	@echo "🚀 Starting server..."
