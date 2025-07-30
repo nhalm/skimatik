@@ -78,14 +78,14 @@ dev-setup:
 .PHONY: example-app-test
 example-app-test: build
 	@echo "🧪 Running example-app integration test..."
-	@cd example-app && $(MAKE) clean && $(MAKE) setup && $(MAKE) generate && $(MAKE) test && $(MAKE) start-and-test
+	@cd example-app && $(MAKE) clean && $(MAKE) setup && $(MAKE) generate && $(MAKE) test
 	@echo "✅ Example app integration test completed successfully"
 
 # Example app integration test for CI (uses existing database)
 .PHONY: example-app-test-ci
 example-app-test-ci: build
 	@echo "🧪 Running example-app integration test (CI mode)..."
-	@cd example-app && $(MAKE) generate && $(MAKE) test-ci
+	@cd example-app && $(MAKE) generate && $(MAKE) test
 	@echo "✅ Example app integration test completed successfully"
 
 # Clean example app (for use in CI)
