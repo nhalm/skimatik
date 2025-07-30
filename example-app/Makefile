@@ -3,19 +3,20 @@
 # Configuration
 DATABASE_URL = postgres://postgres:password@localhost:5432/blog?sslmode=disable
 
-.PHONY: help setup generate test run clean
+.PHONY: help setup generate test start-and-test run clean
 
 help: ## Show available commands
 	@echo "Example Blog Application"
 	@echo ""
 	@echo "Commands:"
-	@echo "  make setup     - Start database and apply schema"
-	@echo "  make generate  - Generate Go code with skimatik"
-	@echo "  make test      - Run integration tests"
-	@echo "  make run       - Run the application"
-	@echo "  make clean     - Clean generated code"
+	@echo "  make setup         - Start database and apply schema"
+	@echo "  make generate      - Generate Go code with skimatik"
+	@echo "  make test          - Run integration tests"
+	@echo "  make start-and-test - Start app and test with curl"
+	@echo "  make run           - Run the application"
+	@echo "  make clean         - Clean generated code"
 	@echo ""
-	@echo "Quick start: make setup && make generate && make test && make run"
+	@echo "Quick start: make setup && make generate && make test && make start-and-test"
 
 setup: ## Start database and apply schema
 	@echo "🐘 Setting up database..."
@@ -31,13 +32,25 @@ setup: ## Start database and apply schema
 
 generate: ## Generate Go code with skimatik
 	@echo "⚡ Generating code..."
-	@skimatik
+	@../bin/skimatik
 	@echo "✅ Code generated"
 
 test: ## Run integration tests for the application
 	@echo "🧪 Testing application..."
 	@go test -v -tags=integration .
 	@echo "✅ Application tests passed"
+
+start-and-test: ## Start app and test with curl
+	@echo "🚀 Starting application in background..."
+	@export DATABASE_URL="$(DATABASE_URL)" && go run . &
+	@echo "⏰ Waiting for app to start..."
+	@sleep 5
+	@echo "🔍 Testing with curl..."
+	@curl -f http://localhost:8080/api/health || (echo "❌ Health check failed" && exit 1)
+	@echo ""
+	@echo "✅ Application is running and responding!"
+	@echo "🛑 Stopping application..."
+	@pkill -f "go run ." || true
 
 run: ## Run the application
 	@echo "🚀 Starting server..."
