@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/nhalm/skimatik/example-app/domain"
 	"github.com/nhalm/skimatik/example-app/repository/generated"
 )
 
@@ -22,21 +23,136 @@ func NewPostRepository(queries *generated.PostsQueries) *PostRepository {
 	}
 }
 
-// Custom business logic methods that build on the generated foundation
+// Implement service.PostRepository interface methods with domain type conversion
 
-// GetFeaturedPosts returns posts marked as featured with custom business logic
-func (r *PostRepository) GetFeaturedPosts(ctx context.Context, limit int) ([]generated.GetPublishedPostsResult, error) {
-	// Use the generated GetPublishedPosts as a base, then filter
-	posts, err := r.GetPublishedPosts(ctx, fmt.Sprintf("%d", limit*2)) // Get more to filter
+func (r *PostRepository) GetPublishedPosts(ctx context.Context, limit int32) ([]domain.PostSummary, error) {
+	results, err := r.PostsQueries.GetPublishedPosts(ctx, fmt.Sprintf("%d", limit))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get published posts: %w", err)
 	}
 
+	posts := make([]domain.PostSummary, len(results))
+	for i, result := range results {
+		var publishedAt *string
+		if result.PublishedAt.Valid {
+			publishedAtStr := result.PublishedAt.Time.Format("2006-01-02T15:04:05Z07:00")
+			publishedAt = &publishedAtStr
+		}
+
+		posts[i] = domain.PostSummary{
+			ID:          uuid.UUID(result.Id.Bytes),
+			Title:       result.Title.String,
+			Content:     result.Content.String,
+			AuthorID:    uuid.UUID(result.AuthorId.Bytes),
+			IsPublished: true, // GetPublishedPosts only returns published posts
+			PublishedAt: publishedAt,
+			CreatedAt:   result.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		}
+	}
+
+	return posts, nil
+}
+
+func (r *PostRepository) GetPostWithAuthor(ctx context.Context, postID uuid.UUID) (*domain.PostDetail, error) {
+	result, err := r.PostsQueries.GetPostWithAuthor(ctx, postID.String())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get post with author: %w", err)
+	}
+
+	var publishedAt *string
+	if result.PublishedAt.Valid {
+		publishedAtStr := result.PublishedAt.Time.Format("2006-01-02T15:04:05Z07:00")
+		publishedAt = &publishedAtStr
+	}
+
+	post := &domain.PostDetail{
+		ID:          uuid.UUID(result.Id.Bytes),
+		Title:       result.Title.String,
+		Content:     result.Content.String,
+		AuthorID:    uuid.UUID(result.AuthorId.Bytes),
+		AuthorName:  result.AuthorName.String,
+		AuthorEmail: result.AuthorEmail.String,
+		IsPublished: result.IsPublished.Bool,
+		PublishedAt: publishedAt,
+		CreatedAt:   result.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	return post, nil
+}
+
+func (r *PostRepository) GetUserPosts(ctx context.Context, userID uuid.UUID) ([]domain.PostSummary, error) {
+	results, err := r.PostsQueries.GetUserPosts(ctx, userID.String())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user posts: %w", err)
+	}
+
+	posts := make([]domain.PostSummary, len(results))
+	for i, result := range results {
+		var publishedAt *string
+		if result.PublishedAt.Valid {
+			publishedAtStr := result.PublishedAt.Time.Format("2006-01-02T15:04:05Z07:00")
+			publishedAt = &publishedAtStr
+		}
+
+		posts[i] = domain.PostSummary{
+			ID:          uuid.UUID(result.Id.Bytes),
+			Title:       result.Title.String,
+			Content:     result.Content.String,
+			AuthorID:    uuid.UUID(result.AuthorId.Bytes),
+			IsPublished: result.IsPublished.Bool,
+			PublishedAt: publishedAt,
+			CreatedAt:   result.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		}
+	}
+
+	return posts, nil
+}
+
+func (r *PostRepository) GetPostsWithStats(ctx context.Context, limit int32) ([]domain.PostWithStats, error) {
+	// Use GetPostsWithCommentCount as the equivalent for "stats"
+	results, err := r.PostsQueries.GetPostsWithCommentCount(ctx, fmt.Sprintf("%d", limit))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get posts with stats: %w", err)
+	}
+
+	posts := make([]domain.PostWithStats, len(results))
+	for i, result := range results {
+		posts[i] = domain.PostWithStats{
+			ID:           uuid.UUID(result.Id.Bytes),
+			Title:        result.Title.String,
+			AuthorID:     uuid.UUID(result.AuthorId.Bytes),
+			AuthorName:   result.AuthorName.String,
+			CommentCount: int(result.CommentCount.Int64),
+			CreatedAt:    result.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		}
+	}
+
+	return posts, nil
+}
+
+func (r *PostRepository) PublishPost(ctx context.Context, postID uuid.UUID) error {
+	err := r.PostsQueries.PublishPost(ctx, postID)
+	if err != nil {
+		return fmt.Errorf("failed to publish post: %w", err)
+	}
+	return nil
+}
+
+// Custom business logic methods that build on the generated foundation
+
+// GetFeaturedPosts returns posts marked as featured with custom business logic
+func (r *PostRepository) GetFeaturedPosts(ctx context.Context, limit int) ([]domain.PostSummary, error) {
+	// Use the generated GetPublishedPosts as a base, then filter
+	posts, err := r.GetPublishedPosts(ctx, int32(limit*2)) // Get more to filter
+	if err != nil {
+		return nil, fmt.Errorf("failed to get published posts for featured filtering: %w", err)
+	}
+
 	// Custom filtering logic - in a real app this would check a featured flag
-	var featured []generated.GetPublishedPostsResult
+	var featured []domain.PostSummary
 	for _, post := range posts {
 		// Simple logic: featured posts have titles longer than 20 characters
-		if len(post.Title.String) > 20 && len(featured) < limit {
+		if len(post.Title) > 20 && len(featured) < limit {
 			featured = append(featured, post)
 		}
 	}
@@ -45,15 +161,15 @@ func (r *PostRepository) GetFeaturedPosts(ctx context.Context, limit int) ([]gen
 }
 
 // GetTrendingPosts returns posts with high engagement with custom business logic
-func (r *PostRepository) GetTrendingPosts(ctx context.Context, limit int) ([]generated.GetPublishedPostsResult, error) {
+func (r *PostRepository) GetTrendingPosts(ctx context.Context, limit int) ([]domain.PostSummary, error) {
 	// Use the generated GetPublishedPosts as a base, then apply trending logic
-	posts, err := r.GetPublishedPosts(ctx, fmt.Sprintf("%d", limit*3))
+	posts, err := r.GetPublishedPosts(ctx, int32(limit*3))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get published posts: %w", err)
 	}
 
 	// Custom trending logic - in a real app this would check engagement metrics
-	var trending []generated.GetPublishedPostsResult
+	var trending []domain.PostSummary
 	for _, post := range posts {
 		// Simple logic: trending posts were published recently
 		// In a real app, you'd check views, comments, likes, etc.
@@ -93,16 +209,16 @@ func (r *PostRepository) GetPostSummary(ctx context.Context, id uuid.UUID) (stri
 // }
 
 // GetPostsByTag demonstrates custom query logic building on generated methods
-func (r *PostRepository) GetPostsByTag(ctx context.Context, tagName string, limit int) ([]generated.GetPublishedPostsResult, error) {
+func (r *PostRepository) GetPostsByTag(ctx context.Context, tagName string, limit int) ([]domain.PostSummary, error) {
 	// In a real implementation, this would use a proper SQL query
 	// For demo purposes, we'll use the generated method and filter
-	posts, err := r.GetPublishedPosts(ctx, fmt.Sprintf("%d", limit*3))
+	posts, err := r.GetPublishedPosts(ctx, int32(limit*3))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get posts for tag filtering: %w", err)
 	}
 
 	// Custom filtering logic (in reality, this would be in the SQL query)
-	var tagged []generated.GetPublishedPostsResult
+	var tagged []domain.PostSummary
 	for _, post := range posts {
 		// Demo: filter posts that might contain the tag in content
 		// In a real app, you'd have a proper tags table and join
@@ -150,7 +266,7 @@ func (r *PostRepository) CreatePostWithValidation(ctx context.Context, title, co
 }
 
 // GetPostStatistics demonstrates aggregating multiple generated queries
-func (r *PostRepository) GetPostStatistics(ctx context.Context) (*PostStats, error) {
+func (r *PostRepository) GetPostStatistics(ctx context.Context) (*domain.PostStats, error) {
 	// Custom business logic that combines multiple generated queries
 	// This pattern is useful for dashboard-style data aggregation
 
@@ -159,7 +275,7 @@ func (r *PostRepository) GetPostStatistics(ctx context.Context) (*PostStats, err
 	// draftCount, err := r.GetDraftPostCount(ctx)
 	// etc.
 
-	return &PostStats{
+	return &domain.PostStats{
 		TotalPosts:     0,
 		PublishedPosts: 0,
 		DraftPosts:     0,
