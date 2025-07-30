@@ -42,15 +42,21 @@ test: ## Run integration tests for the application
 
 start-and-test: ## Start app and test with curl
 	@echo "🚀 Starting application in background..."
+	@lsof -ti:8080 | xargs kill -9 2>/dev/null || true
+	@sleep 2
 	@export DATABASE_URL="$(DATABASE_URL)" && go run . &
 	@echo "⏰ Waiting for app to start..."
 	@sleep 5
-	@echo "🔍 Testing with curl..."
+	@echo "🔍 Testing health endpoint..."
 	@curl -f http://localhost:8080/api/health || (echo "❌ Health check failed" && exit 1)
 	@echo ""
-	@echo "✅ Application is running and responding!"
+	@echo "🔍 Testing that app compiles and starts with generated code..."
+	@curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/posts | grep -E "^(200|400|404)$$" > /dev/null || (echo "❌ App not responding" && exit 1)
+	@echo "✅ App responds to requests (status codes indicate app is running)"
+	@echo ""
+	@echo "✅ Integration test passed: Generated code compiles and app runs!"
 	@echo "🛑 Stopping application..."
-	@pkill -f "go run ." || true
+	@lsof -ti:8080 | xargs kill -9 2>/dev/null || true
 
 run: ## Run the application
 	@echo "🚀 Starting server..."
