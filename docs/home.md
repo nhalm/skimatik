@@ -140,9 +140,25 @@ your-project/
 - **`repository/generated/`** - Type-safe data access (skimatik generates)
 - **`database/queries/`** - SQL files with annotations (you write)
 
-### Example Application
-See our complete [**example application**](https://github.com/nhalm/skimatik/tree/main/example-app) that demonstrates this architecture with a real blog application including users, posts, and comments.
+## 📖 Complete Example Application
+
+Want to see skimatik in action? The **[Complete Blog Application Example](examples#-complete-blog-application-example)** demonstrates a full-stack Go application with HTTP API, service layer, and database persistence using generated repositories.
+
+**Features demonstrated:**
+- 🔗 **Complete HTTP API** with REST endpoints
+- 🏗️ **Repository embedding** patterns with custom business logic  
+- 📊 **Real database schema** with foreign key relationships
+- ⚡ **Generated + custom queries** from both tables and SQL files
+- 🧪 **Integration testing** that validates the complete pipeline
+
+```bash
+# Try it yourself
+git clone https://github.com/nhalm/skimatik.git
+cd skimatik/example-app
+make setup && make generate && make run
+# Application starts at http://localhost:8080
+```
 
 ---
 
-**Next Steps**: Start with the [Quick Start Guide](quick-start) or explore the [Example Application](https://github.com/nhalm/skimatik/tree/main/example-app) to see the full architecture in action. 
+**Next Steps**: Start with the [Quick Start Guide](quick-start) or dive into the [Complete Blog Application Example](examples#-complete-blog-application-example) to see the full architecture in action. 

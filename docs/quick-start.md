@@ -2,6 +2,17 @@
 
 Get up and running with skimatik in just a few minutes. This guide will walk you through installation, configuration, and generating your first repositories.
 
+## 🚀 See It In Action
+
+Want to see a complete working example first? Check out the **[Complete Blog Application Example](examples#-complete-blog-application-example)** which demonstrates skimatik with a full HTTP API, database schema, and generated repositories.
+
+```bash
+# Quick demo with the example app
+git clone https://github.com/nhalm/skimatik.git
+cd skimatik/example-app
+make setup && make generate && make run
+```
+
 ## Prerequisites
 
 - **Go 1.21+** - Required for installation and generated code
