@@ -85,7 +85,7 @@ example-app-test: build
 .PHONY: example-app-test-ci
 example-app-test-ci: build
 	@echo "🧪 Running example-app integration test (CI mode)..."
-	@cd example-app && $(MAKE) generate && $(MAKE) test && $(MAKE) start-and-test
+	@cd example-app && $(MAKE) generate && $(MAKE) test-ci
 	@echo "✅ Example app integration test completed successfully"
 
 # Clean example app (for use in CI)
