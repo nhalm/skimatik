@@ -75,20 +75,14 @@ dev-setup:
 	@echo "Database URL: $(TEST_DB_URL)"
 
 # Example app integration test (validates end-to-end code generation)
+# Note: Requires database to be set up separately (use with existing CI database or run 'make setup' first locally)
 .PHONY: example-app-test
 example-app-test: build
 	@echo "🧪 Running example-app integration test..."
-	@cd example-app && $(MAKE) clean && $(MAKE) setup && $(MAKE) generate && $(MAKE) test
-	@echo "✅ Example app integration test completed successfully"
-
-# Example app integration test for CI (uses existing database)
-.PHONY: example-app-test-ci
-example-app-test-ci: build
-	@echo "🧪 Running example-app integration test (CI mode)..."
 	@cd example-app && $(MAKE) generate && $(MAKE) test
 	@echo "✅ Example app integration test completed successfully"
 
-# Clean example app (for use in CI)
+# Clean example app
 .PHONY: example-app-clean
 example-app-clean:
 	@echo "🧹 Cleaning example app..."
@@ -119,7 +113,6 @@ help:
 	@echo "  test               Run unit tests only (no database required)"
 	@echo "  integration-test   Run integration tests (auto-starts database)"
 	@echo "  example-app-test   End-to-end test using example app (validates code generation)"
-	@echo "  example-app-test-ci  CI version of example app test (uses existing database)"
 	@echo "  test-all           Run all tests (unit + integration)"
 	@echo "  lint               Run linter and code formatter"
 	@echo "  dev-setup          Setup development environment with database"
