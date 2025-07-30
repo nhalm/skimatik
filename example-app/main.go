@@ -9,8 +9,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nhalm/pgxkit"
 	"github.com/nhalm/skimatik/example-app/api"
+	"github.com/nhalm/skimatik/example-app/repository"
+	"github.com/nhalm/skimatik/example-app/repository/generated"
 	"github.com/nhalm/skimatik/example-app/service"
 )
 
@@ -21,26 +23,30 @@ func main() {
 		databaseURL = "postgres://postgres:password@localhost:5432/blog?sslmode=disable"
 	}
 
-	// Connect to database using standard pgx
-	db, err := pgxpool.New(context.Background(), databaseURL)
+	// Connect to database using pgxkit
+	db := pgxkit.NewDB()
+	err := db.Connect(context.Background(), databaseURL)
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
-	defer db.Close()
+	defer db.Shutdown(context.Background())
 
 	// Test database connection
-	if err := db.Ping(context.Background()); err != nil {
-		log.Fatal("Failed to ping database:", err)
+	if err := db.HealthCheck(context.Background()); err != nil {
+		log.Fatal("Failed database health check:", err)
 	}
 	log.Println("✅ Connected to database")
 
-	// TODO: These will be uncommented after running 'make generate'
-	// Initialize generated queries
-	// queries := generated.New(db)
+	// Initialize repositories
+	userRepo := repository.NewUserRepository(db)
 
-	// Initialize services (using stub implementations until code generation)
-	userService := service.NewStubUserService()
-	postService := service.NewStubPostService()
+	// For post repository, first create the generated queries, then wrap them
+	postQueries := generated.NewPostsQueries(db)
+	postRepo := repository.NewPostRepository(postQueries)
+
+	// Initialize services with real repositories
+	userService := service.NewUserService(userRepo)
+	postService := service.NewPostService(postRepo)
 
 	// Initialize handlers
 	userHandler := api.NewUserHandler(userService)
