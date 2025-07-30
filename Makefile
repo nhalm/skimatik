@@ -74,20 +74,13 @@ dev-setup:
 	@echo "✅ Development environment ready!"
 	@echo "Database URL: $(TEST_DB_URL)"
 
-# Example app integration test (validates end-to-end code generation and functionality)
-# Tests: code generation, compilation, database connectivity, API endpoints, and repository functionality
+# Example app integration test (validates end-to-end code generation)
 # Note: Requires database to be set up separately (use with existing CI database or run 'make setup' first locally)
 .PHONY: example-app-test
 example-app-test: build
-	@echo "🧪 Running example-app comprehensive integration test..."
-	@echo "   This tests the complete skimatik workflow:"
-	@echo "   • Code generation from schema and queries"
-	@echo "   • Repository and service integration"
-	@echo "   • Real database operations"
-	@echo "   • API endpoint functionality"
+	@echo "🧪 Running example-app integration test..."
 	@cd example-app && $(MAKE) generate && $(MAKE) test
 	@echo "✅ Example app integration test completed successfully"
-	@echo "   All generated repositories and services are working correctly!"
 
 # Clean example app
 .PHONY: example-app-clean
@@ -119,7 +112,7 @@ help:
 	@echo "  build              Build the skimatik binary"
 	@echo "  test               Run unit tests only (no database required)"
 	@echo "  integration-test   Run integration tests (auto-starts database)"
-	@echo "  example-app-test   Comprehensive end-to-end test with real application (validates full workflow)"
+	@echo "  example-app-test   End-to-end test using example app (validates code generation)"
 	@echo "  test-all           Run all tests (unit + integration)"
 	@echo "  lint               Run linter and code formatter"
 	@echo "  dev-setup          Setup development environment with database"
