@@ -3,7 +3,7 @@
 # Configuration
 DATABASE_URL = postgres://postgres:password@localhost:5432/blog?sslmode=disable
 
-.PHONY: help setup generate test start-and-test run clean
+.PHONY: help setup generate test test-ci start-and-test run clean
 
 help: ## Show available commands
 	@echo "Example Blog Application"
@@ -12,6 +12,7 @@ help: ## Show available commands
 	@echo "  make setup         - Start database and apply schema"
 	@echo "  make generate      - Generate Go code with skimatik"
 	@echo "  make test          - Run integration tests"
+	@echo "  make test-ci       - Run CI-friendly tests (no background processes)"
 	@echo "  make start-and-test - Start app and test with curl"
 	@echo "  make run           - Run the application"
 	@echo "  make clean         - Clean generated code"
@@ -57,6 +58,13 @@ start-and-test: ## Start app and test with curl
 	@echo "✅ Integration test passed: Generated code compiles and app runs!"
 	@echo "🛑 Stopping application..."
 	@lsof -ti:8080 | xargs kill -9 2>/dev/null || true
+
+test-ci: ## CI-friendly test (no background processes)
+	@echo "🧪 Testing application (CI mode)..."
+	@go test -v -tags=integration .
+	@echo "🔨 Testing that generated code compiles..."
+	@go build -v ./...
+	@echo "✅ CI tests passed"
 
 run: ## Run the application
 	@echo "🚀 Starting server..."
