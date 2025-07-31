@@ -2,14 +2,15 @@
 
 # Configuration
 DATABASE_URL = postgres://postgres:password@localhost:5432/blog?sslmode=disable
+MIGRATE_VERSION = v4.17.0
 
-.PHONY: help setup generate test test-ci start-and-test run clean
+.PHONY: help setup generate test test-ci start-and-test run clean install-migrate migrate-up migrate-down migrate-status migrate-create
 
 help: ## Show available commands
 	@echo "Example Blog Application"
 	@echo ""
 	@echo "Commands:"
-	@echo "  make setup         - Start database and apply schema"
+	@echo "  make setup         - Start database and run migrations"
 	@echo "  make generate      - Generate Go code with skimatik"
 	@echo "  make test          - Run integration tests"
 	@echo "  make test-ci       - Run CI-friendly tests (no background processes)"
@@ -17,9 +18,31 @@ help: ## Show available commands
 	@echo "  make run           - Run the application"
 	@echo "  make clean         - Clean generated code"
 	@echo ""
+	@echo "Migration commands:"
+	@echo "  make migrate-up     - Apply all pending migrations"
+	@echo "  make migrate-down   - Rollback one migration"
+	@echo "  make migrate-status - Show migration status"
+	@echo "  make migrate-create NAME=<name> - Create a new migration"
+	@echo ""
 	@echo "Quick start: make setup && make generate && make test && make start-and-test"
 
-setup: ## Start database and apply schema
+install-migrate: ## Install golang-migrate if not present
+	@if ! command -v migrate >/dev/null 2>&1; then \
+		echo "📦 Installing golang-migrate..."; \
+		if [ "$$(uname)" = "Darwin" ]; then \
+			brew install golang-migrate; \
+		elif [ "$$(uname)" = "Linux" ]; then \
+			curl -L https://github.com/golang-migrate/migrate/releases/download/$(MIGRATE_VERSION)/migrate.linux-amd64.tar.gz | tar xvz && \
+			sudo mv migrate /usr/local/bin/migrate; \
+		else \
+			echo "⚠️  Please install golang-migrate manually from https://github.com/golang-migrate/migrate/tree/master/cmd/migrate"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "✅ golang-migrate already installed"; \
+	fi
+
+setup: install-migrate ## Start database and run migrations
 	@echo "🐘 Setting up database..."
 	@docker run --name blog-db \
 		-e POSTGRES_DB=blog \
@@ -28,8 +51,9 @@ setup: ## Start database and apply schema
 		-p 5432:5432 \
 		-d postgres:15-alpine || echo "Database already running"
 	@sleep 3
-	@docker exec -i blog-db psql -U postgres -d blog < database/schema.sql 2>/dev/null || sleep 2 && docker exec -i blog-db psql -U postgres -d blog < database/schema.sql
-	@echo "✅ Database ready"
+	@echo "📝 Running migrations..."
+	@migrate -database "$(DATABASE_URL)" -path database/migrations up || (sleep 2 && migrate -database "$(DATABASE_URL)" -path database/migrations up)
+	@echo "✅ Database ready with migrations applied"
 
 generate: ## Generate Go code with skimatik
 	@echo "⚡ Generating code..."
@@ -87,6 +111,29 @@ test: ## Test the application (validates generated code works)
 run: ## Run the application
 	@echo "🚀 Starting server..."
 	@export DATABASE_URL="$(DATABASE_URL)" && go run .
+
+migrate-up: install-migrate ## Apply all pending migrations
+	@echo "⬆️  Applying migrations..."
+	@migrate -database "$(DATABASE_URL)" -path database/migrations up
+	@echo "✅ Migrations applied"
+
+migrate-down: install-migrate ## Rollback one migration
+	@echo "⬇️  Rolling back one migration..."
+	@migrate -database "$(DATABASE_URL)" -path database/migrations down 1
+	@echo "✅ Rollback complete"
+
+migrate-status: install-migrate ## Show migration status
+	@echo "📊 Migration status:"
+	@migrate -database "$(DATABASE_URL)" -path database/migrations version
+
+migrate-create: install-migrate ## Create a new migration (usage: make migrate-create NAME=add_new_table)
+	@if [ -z "$(NAME)" ]; then \
+		echo "❌ Please provide a migration name: make migrate-create NAME=your_migration_name"; \
+		exit 1; \
+	fi
+	@echo "🆕 Creating migration: $(NAME)"
+	@migrate create -ext sql -dir database/migrations -seq $(NAME)
+	@echo "✅ Migration files created"
 
 clean: ## Clean up
 	@echo "🧹 Cleaning..."
