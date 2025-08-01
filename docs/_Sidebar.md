@@ -6,6 +6,7 @@
 
 ### Guides
 - **[Examples](examples)** - Real usage examples
+- **[Database Migrations](database-migrations)** - Schema management with golang-migrate
 - **[Configuration](configuration-reference)** - Complete config options
 
 ### Architecture

@@ -42,6 +42,56 @@ make build
 ./bin/skimatic --version
 ```
 
+## Setting Up Database Migrations
+
+Skimatik works with your existing database schema. We recommend using [golang-migrate](https://github.com/golang-migrate/migrate) to manage schema changes:
+
+### Install golang-migrate
+
+```bash
+# macOS
+brew install golang-migrate
+
+# Linux
+curl -L https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-amd64.tar.gz | tar xvz
+sudo mv migrate /usr/local/bin/migrate
+```
+
+### Create Your First Migration
+
+```bash
+# Create migrations directory
+mkdir -p database/migrations
+
+# Create initial schema migration
+migrate create -ext sql -dir database/migrations -seq initial_schema
+```
+
+### Write Your Schema
+
+Edit `database/migrations/000001_initial_schema.up.sql`:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+CREATE TABLE users (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email       TEXT NOT NULL UNIQUE,
+    name        TEXT NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+### Apply Migrations
+
+```bash
+migrate -database "postgres://username:password@localhost:5432/database" \
+        -path database/migrations up
+```
+
+See the complete [Database Migrations](database-migrations.md) guide for detailed workflows and best practices.
+
 ## Quick Setup
 
 ### 1. Create Configuration File
@@ -68,6 +118,7 @@ tables:
   exclude_patterns:
     - "*_audit"
     - "migrations"
+    - "schema_migrations"  # golang-migrate tracking table
 ```
 
 ### 2. Generate Repositories
