@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: [ '1.21', '1.22', '1.23' ]
+        go-version: [ '1.24', '1.25' ]
     
     steps:
     - uses: actions/checkout@v5
@@ -50,7 +50,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: '1.23'
+        go-version: '1.24'
     
     - name: golangci-lint
       uses: golangci/golangci-lint-action@v8
@@ -67,7 +67,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: '1.23'
+        go-version: '1.24'
     
     - name: Install Gosec
       run: go install github.com/securego/gosec/v2/cmd/gosec@latest
@@ -86,7 +86,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: '1.23'
+        go-version: '1.24'
     
     - name: Build
       run: go build -v ./...
@@ -115,7 +115,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: '1.23'
+        go-version: '1.24'
     
     - name: Run integration tests
       run: go test -v -tags=integration -parallel=1 ./...
@@ -147,7 +147,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: '1.23'
+        go-version: '1.24'
     
     - name: Cache Go modules
       uses: actions/cache@v4
@@ -155,9 +155,9 @@ jobs:
         path: |
           ~/.cache/go-build
           ~/go/pkg/mod
-        key: ${{ runner.os }}-go-1.23-example-app-${{ hashFiles('**/go.sum') }}-v1
+        key: ${{ runner.os }}-go-1.24-example-app-${{ hashFiles('**/go.sum') }}-v1
         restore-keys: |
-          ${{ runner.os }}-go-1.23-example-app-v1-
+          ${{ runner.os }}-go-1.24-example-app-v1-
     
     - name: Download dependencies
       run: go mod download
