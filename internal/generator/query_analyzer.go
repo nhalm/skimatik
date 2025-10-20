@@ -155,7 +155,7 @@ func (qa *QueryAnalyzer) inferParameterNames(query *Query) error {
 	matches := columnEqPattern.FindAllStringSubmatch(cleanSQL, -1)
 	for _, match := range matches {
 		if len(match) >= 4 {
-			tableName := match[1]   // might be empty
+			tableName := match[1] // might be empty
 			columnName := match[2]
 			paramNum, _ := strconv.Atoi(match[3])
 			// Only set if not already inferred
@@ -552,6 +552,13 @@ func (qa *QueryAnalyzer) inferParameterTypesFromPrepare(ctx context.Context, que
 			if err != nil {
 				return fmt.Errorf("failed to map parameter type: %w", err)
 			}
+
+			// Use int instead of int64 for limit/offset parameters (Go idiomatic)
+			paramName := query.Parameters[i].Name
+			if (paramName == "limit" || paramName == "offset") && goType == "int64" {
+				goType = "int"
+			}
+
 			query.Parameters[i].Type = pgType
 			query.Parameters[i].GoType = goType
 		}
