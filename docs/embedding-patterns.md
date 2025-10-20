@@ -72,7 +72,7 @@ func (r *UsersRepository) List(ctx context.Context) ([]Users, error) {
 
 ## Layer 2: Domain Repository Layer (repository/)
 
-Define domain interfaces and implement them using generated repositories:
+Implement data access layer using generated repositories:
 
 ```go
 // repository/user_repository.go
@@ -86,15 +86,6 @@ import (
     "your-project/repository/generated"
 )
 
-// Domain interface - defines what your business layer needs
-type UserRepository interface {
-    CreateUser(ctx context.Context, name, email string) (*User, error)
-    GetUserByID(ctx context.Context, id uuid.UUID) (*User, error)
-    GetUserByEmail(ctx context.Context, email string) (*User, error)
-    ListActiveUsers(ctx context.Context) ([]User, error)
-    ActivateUser(ctx context.Context, id uuid.UUID) error
-}
-
 // Domain model - can be different from generated struct
 type User struct {
     ID       uuid.UUID
@@ -104,30 +95,30 @@ type User struct {
 }
 
 // Implementation embeds generated repository
-type userRepository struct {
+type UserRepository struct {
     *generated.UsersRepository
     db *pgxkit.DB
 }
 
-func NewUserRepository(db *pgxkit.DB) UserRepository {
-    return &userRepository{
+func NewUserRepository(db *pgxkit.DB) *UserRepository {
+    return &UserRepository{
         UsersRepository: generated.NewUsersRepository(db),
         db:              db,
     }
 }
 
-func (r *userRepository) CreateUser(ctx context.Context, name, email string) (*User, error) {
+func (r *UserRepository) CreateUser(ctx context.Context, name, email string) (*User, error) {
     // Use generated repository for basic create
     params := generated.CreateUsersParams{
         Name:  name,
         Email: email,
     }
-    
+
     user, err := r.UsersRepository.Create(ctx, params)
     if err != nil {
         return nil, fmt.Errorf("failed to create user: %w", err)
     }
-    
+
     // Convert to domain model
     return &User{
         ID:       user.ID,
@@ -137,25 +128,25 @@ func (r *userRepository) CreateUser(ctx context.Context, name, email string) (*U
     }, nil
 }
 
-func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*User, error) {
+func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*User, error) {
     // Custom query using shared database utilities
     query := `SELECT id, name, email, is_active FROM users WHERE email = $1`
-    
+
     row := ExecuteQueryRow(ctx, r.db, "get_by_email", "User", query, email)
-    
+
     var user User
     err := row.Scan(&user.ID, &user.Name, &user.Email, &user.IsActive)
     if err := HandleQueryRowError("get_by_email", "User", err); err != nil {
         return nil, err
     }
-    
+
     return &user, nil
 }
 ```
 
 ## Layer 3: Business Service Layer (service/)
 
-Implement business logic by orchestrating repositories:
+Define repository interfaces needed by services and implement business logic:
 
 ```go
 // service/user_service.go
@@ -168,10 +159,20 @@ import (
     "your-project/repository"
 )
 
-type UserService interface {
-    RegisterUser(ctx context.Context, name, email string) (*UserProfile, error)
-    GetUserProfile(ctx context.Context, userID uuid.UUID) (*UserProfile, error)
-    UpdateUserProfile(ctx context.Context, userID uuid.UUID, updates ProfileUpdates) error
+// Repository interface defined where it's used
+type UserRepository interface {
+    CreateUser(ctx context.Context, name, email string) (*repository.User, error)
+    GetUserByID(ctx context.Context, id uuid.UUID) (*repository.User, error)
+    GetUserByEmail(ctx context.Context, email string) (*repository.User, error)
+}
+
+type OrderRepository interface {
+    GetUserOrderStats(ctx context.Context, userID uuid.UUID) (*OrderStats, error)
+}
+
+type OrderStats struct {
+    Count       int
+    TotalAmount float64
 }
 
 type UserProfile struct {
@@ -188,31 +189,31 @@ type ProfileUpdates struct {
     Email *string `json:"email,omitempty"`
 }
 
-type userService struct {
-    userRepo  repository.UserRepository
-    orderRepo repository.OrderRepository
+type UserService struct {
+    userRepo  UserRepository
+    orderRepo OrderRepository
 }
 
-func NewUserService(userRepo repository.UserRepository, orderRepo repository.OrderRepository) UserService {
-    return &userService{
+func NewUserService(userRepo UserRepository, orderRepo OrderRepository) *UserService {
+    return &UserService{
         userRepo:  userRepo,
         orderRepo: orderRepo,
     }
 }
 
-func (s *userService) RegisterUser(ctx context.Context, name, email string) (*UserProfile, error) {
+func (s *UserService) RegisterUser(ctx context.Context, name, email string) (*UserProfile, error) {
     // Business logic: validate email, check duplicates, etc.
     existingUser, err := s.userRepo.GetUserByEmail(ctx, email)
     if err == nil && existingUser != nil {
         return nil, fmt.Errorf("user with email %s already exists", email)
     }
-    
+
     // Create user using repository
     user, err := s.userRepo.CreateUser(ctx, name, email)
     if err != nil {
         return nil, fmt.Errorf("failed to register user: %w", err)
     }
-    
+
     // Return enriched profile
     return &UserProfile{
         ID:          user.ID,
@@ -224,39 +225,39 @@ func (s *userService) RegisterUser(ctx context.Context, name, email string) (*Us
     }, nil
 }
 
-func (s *userService) GetUserProfile(ctx context.Context, userID uuid.UUID) (*UserProfile, error) {
+func (s *UserService) GetUserProfile(ctx context.Context, userID uuid.UUID) (*UserProfile, error) {
     // Orchestrate multiple repositories
     user, err := s.userRepo.GetUserByID(ctx, userID)
     if err != nil {
         return nil, fmt.Errorf("user not found: %w", err)
     }
-    
+
     // Get order statistics
     orderStats, err := s.orderRepo.GetUserOrderStats(ctx, userID)
     if err != nil {
         return nil, fmt.Errorf("failed to get order stats: %w", err)
     }
-    
+
     return &UserProfile{
-        ID:          user.ID,
-        Name:        user.Name,
-        Email:       user.Email,
-        OrderCount:  orderStats.Count,
-        TotalSpent:  orderStats.TotalAmount,
-        MemberSince: user.CreatedAt.Format("January 2006"),
+        ID:         user.ID,
+        Name:       user.Name,
+        Email:      user.Email,
+        OrderCount: orderStats.Count,
+        TotalSpent: orderStats.TotalAmount,
     }, nil
 }
 ```
 
 ## Layer 4: API Handler Layer (api/)
 
-Handle HTTP requests and responses:
+Define service interfaces needed by handlers and handle HTTP requests:
 
 ```go
 // api/handlers/user_handler.go
 package handlers
 
 import (
+    "context"
     "encoding/json"
     "net/http"
     "github.com/google/uuid"
@@ -264,11 +265,17 @@ import (
     "your-project/service"
 )
 
-type UserHandler struct {
-    userService service.UserService
+// Service interface defined where it's used
+type UserService interface {
+    RegisterUser(ctx context.Context, name, email string) (*service.UserProfile, error)
+    GetUserProfile(ctx context.Context, userID uuid.UUID) (*service.UserProfile, error)
 }
 
-func NewUserHandler(userService service.UserService) *UserHandler {
+type UserHandler struct {
+    userService UserService
+}
+
+func NewUserHandler(userService UserService) *UserHandler {
     return &UserHandler{userService: userService}
 }
 
@@ -283,13 +290,13 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Invalid request body", http.StatusBadRequest)
         return
     }
-    
+
     profile, err := h.userService.RegisterUser(r.Context(), req.Name, req.Email)
     if err != nil {
         http.Error(w, err.Error(), http.StatusBadRequest)
         return
     }
-    
+
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusCreated)
     json.NewEncoder(w).Encode(profile)
@@ -302,19 +309,21 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Invalid user ID", http.StatusBadRequest)
         return
     }
-    
+
     profile, err := h.userService.GetUserProfile(r.Context(), userID)
     if err != nil {
         http.Error(w, err.Error(), http.StatusNotFound)
         return
     }
-    
+
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(profile)
 }
 ```
 
 ## Dependency Injection & Wiring
+
+Concrete implementations satisfy interfaces at each layer boundary:
 
 ```go
 // main.go
@@ -337,26 +346,45 @@ func main() {
         log.Fatal(err)
     }
     defer db.Close()
-    
-    // Initialize repositories
+
+    // Initialize repositories (concrete types)
     userRepo := repository.NewUserRepository(db)
     orderRepo := repository.NewOrderRepository(db)
-    
-    // Initialize services
+
+    // Initialize services (concrete types)
+    // Repositories satisfy service.UserRepository and service.OrderRepository interfaces
     userService := service.NewUserService(userRepo, orderRepo)
-    
+
     // Initialize handlers
+    // Service satisfies handlers.UserService interface
     userHandler := handlers.NewUserHandler(userService)
-    
+
     // Setup routes
     r := mux.NewRouter()
     r.HandleFunc("/users", userHandler.CreateUser).Methods("POST")
     r.HandleFunc("/users/{id}", userHandler.GetUser).Methods("GET")
-    
+
     log.Println("Server starting on :8080")
     log.Fatal(http.ListenAndServe(":8080", r))
 }
 ```
+
+## Interface Placement Principle
+
+**Interfaces are defined where they're consumed, not where they're implemented.**
+
+This follows Go best practices and provides several advantages:
+- **Consumer-driven design**: Interfaces only include methods the consumer actually needs
+- **Reduced coupling**: Implementation packages don't dictate the interface contract
+- **Better testing**: Each layer can mock only its direct dependencies
+- **Flexibility**: Multiple implementations can satisfy the same interface without coordination
+
+Example flow:
+1. `repository/` exports concrete `UserRepository` struct
+2. `service/` defines `UserRepository` interface with methods it needs
+3. `repository.UserRepository` satisfies `service.UserRepository` automatically
+4. `api/handlers/` defines `UserService` interface with methods it needs
+5. `service.UserService` satisfies `handlers.UserService` automatically
 
 ## Key Benefits
 
@@ -368,13 +396,22 @@ func main() {
 
 ### Testability
 ```go
-// Easy to mock at service boundaries
+// Easy to mock interfaces defined at layer boundaries
 func TestUserService_RegisterUser(t *testing.T) {
+    // Mock implements service.UserRepository interface
     mockUserRepo := &mockUserRepository{}
     mockOrderRepo := &mockOrderRepository{}
     userService := service.NewUserService(mockUserRepo, mockOrderRepo)
-    
+
     // Test business logic without database
+}
+
+func TestUserHandler_CreateUser(t *testing.T) {
+    // Mock implements handlers.UserService interface
+    mockService := &mockUserService{}
+    handler := handlers.NewUserHandler(mockService)
+
+    // Test HTTP handling without real service
 }
 ```
 
