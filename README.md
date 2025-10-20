@@ -79,8 +79,10 @@ page, err := userRepo.ListPaginated(ctx, ListUsersParams{
     Cursor: cursor,
 })
 
-// Custom queries from SQL files
-activeUsers, err := userRepo.GetActiveUsers(ctx, time.Now().AddDate(0, -1, 0))
+// Custom queries from SQL files with semantic parameter names
+activeUsers, err := userRepo.GetActiveUsers(ctx, 50) // limit parameter
+userByEmail, err := userRepo.GetUserByEmail(ctx, "user@example.com") // email parameter
+searchResults, err := userRepo.SearchUsers(ctx, "john", 20) // searchTerm, limit parameters
 ```
 
 ## Requirements

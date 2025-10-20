@@ -30,7 +30,7 @@ func NewUserRepository(db *pgxkit.DB) *UserRepository {
 // Implement service.UserRepository interface methods with domain type conversion
 
 func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int32) ([]domain.UserSummary, error) {
-	results, err := r.UsersQueries.GetActiveUsers(ctx, fmt.Sprintf("%d", limit))
+	results, err := r.UsersQueries.GetActiveUsers(ctx, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active users: %w", err)
 	}
@@ -72,7 +72,7 @@ func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*dom
 }
 
 func (r *UserRepository) SearchUsers(ctx context.Context, query string) ([]domain.UserSummary, error) {
-	results, err := r.UsersQueries.SearchUsers(ctx, "%"+query+"%", "50")
+	results, err := r.UsersQueries.SearchUsers(ctx, "%"+query+"%", 50)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search users: %w", err)
 	}
@@ -91,7 +91,7 @@ func (r *UserRepository) SearchUsers(ctx context.Context, query string) ([]domai
 }
 
 func (r *UserRepository) GetUserStats(ctx context.Context, userID uuid.UUID) (*domain.UserStats, error) {
-	result, err := r.UsersQueries.GetUserStats(ctx, userID.String())
+	result, err := r.UsersQueries.GetUserStats(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user stats: %w", err)
 	}
