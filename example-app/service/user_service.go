@@ -15,7 +15,7 @@ var ErrUserNotFound = fmt.Errorf("user not found")
 // The repository should return domain types, not database-specific types
 type UserRepository interface {
 	// Basic generated query methods - all return domain types
-	GetActiveUsers(ctx context.Context, limit int32) ([]domain.UserSummary, error)
+	GetActiveUsers(ctx context.Context, limit int) ([]domain.UserSummary, error)
 	GetUserByEmail(ctx context.Context, email string) (*domain.UserDetail, error)
 	SearchUsers(ctx context.Context, query string) ([]domain.UserSummary, error)
 	GetUserStats(ctx context.Context, userID uuid.UUID) (*domain.UserStats, error)
@@ -39,7 +39,7 @@ func NewUserService(userRepo UserRepository) *userService {
 // The service layer focuses on business logic, not data conversion
 
 func (s *userService) GetActiveUsers(ctx context.Context, limit int) ([]domain.UserSummary, error) {
-	users, err := s.userRepo.GetActiveUsers(ctx, int32(limit))
+	users, err := s.userRepo.GetActiveUsers(ctx, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active users: %w", err)
 	}

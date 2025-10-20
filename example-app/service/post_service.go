@@ -26,7 +26,7 @@ func NewPostService(postRepo PostRepository) *postService {
 // The service layer focuses on business logic, not data conversion
 
 func (s *postService) GetPublishedPosts(ctx context.Context, limit int) ([]domain.PostSummary, error) {
-	posts, err := s.postRepo.GetPublishedPosts(ctx, int32(limit))
+	posts, err := s.postRepo.GetPublishedPosts(ctx, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get published posts: %w", err)
 	}
@@ -57,7 +57,7 @@ func (s *postService) GetUserPosts(ctx context.Context, userID uuid.UUID) ([]dom
 }
 
 func (s *postService) GetPostsWithStats(ctx context.Context, limit int) ([]domain.PostWithStats, error) {
-	posts, err := s.postRepo.GetPostsWithStats(ctx, int32(limit))
+	posts, err := s.postRepo.GetPostsWithStats(ctx, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get posts with stats: %w", err)
 	}
