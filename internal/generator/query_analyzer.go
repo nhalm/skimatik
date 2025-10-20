@@ -37,6 +37,11 @@ func (qa *QueryAnalyzer) AnalyzeQuery(ctx context.Context, query *Query) error {
 		return fmt.Errorf("failed to extract parameters: %w", err)
 	}
 
+	// Infer parameter names from SQL patterns (doesn't require database connection)
+	if err := qa.inferParameterNames(query); err != nil {
+		return fmt.Errorf("failed to infer parameter names: %w", err)
+	}
+
 	// If query is empty, no further analysis needed
 	if strings.TrimSpace(query.SQL) == "" {
 		return nil
@@ -52,6 +57,11 @@ func (qa *QueryAnalyzer) AnalyzeQuery(ctx context.Context, query *Query) error {
 		if err := qa.analyzeSelectQuery(ctx, query); err != nil {
 			return fmt.Errorf("failed to analyze SELECT query: %w", err)
 		}
+	}
+
+	// Infer parameter types using PostgreSQL PREPARE (for all query types)
+	if err := qa.inferParameterTypesFromPrepare(ctx, query); err != nil {
+		return fmt.Errorf("failed to infer parameter types: %w", err)
 	}
 
 	// Validate query syntax by attempting to prepare it
@@ -110,6 +120,129 @@ func (qa *QueryAnalyzer) extractParameters(query *Query) error {
 
 	query.Parameters = parameters
 	return nil
+}
+
+// inferParameterNames infers semantic parameter names from SQL context
+func (qa *QueryAnalyzer) inferParameterNames(query *Query) error {
+	if len(query.Parameters) == 0 {
+		return nil
+	}
+
+	// Create a map to track inferred names by parameter index
+	inferredNames := make(map[int]string)
+
+	// Clean SQL for parsing (remove string literals and comments)
+	cleanSQL := qa.removeQuotedContent(query.SQL)
+
+	// Pattern 1: column = $N or column IN ($N)
+	// Matches: WHERE email = $1, AND users.id = $2, WHERE status IN ($3)
+	columnEqPattern := regexp.MustCompile(`(?:WHERE|AND|OR|ON)\s+(?:\w+\.)?(\w+)\s*(?:=|IN\s*\()\s*\$(\d+)`)
+	matches := columnEqPattern.FindAllStringSubmatch(cleanSQL, -1)
+	for _, match := range matches {
+		if len(match) >= 3 {
+			columnName := match[1]
+			paramNum, _ := strconv.Atoi(match[2])
+			// Only set if not already inferred
+			if _, exists := inferredNames[paramNum]; !exists {
+				inferredNames[paramNum] = toCamelCase(columnName)
+			}
+		}
+	}
+
+	// Pattern 2: column operator $N (>, <, >=, <=, LIKE, ILIKE)
+	// For comparisons, we could use minX/maxX but let's keep it simple with just the column name
+	comparisonPattern := regexp.MustCompile(`(?:\w+\.)?(\w+)\s*(?:>|<|>=|<=)\s*\$(\d+)`)
+	matches = comparisonPattern.FindAllStringSubmatch(cleanSQL, -1)
+	for _, match := range matches {
+		if len(match) >= 3 {
+			columnName := match[1]
+			paramNum, _ := strconv.Atoi(match[2])
+			if _, exists := inferredNames[paramNum]; !exists {
+				inferredNames[paramNum] = toCamelCase(columnName)
+			}
+		}
+	}
+
+	// Pattern 3: LIKE/ILIKE patterns
+	likePattern := regexp.MustCompile(`(?:\w+\.)?(\w+)\s+(?:LIKE|ILIKE)\s+\$(\d+)`)
+	matches = likePattern.FindAllStringSubmatch(cleanSQL, -1)
+	for _, match := range matches {
+		if len(match) >= 3 {
+			paramNum, _ := strconv.Atoi(match[2])
+			// For LIKE patterns, use "searchTerm" if multiple columns use same param
+			if _, exists := inferredNames[paramNum]; !exists {
+				inferredNames[paramNum] = "searchTerm"
+			}
+		}
+	}
+
+	// Pattern 4: LIMIT $N
+	limitPattern := regexp.MustCompile(`LIMIT\s+\$(\d+)`)
+	matches = limitPattern.FindAllStringSubmatch(cleanSQL, -1)
+	for _, match := range matches {
+		if len(match) >= 2 {
+			paramNum, _ := strconv.Atoi(match[1])
+			inferredNames[paramNum] = "limit"
+		}
+	}
+
+	// Pattern 5: OFFSET $N
+	offsetPattern := regexp.MustCompile(`OFFSET\s+\$(\d+)`)
+	matches = offsetPattern.FindAllStringSubmatch(cleanSQL, -1)
+	for _, match := range matches {
+		if len(match) >= 2 {
+			paramNum, _ := strconv.Atoi(match[1])
+			inferredNames[paramNum] = "offset"
+		}
+	}
+
+	// Pattern 6: UPDATE SET clause
+	// Matches: SET email = $1, SET users.name = $2, , status = $3
+	setPattern := regexp.MustCompile(`(?:SET|,)\s+(?:\w+\.)?(\w+)\s*=\s*\$(\d+)`)
+	matches = setPattern.FindAllStringSubmatch(cleanSQL, -1)
+	for _, match := range matches {
+		if len(match) >= 3 {
+			columnName := match[1]
+			paramNum, _ := strconv.Atoi(match[2])
+			if _, exists := inferredNames[paramNum]; !exists {
+				inferredNames[paramNum] = toCamelCase(columnName)
+			}
+		}
+	}
+
+	// Apply inferred names to parameters (keep fallback param1, param2 for unmatched)
+	for i := range query.Parameters {
+		paramIndex := query.Parameters[i].Index
+		if name, exists := inferredNames[paramIndex]; exists {
+			query.Parameters[i].Name = name
+		}
+		// Otherwise keep the default "paramN" name set in extractParameters
+	}
+
+	return nil
+}
+
+// toCamelCase converts a snake_case or regular identifier to camelCase
+func toCamelCase(s string) string {
+	if s == "" {
+		return s
+	}
+
+	// Split by underscore
+	parts := strings.Split(s, "_")
+	if len(parts) == 1 {
+		// No underscores, just lowercase first letter
+		return strings.ToLower(s[:1]) + s[1:]
+	}
+
+	// First part is lowercase, rest are Title case
+	result := strings.ToLower(parts[0])
+	for i := 1; i < len(parts); i++ {
+		if len(parts[i]) > 0 {
+			result += strings.ToUpper(parts[i][:1]) + parts[i][1:]
+		}
+	}
+	return result
 }
 
 // removeQuotedContent removes string literals and quoted identifiers to avoid false parameter detection
@@ -289,27 +422,28 @@ func (qa *QueryAnalyzer) mapOIDToTypeName(oid uint32) string {
 
 // validateQuerySyntax validates that the query is syntactically correct
 func (qa *QueryAnalyzer) validateQuerySyntax(ctx context.Context, query *Query) error {
-	// For exec queries, we can't use LIMIT 0, so we'll use a different approach
-	if query.Type == QueryTypeExec {
-		return qa.validateExecQuery(ctx, query)
-	}
-
 	// For SELECT queries, we already validated them in analyzeQueryColumns
+	// For EXEC queries, we validate via PREPARE in inferParameterTypesFromPrepare
 	return nil
 }
 
-// validateExecQuery validates an EXEC query by preparing it
-func (qa *QueryAnalyzer) validateExecQuery(ctx context.Context, query *Query) error {
-	// Try to prepare the statement to validate syntax
+// inferParameterTypesFromPrepare uses PostgreSQL PREPARE to infer parameter types for all query types
+func (qa *QueryAnalyzer) inferParameterTypesFromPrepare(ctx context.Context, query *Query) error {
+	// Skip if no parameters
+	if len(query.Parameters) == 0 {
+		return nil
+	}
+
+	// Try to prepare the statement to infer types
 	// We'll use a transaction that we roll back to avoid side effects
 	tx, err := qa.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction for validation: %w", err)
+		return fmt.Errorf("failed to begin transaction for type inference: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
 	// Prepare the statement with a unique name
-	stmtName := fmt.Sprintf("validate_query_%s", query.Name)
+	stmtName := fmt.Sprintf("infer_types_%s", query.Name)
 	stmt, err := tx.Prepare(ctx, stmtName, query.SQL)
 	if err != nil {
 		return fmt.Errorf("query preparation failed: %w", err)

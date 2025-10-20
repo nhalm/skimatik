@@ -457,3 +457,195 @@ func TestQueryAnalyzer_AnalyzeQuery_NilQuery(t *testing.T) {
 		t.Errorf("Expected 0 parameters for empty query, got %d", len(query.Parameters))
 	}
 }
+
+func TestQueryAnalyzer_InferParameterNames(t *testing.T) {
+	analyzer := NewQueryAnalyzer(nil)
+
+	tests := []struct {
+		name          string
+		sql           string
+		expectedNames map[int]string
+	}{
+		{
+			name: "simple WHERE clause with email",
+			sql:  "SELECT * FROM users WHERE email = $1",
+			expectedNames: map[int]string{
+				1: "email",
+			},
+		},
+		{
+			name: "multiple WHERE conditions",
+			sql:  "SELECT * FROM users WHERE email = $1 AND is_active = $2",
+			expectedNames: map[int]string{
+				1: "email",
+				2: "isActive",
+			},
+		},
+		{
+			name: "LIKE pattern",
+			sql:  "SELECT * FROM users WHERE name ILIKE $1 OR email ILIKE $1",
+			expectedNames: map[int]string{
+				1: "searchTerm",
+			},
+		},
+		{
+			name: "LIMIT clause",
+			sql:  "SELECT * FROM users LIMIT $1",
+			expectedNames: map[int]string{
+				1: "limit",
+			},
+		},
+		{
+			name: "OFFSET clause",
+			sql:  "SELECT * FROM users OFFSET $1",
+			expectedNames: map[int]string{
+				1: "offset",
+			},
+		},
+		{
+			name: "table prefixed column",
+			sql:  "SELECT * FROM users u WHERE u.checkout_session_id = $1",
+			expectedNames: map[int]string{
+				1: "checkoutSessionId",
+			},
+		},
+		{
+			name: "comparison operators",
+			sql:  "SELECT * FROM users WHERE age > $1 AND created_at <= $2",
+			expectedNames: map[int]string{
+				1: "age",
+				2: "createdAt",
+			},
+		},
+		{
+			name: "IN clause",
+			sql:  "SELECT * FROM users WHERE status IN ($1)",
+			expectedNames: map[int]string{
+				1: "status",
+			},
+		},
+		{
+			name: "mixed patterns",
+			sql:  "SELECT * FROM users WHERE email = $1 AND name ILIKE $2 LIMIT $3",
+			expectedNames: map[int]string{
+				1: "email",
+				2: "searchTerm",
+				3: "limit",
+			},
+		},
+		{
+			name: "no parameters",
+			sql:  "SELECT * FROM users",
+			expectedNames: map[int]string{},
+		},
+		{
+			name: "UPDATE single column",
+			sql:  "UPDATE users SET email = $1 WHERE id = $2",
+			expectedNames: map[int]string{
+				1: "email",
+				2: "id",
+			},
+		},
+		{
+			name: "UPDATE multiple columns",
+			sql:  "UPDATE users SET email = $1, name = $2, updated_at = $3 WHERE id = $4",
+			expectedNames: map[int]string{
+				1: "email",
+				2: "name",
+				3: "updatedAt",
+				4: "id",
+			},
+		},
+		{
+			name: "UPDATE with table prefix",
+			sql:  "UPDATE users u SET u.email = $1, u.status = $2 WHERE u.id = $3",
+			expectedNames: map[int]string{
+				1: "email",
+				2: "status",
+				3: "id",
+			},
+		},
+		{
+			name: "UPDATE with snake_case columns",
+			sql:  "UPDATE payment_links SET checkout_session_id = $1, is_active = $2 WHERE id = $3",
+			expectedNames: map[int]string{
+				1: "checkoutSessionId",
+				2: "isActive",
+				3: "id",
+			},
+		},
+		{
+			name: "UPDATE without WHERE clause",
+			sql:  "UPDATE users SET is_active = $1, updated_at = $2",
+			expectedNames: map[int]string{
+				1: "isActive",
+				2: "updatedAt",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			query := Query{
+				Name: tt.name,
+				SQL:  tt.sql,
+				Type: QueryTypeMany,
+			}
+
+			// First extract parameters
+			err := analyzer.extractParameters(&query)
+			if err != nil {
+				t.Fatalf("extractParameters failed: %v", err)
+			}
+
+			// Then infer names
+			err = analyzer.inferParameterNames(&query)
+			if err != nil {
+				t.Fatalf("inferParameterNames failed: %v", err)
+			}
+
+			// Verify names
+			for _, param := range query.Parameters {
+				expectedName, exists := tt.expectedNames[param.Index]
+				if !exists {
+					t.Errorf("Unexpected parameter index %d", param.Index)
+					continue
+				}
+				if param.Name != expectedName {
+					t.Errorf("Parameter $%d: expected name %q, got %q", param.Index, expectedName, param.Name)
+				}
+			}
+
+			// Verify we got all expected parameters
+			if len(query.Parameters) != len(tt.expectedNames) {
+				t.Errorf("Expected %d parameters, got %d", len(tt.expectedNames), len(query.Parameters))
+			}
+		})
+	}
+}
+
+func TestToCamelCase(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"email", "email"},
+		{"checkout_session_id", "checkoutSessionId"},
+		{"is_active", "isActive"},
+		{"created_at", "createdAt"},
+		{"user_id", "userId"},
+		{"", ""},
+		{"single", "single"},
+		{"UPPERCASE", "uPPERCASE"},
+		{"snake_case_long", "snakeCaseLong"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := toCamelCase(tt.input)
+			if result != tt.expected {
+				t.Errorf("toCamelCase(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
