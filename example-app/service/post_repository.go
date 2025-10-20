@@ -12,10 +12,10 @@ import (
 // The repository should return domain types, not database-specific types
 type PostRepository interface {
 	// Basic generated query methods - all return domain types
-	GetPublishedPosts(ctx context.Context, limit int32) ([]domain.PostSummary, error)
+	GetPublishedPosts(ctx context.Context, limit int) ([]domain.PostSummary, error)
 	GetPostWithAuthor(ctx context.Context, postID uuid.UUID) (*domain.PostDetail, error)
 	GetUserPosts(ctx context.Context, userID uuid.UUID) ([]domain.PostSummary, error)
-	GetPostsWithStats(ctx context.Context, limit int32) ([]domain.PostWithStats, error)
+	GetPostsWithStats(ctx context.Context, limit int) ([]domain.PostWithStats, error)
 	PublishPost(ctx context.Context, postID uuid.UUID) error
 
 	// Custom repository methods that extend generated functionality

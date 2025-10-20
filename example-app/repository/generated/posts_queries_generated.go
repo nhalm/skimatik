@@ -90,7 +90,7 @@ func NewPostsQueries(db *pgxkit.DB) *PostsQueries {
 }
 
 // GetPublishedPosts executes the GetPublishedPosts query and returns multiple results
-func (r *PostsQueries) GetPublishedPosts(ctx context.Context, param1 string) ([]GetPublishedPostsResult, error) {
+func (r *PostsQueries) GetPublishedPosts(ctx context.Context, limit int) ([]GetPublishedPostsResult, error) {
 	query := `SELECT p.id, p.title, p.content, p.author_id, p.published_at, p.created_at,
        u.name as author_name
 FROM posts p
@@ -99,7 +99,7 @@ WHERE p.is_published = true
 ORDER BY p.published_at DESC
 LIMIT $1;`
 
-	rows, err := ExecuteQuery(ctx, r.db, "GetPublishedPosts", "GetPublishedPostsResult", query, param1)
+	rows, err := ExecuteQuery(ctx, r.db, "GetPublishedPosts", "GetPublishedPostsResult", query, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ LIMIT $1;`
 }
 
 // GetPostWithAuthor executes the GetPostWithAuthor query and returns a single result
-func (r *PostsQueries) GetPostWithAuthor(ctx context.Context, param1 string) (*GetPostWithAuthorResult, error) {
+func (r *PostsQueries) GetPostWithAuthor(ctx context.Context, id uuid.UUID) (*GetPostWithAuthorResult, error) {
 	query := `SELECT p.id, p.title, p.content, p.author_id, p.is_published, p.published_at, p.created_at,
        u.name as author_name, u.email as author_email
 FROM posts p
@@ -127,7 +127,7 @@ JOIN users u ON p.author_id = u.id
 WHERE p.id = $1;`
 
 	var result GetPostWithAuthorResult
-	row := ExecuteQueryRow(ctx, r.db, "GetPostWithAuthor", "GetPostWithAuthorResult", query, param1)
+	row := ExecuteQueryRow(ctx, r.db, "GetPostWithAuthor", "GetPostWithAuthorResult", query, id)
 	err := row.Scan(&result.Id, &result.Title, &result.Content, &result.AuthorId, &result.IsPublished, &result.PublishedAt, &result.CreatedAt, &result.AuthorName, &result.AuthorEmail)
 	if err := HandleQueryRowError("GetPostWithAuthor", "GetPostWithAuthorResult", err); err != nil {
 		return nil, err
@@ -137,13 +137,13 @@ WHERE p.id = $1;`
 }
 
 // GetUserPosts executes the GetUserPosts query and returns multiple results
-func (r *PostsQueries) GetUserPosts(ctx context.Context, param1 string) ([]GetUserPostsResult, error) {
+func (r *PostsQueries) GetUserPosts(ctx context.Context, authorId uuid.UUID) ([]GetUserPostsResult, error) {
 	query := `SELECT id, title, content, author_id, is_published, published_at, created_at
 FROM posts
 WHERE author_id = $1
 ORDER BY created_at DESC;`
 
-	rows, err := ExecuteQuery(ctx, r.db, "GetUserPosts", "GetUserPostsResult", query, param1)
+	rows, err := ExecuteQuery(ctx, r.db, "GetUserPosts", "GetUserPostsResult", query, authorId)
 	if err != nil {
 		return nil, err
 	}
@@ -163,16 +163,16 @@ ORDER BY created_at DESC;`
 }
 
 // PublishPost executes the PublishPost query
-func (r *PostsQueries) PublishPost(ctx context.Context, param1 uuid.UUID) error {
+func (r *PostsQueries) PublishPost(ctx context.Context, id uuid.UUID) error {
 	query := `UPDATE posts 
 SET is_published = true, published_at = NOW()
 WHERE id = $1 AND is_published = false;`
 
-	return ExecuteNonQuery(ctx, r.db, "PublishPost", "PublishPost", query, param1)
+	return ExecuteNonQuery(ctx, r.db, "PublishPost", "PublishPost", query, id)
 }
 
 // GetPostsWithCommentCount executes the GetPostsWithCommentCount query and returns multiple results
-func (r *PostsQueries) GetPostsWithCommentCount(ctx context.Context, param1 string) ([]GetPostsWithCommentCountResult, error) {
+func (r *PostsQueries) GetPostsWithCommentCount(ctx context.Context, limit int) ([]GetPostsWithCommentCountResult, error) {
 	query := `SELECT p.id, p.title, p.author_id, p.published_at, p.created_at,
        u.name as author_name,
        COUNT(c.id) as comment_count
@@ -184,7 +184,7 @@ GROUP BY p.id, p.title, p.author_id, p.published_at, p.created_at, u.name
 ORDER BY p.published_at DESC
 LIMIT $1;`
 
-	rows, err := ExecuteQuery(ctx, r.db, "GetPostsWithCommentCount", "GetPostsWithCommentCountResult", query, param1)
+	rows, err := ExecuteQuery(ctx, r.db, "GetPostsWithCommentCount", "GetPostsWithCommentCountResult", query, limit)
 	if err != nil {
 		return nil, err
 	}

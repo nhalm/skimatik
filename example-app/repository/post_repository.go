@@ -143,7 +143,7 @@ func (r *PostRepository) PublishPost(ctx context.Context, postID uuid.UUID) erro
 // GetFeaturedPosts returns posts marked as featured with custom business logic
 func (r *PostRepository) GetFeaturedPosts(ctx context.Context, limit int) ([]domain.PostSummary, error) {
 	// Use the generated GetPublishedPosts as a base, then filter
-	posts, err := r.GetPublishedPosts(ctx, int32(limit*2)) // Get more to filter
+	posts, err := r.GetPublishedPosts(ctx, limit*2) // Get more to filter
 	if err != nil {
 		return nil, fmt.Errorf("failed to get published posts for featured filtering: %w", err)
 	}
@@ -163,7 +163,7 @@ func (r *PostRepository) GetFeaturedPosts(ctx context.Context, limit int) ([]dom
 // GetTrendingPosts returns posts with high engagement with custom business logic
 func (r *PostRepository) GetTrendingPosts(ctx context.Context, limit int) ([]domain.PostSummary, error) {
 	// Use the generated GetPublishedPosts as a base, then apply trending logic
-	posts, err := r.GetPublishedPosts(ctx, int32(limit*3))
+	posts, err := r.GetPublishedPosts(ctx, limit*3)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get published posts: %w", err)
 	}
@@ -212,7 +212,7 @@ func (r *PostRepository) GetPostSummary(ctx context.Context, id uuid.UUID) (stri
 func (r *PostRepository) GetPostsByTag(ctx context.Context, tagName string, limit int) ([]domain.PostSummary, error) {
 	// In a real implementation, this would use a proper SQL query
 	// For demo purposes, we'll use the generated method and filter
-	posts, err := r.GetPublishedPosts(ctx, int32(limit*3))
+	posts, err := r.GetPublishedPosts(ctx, limit*3)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get posts for tag filtering: %w", err)
 	}
