@@ -26,7 +26,7 @@ func NewPostRepository(queries *generated.PostsQueries) *PostRepository {
 // Implement service.PostRepository interface methods with domain type conversion
 
 func (r *PostRepository) GetPublishedPosts(ctx context.Context, limit int32) ([]domain.PostSummary, error) {
-	results, err := r.PostsQueries.GetPublishedPosts(ctx, fmt.Sprintf("%d", limit))
+	results, err := r.PostsQueries.GetPublishedPosts(ctx, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get published posts: %w", err)
 	}
@@ -54,7 +54,7 @@ func (r *PostRepository) GetPublishedPosts(ctx context.Context, limit int32) ([]
 }
 
 func (r *PostRepository) GetPostWithAuthor(ctx context.Context, postID uuid.UUID) (*domain.PostDetail, error) {
-	result, err := r.PostsQueries.GetPostWithAuthor(ctx, postID.String())
+	result, err := r.PostsQueries.GetPostWithAuthor(ctx, postID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get post with author: %w", err)
 	}
@@ -81,7 +81,7 @@ func (r *PostRepository) GetPostWithAuthor(ctx context.Context, postID uuid.UUID
 }
 
 func (r *PostRepository) GetUserPosts(ctx context.Context, userID uuid.UUID) ([]domain.PostSummary, error) {
-	results, err := r.PostsQueries.GetUserPosts(ctx, userID.String())
+	results, err := r.PostsQueries.GetUserPosts(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user posts: %w", err)
 	}
@@ -110,7 +110,7 @@ func (r *PostRepository) GetUserPosts(ctx context.Context, userID uuid.UUID) ([]
 
 func (r *PostRepository) GetPostsWithStats(ctx context.Context, limit int32) ([]domain.PostWithStats, error) {
 	// Use GetPostsWithCommentCount as the equivalent for "stats"
-	results, err := r.PostsQueries.GetPostsWithCommentCount(ctx, fmt.Sprintf("%d", limit))
+	results, err := r.PostsQueries.GetPostsWithCommentCount(ctx, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get posts with stats: %w", err)
 	}
