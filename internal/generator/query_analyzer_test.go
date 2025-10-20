@@ -534,8 +534,8 @@ func TestQueryAnalyzer_InferParameterNames(t *testing.T) {
 			},
 		},
 		{
-			name: "no parameters",
-			sql:  "SELECT * FROM users",
+			name:          "no parameters",
+			sql:           "SELECT * FROM users",
 			expectedNames: map[int]string{},
 		},
 		{

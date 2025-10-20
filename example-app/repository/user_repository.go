@@ -29,7 +29,7 @@ func NewUserRepository(db *pgxkit.DB) *UserRepository {
 
 // Implement service.UserRepository interface methods with domain type conversion
 
-func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int32) ([]domain.UserSummary, error) {
+func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]domain.UserSummary, error) {
 	results, err := r.UsersQueries.GetActiveUsers(ctx, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active users: %w", err)
