@@ -37,7 +37,7 @@ func (qa *QueryAnalyzer) AnalyzeQuery(ctx context.Context, query *Query) error {
 		return fmt.Errorf("failed to extract parameters: %w", err)
 	}
 
-	// Infer parameter names from SQL patterns (doesn't require database connection)
+	// Infer parameter names and track table/column associations (doesn't require database connection)
 	if err := qa.inferParameterNames(query); err != nil {
 		return fmt.Errorf("failed to infer parameter names: %w", err)
 	}
@@ -62,6 +62,11 @@ func (qa *QueryAnalyzer) AnalyzeQuery(ctx context.Context, query *Query) error {
 	// Infer parameter types using PostgreSQL PREPARE (for all query types)
 	if err := qa.inferParameterTypesFromPrepare(ctx, query); err != nil {
 		return fmt.Errorf("failed to infer parameter types: %w", err)
+	}
+
+	// Infer parameter nullability from schema for parameters with known table/column
+	if err := qa.inferParameterNullability(ctx, query); err != nil {
+		return fmt.Errorf("failed to infer parameter nullability: %w", err)
 	}
 
 	// Validate query syntax by attempting to prepare it
@@ -128,50 +133,76 @@ func (qa *QueryAnalyzer) inferParameterNames(query *Query) error {
 		return nil
 	}
 
-	// Create a map to track inferred names by parameter index
+	// Create maps to track inferred data by parameter index
 	inferredNames := make(map[int]string)
+	inferredColumns := make(map[int]string) // column name
+	inferredTables := make(map[int]string)  // table name (if detected)
 
 	// Clean SQL for parsing (remove string literals and comments)
 	cleanSQL := qa.removeQuotedContent(query.SQL)
 
+	// First, try to detect the primary table from UPDATE statement
+	updateTablePattern := regexp.MustCompile(`UPDATE\s+(\w+)`)
+	if match := updateTablePattern.FindStringSubmatch(cleanSQL); len(match) >= 2 {
+		primaryTable := match[1]
+		// Store this for SET clause parameters
+		inferredTables[0] = primaryTable // Use 0 as a marker for primary table
+	}
+
 	// Pattern 1: column = $N or column IN ($N)
 	// Matches: WHERE email = $1, AND users.id = $2, WHERE status IN ($3)
-	columnEqPattern := regexp.MustCompile(`(?:WHERE|AND|OR|ON)\s+(?:\w+\.)?(\w+)\s*(?:=|IN\s*\()\s*\$(\d+)`)
+	columnEqPattern := regexp.MustCompile(`(?:WHERE|AND|OR|ON)\s+(?:(\w+)\.)?(\w+)\s*(?:=|IN\s*\()\s*\$(\d+)`)
 	matches := columnEqPattern.FindAllStringSubmatch(cleanSQL, -1)
 	for _, match := range matches {
-		if len(match) >= 3 {
-			columnName := match[1]
-			paramNum, _ := strconv.Atoi(match[2])
+		if len(match) >= 4 {
+			tableName := match[1]   // might be empty
+			columnName := match[2]
+			paramNum, _ := strconv.Atoi(match[3])
 			// Only set if not already inferred
 			if _, exists := inferredNames[paramNum]; !exists {
 				inferredNames[paramNum] = toCamelCase(columnName)
+				inferredColumns[paramNum] = columnName
+				if tableName != "" {
+					inferredTables[paramNum] = tableName
+				}
 			}
 		}
 	}
 
-	// Pattern 2: column operator $N (>, <, >=, <=, LIKE, ILIKE)
+	// Pattern 2: column operator $N (>, <, >=, <=)
 	// For comparisons, we could use minX/maxX but let's keep it simple with just the column name
-	comparisonPattern := regexp.MustCompile(`(?:\w+\.)?(\w+)\s*(?:>|<|>=|<=)\s*\$(\d+)`)
+	comparisonPattern := regexp.MustCompile(`(?:(\w+)\.)?(\w+)\s*(?:>|<|>=|<=)\s*\$(\d+)`)
 	matches = comparisonPattern.FindAllStringSubmatch(cleanSQL, -1)
 	for _, match := range matches {
-		if len(match) >= 3 {
-			columnName := match[1]
-			paramNum, _ := strconv.Atoi(match[2])
+		if len(match) >= 4 {
+			tableName := match[1]
+			columnName := match[2]
+			paramNum, _ := strconv.Atoi(match[3])
 			if _, exists := inferredNames[paramNum]; !exists {
 				inferredNames[paramNum] = toCamelCase(columnName)
+				inferredColumns[paramNum] = columnName
+				if tableName != "" {
+					inferredTables[paramNum] = tableName
+				}
 			}
 		}
 	}
 
 	// Pattern 3: LIKE/ILIKE patterns
-	likePattern := regexp.MustCompile(`(?:\w+\.)?(\w+)\s+(?:LIKE|ILIKE)\s+\$(\d+)`)
+	likePattern := regexp.MustCompile(`(?:(\w+)\.)?(\w+)\s+(?:LIKE|ILIKE)\s+\$(\d+)`)
 	matches = likePattern.FindAllStringSubmatch(cleanSQL, -1)
 	for _, match := range matches {
-		if len(match) >= 3 {
-			paramNum, _ := strconv.Atoi(match[2])
+		if len(match) >= 4 {
+			tableName := match[1]
+			columnName := match[2]
+			paramNum, _ := strconv.Atoi(match[3])
 			// For LIKE patterns, use "searchTerm" if multiple columns use same param
 			if _, exists := inferredNames[paramNum]; !exists {
 				inferredNames[paramNum] = "searchTerm"
+				inferredColumns[paramNum] = columnName
+				if tableName != "" {
+					inferredTables[paramNum] = tableName
+				}
 			}
 		}
 	}
@@ -198,23 +229,38 @@ func (qa *QueryAnalyzer) inferParameterNames(query *Query) error {
 
 	// Pattern 6: UPDATE SET clause
 	// Matches: SET email = $1, SET users.name = $2, , status = $3
-	setPattern := regexp.MustCompile(`(?:SET|,)\s+(?:\w+\.)?(\w+)\s*=\s*\$(\d+)`)
+	setPattern := regexp.MustCompile(`(?:SET|,)\s+(?:(\w+)\.)?(\w+)\s*=\s*\$(\d+)`)
 	matches = setPattern.FindAllStringSubmatch(cleanSQL, -1)
+	primaryTable := inferredTables[0] // Get primary table if detected
 	for _, match := range matches {
-		if len(match) >= 3 {
-			columnName := match[1]
-			paramNum, _ := strconv.Atoi(match[2])
+		if len(match) >= 4 {
+			tableName := match[1]
+			columnName := match[2]
+			paramNum, _ := strconv.Atoi(match[3])
 			if _, exists := inferredNames[paramNum]; !exists {
 				inferredNames[paramNum] = toCamelCase(columnName)
+				inferredColumns[paramNum] = columnName
+				// For UPDATE SET, use explicit table name or fall back to primary table
+				if tableName != "" {
+					inferredTables[paramNum] = tableName
+				} else if primaryTable != "" {
+					inferredTables[paramNum] = primaryTable
+				}
 			}
 		}
 	}
 
-	// Apply inferred names to parameters (keep fallback param1, param2 for unmatched)
+	// Apply inferred names and table/column associations to parameters
 	for i := range query.Parameters {
 		paramIndex := query.Parameters[i].Index
 		if name, exists := inferredNames[paramIndex]; exists {
 			query.Parameters[i].Name = name
+		}
+		if column, exists := inferredColumns[paramIndex]; exists {
+			query.Parameters[i].ColumnName = column
+		}
+		if table, exists := inferredTables[paramIndex]; exists {
+			query.Parameters[i].TableName = table
 		}
 		// Otherwise keep the default "paramN" name set in extractParameters
 	}
@@ -243,6 +289,50 @@ func toCamelCase(s string) string {
 		}
 	}
 	return result
+}
+
+// inferParameterNullability looks up column nullability from the database schema
+func (qa *QueryAnalyzer) inferParameterNullability(ctx context.Context, query *Query) error {
+	for i := range query.Parameters {
+		param := &query.Parameters[i]
+
+		// Only look up nullability if we have both table and column name
+		if param.TableName == "" || param.ColumnName == "" {
+			continue
+		}
+
+		// Query information_schema to check if column is nullable
+		schemaQuery := `SELECT is_nullable FROM information_schema.columns
+		                WHERE table_schema = 'public'
+		                AND table_name = $1
+		                AND column_name = $2`
+
+		var isNullable string
+		err := qa.db.QueryRow(ctx, schemaQuery, param.TableName, param.ColumnName).Scan(&isNullable)
+		if err != nil {
+			// If we can't find the column, skip nullability (might be an alias or expression)
+			continue
+		}
+
+		// Set nullable flag if column allows NULL
+		param.Nullable = (isNullable == "YES")
+
+		// If nullable, update GoType to be a pointer
+		if param.Nullable {
+			param.GoType = makePointerType(param.GoType)
+		}
+	}
+
+	return nil
+}
+
+// makePointerType converts a Go type to its pointer equivalent
+func makePointerType(goType string) string {
+	// Already a pointer
+	if strings.HasPrefix(goType, "*") {
+		return goType
+	}
+	return "*" + goType
 }
 
 // removeQuotedContent removes string literals and quoted identifiers to avoid false parameter detection
