@@ -649,3 +649,130 @@ func TestToCamelCase(t *testing.T) {
 		})
 	}
 }
+
+func TestQueryAnalyzer_TableColumnTracking(t *testing.T) {
+	analyzer := NewQueryAnalyzer(nil)
+
+	tests := []struct {
+		name           string
+		sql            string
+		expectedParams map[int]struct {
+			name   string
+			table  string
+			column string
+		}
+	}{
+		{
+			name: "UPDATE with table name detection",
+			sql:  "UPDATE users SET email = $1, name = $2 WHERE id = $3",
+			expectedParams: map[int]struct {
+				name   string
+				table  string
+				column string
+			}{
+				1: {name: "email", table: "users", column: "email"},
+				2: {name: "name", table: "users", column: "name"},
+				3: {name: "id", table: "", column: "id"}, // WHERE clause doesn't get table
+			},
+		},
+		{
+			name: "UPDATE with table prefix in WHERE",
+			sql:  "UPDATE users SET email = $1 WHERE users.id = $2",
+			expectedParams: map[int]struct {
+				name   string
+				table  string
+				column string
+			}{
+				1: {name: "email", table: "users", column: "email"},
+				2: {name: "id", table: "users", column: "id"},
+			},
+		},
+		{
+			name: "UPDATE with alias",
+			sql:  "UPDATE users u SET u.email = $1 WHERE u.id = $2",
+			expectedParams: map[int]struct {
+				name   string
+				table  string
+				column string
+			}{
+				1: {name: "email", table: "u", column: "email"},
+				2: {name: "id", table: "u", column: "id"},
+			},
+		},
+		{
+			name: "SELECT with table prefix",
+			sql:  "SELECT * FROM users WHERE users.email = $1 AND users.is_active = $2",
+			expectedParams: map[int]struct {
+				name   string
+				table  string
+				column string
+			}{
+				1: {name: "email", table: "users", column: "email"},
+				2: {name: "isActive", table: "users", column: "is_active"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			query := Query{
+				Name: tt.name,
+				SQL:  tt.sql,
+				Type: QueryTypeMany,
+			}
+
+			// Extract and infer
+			err := analyzer.extractParameters(&query)
+			if err != nil {
+				t.Fatalf("extractParameters failed: %v", err)
+			}
+
+			err = analyzer.inferParameterNames(&query)
+			if err != nil {
+				t.Fatalf("inferParameterNames failed: %v", err)
+			}
+
+			// Verify table/column tracking
+			for _, param := range query.Parameters {
+				expected, exists := tt.expectedParams[param.Index]
+				if !exists {
+					t.Errorf("Unexpected parameter index %d", param.Index)
+					continue
+				}
+
+				if param.Name != expected.name {
+					t.Errorf("Parameter $%d: expected name %q, got %q", param.Index, expected.name, param.Name)
+				}
+				if param.TableName != expected.table {
+					t.Errorf("Parameter $%d: expected table %q, got %q", param.Index, expected.table, param.TableName)
+				}
+				if param.ColumnName != expected.column {
+					t.Errorf("Parameter $%d: expected column %q, got %q", param.Index, expected.column, param.ColumnName)
+				}
+			}
+		})
+	}
+}
+
+func TestMakePointerType(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"string", "*string"},
+		{"int32", "*int32"},
+		{"uuid.UUID", "*uuid.UUID"},
+		{"*string", "*string"}, // Already a pointer
+		{"*int32", "*int32"},
+		{"pgtype.Text", "*pgtype.Text"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := makePointerType(tt.input)
+			if result != tt.expected {
+				t.Errorf("makePointerType(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
