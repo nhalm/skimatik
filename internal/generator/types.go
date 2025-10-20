@@ -53,10 +53,13 @@ const (
 
 // Parameter represents a query parameter
 type Parameter struct {
-	Name   string `json:"name"`
-	Type   string `json:"type"`    // PostgreSQL type
-	GoType string `json:"go_type"` // Go type
-	Index  int    `json:"index"`   // Parameter position (1-based)
+	Name       string `json:"name"`
+	Type       string `json:"type"`        // PostgreSQL type
+	GoType     string `json:"go_type"`     // Go type
+	Index      int    `json:"index"`       // Parameter position (1-based)
+	Nullable   bool   `json:"nullable"`    // Whether the parameter should be nullable (pointer type)
+	TableName  string `json:"table_name"`  // Table name if detected (for nullability lookup)
+	ColumnName string `json:"column_name"` // Column name if detected (for nullability lookup)
 }
 
 // GetColumn returns a column by name, or nil if not found
