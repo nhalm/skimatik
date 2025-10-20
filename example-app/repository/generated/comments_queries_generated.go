@@ -65,7 +65,7 @@ func NewCommentsQueries(db *pgxkit.DB) *CommentsQueries {
 }
 
 // GetPostComments executes the GetPostComments query and returns multiple results
-func (r *CommentsQueries) GetPostComments(ctx context.Context, param1 string) ([]GetPostCommentsResult, error) {
+func (r *CommentsQueries) GetPostComments(ctx context.Context, postId uuid.UUID) ([]GetPostCommentsResult, error) {
 	query := `SELECT c.id, c.content, c.created_at, c.is_approved,
        u.name as author_name, u.email as author_email
 FROM comments c
@@ -73,7 +73,7 @@ JOIN users u ON c.author_id = u.id
 WHERE c.post_id = $1 AND c.is_approved = true
 ORDER BY c.created_at ASC;`
 
-	rows, err := ExecuteQuery(ctx, r.db, "GetPostComments", "GetPostCommentsResult", query, param1)
+	rows, err := ExecuteQuery(ctx, r.db, "GetPostComments", "GetPostCommentsResult", query, postId)
 	if err != nil {
 		return nil, err
 	}
@@ -123,22 +123,22 @@ ORDER BY c.created_at DESC;`
 }
 
 // ApproveComment executes the ApproveComment query
-func (r *CommentsQueries) ApproveComment(ctx context.Context, param1 uuid.UUID) error {
+func (r *CommentsQueries) ApproveComment(ctx context.Context, id uuid.UUID) error {
 	query := `UPDATE comments 
 SET is_approved = true 
 WHERE id = $1;`
 
-	return ExecuteNonQuery(ctx, r.db, "ApproveComment", "ApproveComment", query, param1)
+	return ExecuteNonQuery(ctx, r.db, "ApproveComment", "ApproveComment", query, id)
 }
 
 // GetUserCommentCount executes the GetUserCommentCount query and returns a single result
-func (r *CommentsQueries) GetUserCommentCount(ctx context.Context, param1 string) (*GetUserCommentCountResult, error) {
+func (r *CommentsQueries) GetUserCommentCount(ctx context.Context, authorId uuid.UUID) (*GetUserCommentCountResult, error) {
 	query := `SELECT COUNT(*) as comment_count
 FROM comments 
 WHERE author_id = $1 AND is_approved = true;`
 
 	var result GetUserCommentCountResult
-	row := ExecuteQueryRow(ctx, r.db, "GetUserCommentCount", "GetUserCommentCountResult", query, param1)
+	row := ExecuteQueryRow(ctx, r.db, "GetUserCommentCount", "GetUserCommentCountResult", query, authorId)
 	err := row.Scan(&result.CommentCount)
 	if err := HandleQueryRowError("GetUserCommentCount", "GetUserCommentCountResult", err); err != nil {
 		return nil, err

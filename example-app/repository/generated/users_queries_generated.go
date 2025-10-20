@@ -84,13 +84,13 @@ func NewUsersQueries(db *pgxkit.DB) *UsersQueries {
 }
 
 // GetUserByEmail executes the GetUserByEmail query and returns a single result
-func (r *UsersQueries) GetUserByEmail(ctx context.Context, param1 string) (*GetUserByEmailResult, error) {
+func (r *UsersQueries) GetUserByEmail(ctx context.Context, email string) (*GetUserByEmailResult, error) {
 	query := `SELECT id, name, email, bio, is_active, created_at, updated_at
 FROM users 
 WHERE email = $1 AND is_active = true;`
 
 	var result GetUserByEmailResult
-	row := ExecuteQueryRow(ctx, r.db, "GetUserByEmail", "GetUserByEmailResult", query, param1)
+	row := ExecuteQueryRow(ctx, r.db, "GetUserByEmail", "GetUserByEmailResult", query, email)
 	err := row.Scan(&result.Id, &result.Name, &result.Email, &result.Bio, &result.IsActive, &result.CreatedAt, &result.UpdatedAt)
 	if err := HandleQueryRowError("GetUserByEmail", "GetUserByEmailResult", err); err != nil {
 		return nil, err
@@ -100,14 +100,14 @@ WHERE email = $1 AND is_active = true;`
 }
 
 // GetActiveUsers executes the GetActiveUsers query and returns multiple results
-func (r *UsersQueries) GetActiveUsers(ctx context.Context, param1 string) ([]GetActiveUsersResult, error) {
+func (r *UsersQueries) GetActiveUsers(ctx context.Context, limit int) ([]GetActiveUsersResult, error) {
 	query := `SELECT id, name, email, bio, is_active, created_at, updated_at
 FROM users 
 WHERE is_active = true 
 ORDER BY created_at DESC 
 LIMIT $1;`
 
-	rows, err := ExecuteQuery(ctx, r.db, "GetActiveUsers", "GetActiveUsersResult", query, param1)
+	rows, err := ExecuteQuery(ctx, r.db, "GetActiveUsers", "GetActiveUsersResult", query, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ LIMIT $1;`
 }
 
 // GetUserStats executes the GetUserStats query and returns a single result
-func (r *UsersQueries) GetUserStats(ctx context.Context, param1 string) (*GetUserStatsResult, error) {
+func (r *UsersQueries) GetUserStats(ctx context.Context, id uuid.UUID) (*GetUserStatsResult, error) {
 	query := `SELECT 
     COUNT(DISTINCT p.id) as post_count,
     COUNT(DISTINCT c.id) as comment_count
@@ -138,7 +138,7 @@ WHERE u.id = $1
 GROUP BY u.id;`
 
 	var result GetUserStatsResult
-	row := ExecuteQueryRow(ctx, r.db, "GetUserStats", "GetUserStatsResult", query, param1)
+	row := ExecuteQueryRow(ctx, r.db, "GetUserStats", "GetUserStatsResult", query, id)
 	err := row.Scan(&result.PostCount, &result.CommentCount)
 	if err := HandleQueryRowError("GetUserStats", "GetUserStatsResult", err); err != nil {
 		return nil, err
@@ -148,14 +148,14 @@ GROUP BY u.id;`
 }
 
 // DeactivateUser executes the DeactivateUser query
-func (r *UsersQueries) DeactivateUser(ctx context.Context, param1 uuid.UUID) error {
+func (r *UsersQueries) DeactivateUser(ctx context.Context, id uuid.UUID) error {
 	query := `UPDATE users SET is_active = false WHERE id = $1;`
 
-	return ExecuteNonQuery(ctx, r.db, "DeactivateUser", "DeactivateUser", query, param1)
+	return ExecuteNonQuery(ctx, r.db, "DeactivateUser", "DeactivateUser", query, id)
 }
 
 // SearchUsers executes the SearchUsers query and returns multiple results
-func (r *UsersQueries) SearchUsers(ctx context.Context, param1 string, param2 string) ([]SearchUsersResult, error) {
+func (r *UsersQueries) SearchUsers(ctx context.Context, searchTerm string, limit int) ([]SearchUsersResult, error) {
 	query := `SELECT id, name, email, bio, is_active, created_at, updated_at
 FROM users 
 WHERE is_active = true 
@@ -163,7 +163,7 @@ AND (name ILIKE $1 OR email ILIKE $1)
 ORDER BY created_at DESC 
 LIMIT $2;`
 
-	rows, err := ExecuteQuery(ctx, r.db, "SearchUsers", "SearchUsersResult", query, param1, param2)
+	rows, err := ExecuteQuery(ctx, r.db, "SearchUsers", "SearchUsersResult", query, searchTerm, limit)
 	if err != nil {
 		return nil, err
 	}

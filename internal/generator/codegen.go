@@ -556,8 +556,8 @@ func (cg *CodeGenerator) GenerateQueries(queries []Query) error {
 // groupQueriesByFile groups queries by their source file
 func (cg *CodeGenerator) groupQueriesByFile(queries []Query) map[string][]Query {
 	groups := make(map[string][]Query)
-	for _, query := range queries {
-		groups[query.SourceFile] = append(groups[query.SourceFile], query)
+	for i := range queries {
+		groups[queries[i].SourceFile] = append(groups[queries[i].SourceFile], queries[i])
 	}
 	return groups
 }
@@ -568,10 +568,10 @@ func (cg *CodeGenerator) generateQueryFile(sourceFile string, queries []Query) e
 		return nil
 	}
 
-	// Map column types for all queries
+	// Map result column types for all queries
 	for i := range queries {
-		if err := cg.typeMapper.MapQueryColumns(&queries[i]); err != nil {
-			return fmt.Errorf("failed to map column types for query %s: %w", queries[i].Name, err)
+		if err := cg.typeMapper.MapResultColumns(&queries[i]); err != nil {
+			return fmt.Errorf("failed to map result column types for query %s: %w", queries[i].Name, err)
 		}
 	}
 

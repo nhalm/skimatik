@@ -244,26 +244,19 @@ func (tm *TypeMapper) MapTableColumns(table *Table) error {
 }
 
 // MapQueryColumns maps all columns in a query and sets their GoType field
-func (tm *TypeMapper) MapQueryColumns(query *Query) error {
+func (tm *TypeMapper) MapResultColumns(query *Query) error {
 	if query == nil {
 		return fmt.Errorf("query cannot be nil")
 	}
 
+	// Map result column types for SELECT queries
+	// Parameters are already mapped by the query analyzer using database introspection
 	for i := range query.Columns {
 		goType, err := tm.MapType(query.Columns[i].Type, query.Columns[i].IsNullable, query.Columns[i].IsArray)
 		if err != nil {
 			return fmt.Errorf("failed to map type for column %s in query %s: %w", query.Columns[i].Name, query.Name, err)
 		}
 		query.Columns[i].GoType = goType
-	}
-
-	// Also map parameter types
-	for i := range query.Parameters {
-		goType, err := tm.MapType(query.Parameters[i].Type, false, false) // Parameters are typically not nullable
-		if err != nil {
-			return fmt.Errorf("failed to map type for parameter %d in query %s: %w", query.Parameters[i].Index, query.Name, err)
-		}
-		query.Parameters[i].GoType = goType
 	}
 
 	return nil
