@@ -10,12 +10,14 @@ import (
 	"github.com/nhalm/skimatik/internal/generator"
 )
 
+var version = "dev"
+
 func main() {
 	var (
-		config  = flag.String("config", "skimatik.yaml", "Path to YAML configuration file")
-		verbose = flag.Bool("verbose", false, "Enable verbose logging output")
-		help    = flag.Bool("help", false, "Show detailed help and examples")
-		version = flag.Bool("version", false, "Show version information")
+		config     = flag.String("config", "skimatik.yaml", "Path to YAML configuration file")
+		verbose    = flag.Bool("verbose", false, "Enable verbose logging output")
+		help       = flag.Bool("help", false, "Show detailed help and examples")
+		showVersion = flag.Bool("version", false, "Show version information")
 	)
 
 	// Custom usage function with better formatting
@@ -136,8 +138,8 @@ MORE INFO:
 		os.Exit(0)
 	}
 
-	if *version {
-		fmt.Println("skimatik version 2.0.0")
+	if *showVersion {
+		fmt.Printf("skimatik version %s\n", version)
 		fmt.Println("Database-first code generator for PostgreSQL")
 		fmt.Println("https://github.com/nhalm/skimatik")
 		os.Exit(0)
