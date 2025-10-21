@@ -11,6 +11,7 @@ GOLINT=golangci-lint
 BINARY_NAME=skimatik
 BINARY_PATH=./bin/$(BINARY_NAME)
 MAIN_PATH=./cmd/skimatik
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 DOCKER_COMPOSE=docker-compose -f build/docker-compose.yml
 
 # Test parameters
@@ -24,9 +25,9 @@ default: help
 # Build the binary
 .PHONY: build
 build:
-	@echo "Building $(BINARY_NAME)..."
+	@echo "Building $(BINARY_NAME) version $(VERSION)..."
 	@mkdir -p bin
-	$(GOBUILD) -o $(BINARY_PATH) $(MAIN_PATH)
+	$(GOBUILD) -ldflags="-X main.version=$(VERSION)" -o $(BINARY_PATH) $(MAIN_PATH)
 	@echo "✅ Binary built: $(BINARY_PATH)"
 
 # Run unit tests only (no database required)
