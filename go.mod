@@ -1,4 +1,4 @@
-module github.com/nhalm/skimatic
+module github.com/nhalm/skimatik
 
 go 1.24.0
 
