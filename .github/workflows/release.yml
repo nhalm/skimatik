@@ -35,7 +35,23 @@ jobs:
       run: |
         echo "Running comprehensive tests for release..."
         go test -v -race ./...
-    
+
+    - name: Build release binaries
+      run: |
+        TAG_NAME=${GITHUB_REF#refs/tags/}
+        mkdir -p dist
+
+        # Build for multiple platforms
+        GOOS=linux GOARCH=amd64 go build -ldflags="-X main.version=$TAG_NAME" -o dist/skimatik-linux-amd64 ./cmd/skimatik
+        GOOS=linux GOARCH=arm64 go build -ldflags="-X main.version=$TAG_NAME" -o dist/skimatik-linux-arm64 ./cmd/skimatik
+        GOOS=darwin GOARCH=amd64 go build -ldflags="-X main.version=$TAG_NAME" -o dist/skimatik-darwin-amd64 ./cmd/skimatik
+        GOOS=darwin GOARCH=arm64 go build -ldflags="-X main.version=$TAG_NAME" -o dist/skimatik-darwin-arm64 ./cmd/skimatik
+        GOOS=windows GOARCH=amd64 go build -ldflags="-X main.version=$TAG_NAME" -o dist/skimatik-windows-amd64.exe ./cmd/skimatik
+
+        # Create checksums
+        cd dist
+        sha256sum * > checksums.txt
+
     - name: Generate changelog
       id: changelog
       run: |
@@ -71,7 +87,8 @@ jobs:
         gh release create ${{ steps.changelog.outputs.tag_name }} \
           --title "Release ${{ steps.changelog.outputs.tag_name }}" \
           --notes-file changelog.md \
-          $(if [[ "${{ steps.changelog.outputs.tag_name }}" == *"-"* ]]; then echo "--prerelease"; fi)
+          $(if [[ "${{ steps.changelog.outputs.tag_name }}" == *"-"* ]]; then echo "--prerelease"; fi) \
+          dist/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     

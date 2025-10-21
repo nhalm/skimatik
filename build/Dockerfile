@@ -14,7 +14,8 @@ RUN go mod download
 COPY . .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o skimatik ./cmd/skimatik
+ARG VERSION=dev
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-X main.version=${VERSION}" -o skimatik ./cmd/skimatik
 
 # Final stage
 FROM alpine:latest
