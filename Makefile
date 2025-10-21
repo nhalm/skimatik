@@ -10,7 +10,7 @@ GOLINT=golangci-lint
 # Project parameters
 BINARY_NAME=skimatik
 BINARY_PATH=./bin/$(BINARY_NAME)
-MAIN_PATH=./cmd/skimatic
+MAIN_PATH=./cmd/skimatik
 DOCKER_COMPOSE=docker-compose -f build/docker-compose.yml
 
 # Test parameters

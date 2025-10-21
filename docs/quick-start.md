@@ -24,13 +24,13 @@ make setup && make generate && make run
 ### Option 1: Install Latest Release (Recommended)
 
 ```bash
-go install github.com/nhalm/skimatik/cmd/skimatic@latest
+go install github.com/nhalm/skimatik/cmd/skimatik@latest
 ```
 
 ### Option 2: Install Specific Version
 
 ```bash
-go install github.com/nhalm/skimatik/cmd/skimatic@v1.0.0
+go install github.com/nhalm/skimatik/cmd/skimatik@v1.0.0
 ```
 
 ### Option 3: Build from Source
@@ -39,7 +39,7 @@ go install github.com/nhalm/skimatik/cmd/skimatic@v1.0.0
 git clone https://github.com/nhalm/skimatik.git
 cd skimatik
 make build
-./bin/skimatic --version
+./bin/skimatik --version
 ```
 
 ## Setting Up Database Migrations
@@ -124,7 +124,7 @@ tables:
 ### 2. Generate Repositories
 
 ```bash
-skimatic --config=skimatik.yaml
+skimatik --config=skimatik.yaml
 ```
 
 ### 3. View Generated Code
@@ -350,26 +350,26 @@ export SKIMATIK_DATABASE_DSN="postgres://..."
 export SKIMATIK_OUTPUT_DIR="./generated"
 export SKIMATIK_PACKAGE_NAME="models"
 
-skimatic --config=skimatik.yaml  # Environment variables take precedence
+skimatik --config=skimatik.yaml  # Environment variables take precedence
 ```
 
 ## CLI Options
 
 ```bash
 # Basic usage
-skimatic --config=skimatik.yaml
+skimatik --config=skimatik.yaml
 
 # Override output directory
-skimatic --config=skimatik.yaml --output-dir=./models
+skimatik --config=skimatik.yaml --output-dir=./models
 
 # Verbose logging
-skimatic --config=skimatik.yaml --verbose
+skimatik --config=skimatik.yaml --verbose
 
 # Dry run (show what would be generated)
-skimatic --config=skimatik.yaml --dry-run
+skimatik --config=skimatik.yaml --dry-run
 
 # Help
-skimatic --help
+skimatik --help
 ```
 
 ## Troubleshooting
@@ -398,13 +398,13 @@ Solution: Ensure your database user has read permissions on the schema.
 
 ```bash
 # Test database connection
-skimatic --config=skimatik.yaml --validate-connection
+skimatik --config=skimatik.yaml --validate-connection
 
 # Check table structure
-skimatic --config=skimatik.yaml --list-tables
+skimatik --config=skimatik.yaml --list-tables
 
 # Validate configuration
-skimatic --config=skimatik.yaml --validate-config
+skimatik --config=skimatik.yaml --validate-config
 ```
 
 ## Next Steps

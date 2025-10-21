@@ -352,25 +352,25 @@ All configuration options can be overridden via command-line flags:
 
 ### Primary Usage
 ```bash
-skimatic --config=skimatik.yaml
+skimatik --config=skimatik.yaml
 ```
 
 ### Common Overrides
 ```bash
 # Override output directory
-skimatic --config=skimatik.yaml --output-dir=./generated
+skimatik --config=skimatik.yaml --output-dir=./generated
 
 # Override package name
-skimatic --config=skimatik.yaml --package-name=models
+skimatik --config=skimatik.yaml --package-name=models
 
 # Override database DSN
-skimatic --config=skimatik.yaml --database-dsn="postgres://..."
+skimatik --config=skimatik.yaml --database-dsn="postgres://..."
 
 # Enable verbose logging
-skimatic --config=skimatik.yaml --verbose
+skimatik --config=skimatik.yaml --verbose
 
 # Dry run (show what would be generated)
-skimatic --config=skimatik.yaml --dry-run
+skimatik --config=skimatik.yaml --dry-run
 ```
 
 ### Complete Flag Reference
@@ -503,7 +503,7 @@ generation:
 
 ### Validate Configuration
 ```bash
-skimatic --config=skimatik.yaml --validate-config
+skimatik --config=skimatik.yaml --validate-config
 ```
 
 ### Common Validation Errors
@@ -528,7 +528,7 @@ Error: schema 'invalid' does not exist
 
 ### Test Database Connection
 ```bash
-skimatic --config=skimatik.yaml --validate-connection
+skimatik --config=skimatik.yaml --validate-connection
 ```
 
 ## 📋 Best Practices
@@ -574,13 +574,13 @@ tables:
 ### 4. Use Configuration Per Environment
 ```bash
 # Development
-skimatic --config=config/dev.yaml
+skimatik --config=config/dev.yaml
 
 # Staging  
-skimatic --config=config/staging.yaml
+skimatik --config=config/staging.yaml
 
 # Production
-skimatic --config=config/prod.yaml
+skimatik --config=config/prod.yaml
 ```
 
 ### 5. Version Control Considerations
