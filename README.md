@@ -22,7 +22,7 @@ A database-first code generator for PostgreSQL that creates type-safe Go reposit
 
 ```bash
 # Install skimatik
-go install github.com/nhalm/skimatik/cmd/skimatic@latest
+go install github.com/nhalm/skimatik/cmd/skimatik@latest
 
 # Create a configuration file
 cat > skimatik.yaml << EOF
@@ -43,7 +43,7 @@ tables:
 EOF
 
 # Generate repositories
-skimatic
+skimatik
 
 # Use the generated code
 ```
@@ -94,7 +94,7 @@ searchResults, err := userRepo.SearchUsers(ctx, "john", 20) // searchTerm, limit
 ## Installation
 
 ```bash
-go install github.com/nhalm/skimatik/cmd/skimatic@latest
+go install github.com/nhalm/skimatik/cmd/skimatik@latest
 ```
 
 For more installation options and detailed setup instructions, see the [Quick Start Guide](https://github.com/nhalm/skimatik/wiki/quick-start).
