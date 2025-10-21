@@ -42,7 +42,7 @@ A database-first code generator for PostgreSQL that creates type-safe Go reposit
 ### Installation
 
 ```bash
-go install github.com/nhalm/skimatik/cmd/skimatic@latest
+go install github.com/nhalm/skimatik/cmd/skimatik@latest
 ```
 
 ### Basic Usage
