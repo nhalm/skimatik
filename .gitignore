@@ -76,3 +76,6 @@ coverage.html
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# macOS Finder temporary files (inode-numbered duplicates)
+.!*
