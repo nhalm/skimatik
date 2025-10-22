@@ -6,11 +6,39 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime/debug"
 
 	"github.com/nhalm/skimatik/internal/generator"
 )
 
-var version = "dev"
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
+func getVersion() string {
+	if version != "dev" {
+		return version
+	}
+
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "(devel)" && info.Main.Version != "" {
+		return info.Main.Version
+	}
+
+	return "dev"
+}
+
+func getFullVersion() string {
+	v := getVersion()
+	if commit != "none" {
+		v = fmt.Sprintf("%s (commit: %s)", v, commit[:7])
+	}
+	if date != "unknown" {
+		v = fmt.Sprintf("%s built at %s", v, date)
+	}
+	return v
+}
 
 func main() {
 	var (
@@ -139,7 +167,7 @@ MORE INFO:
 	}
 
 	if *showVersion {
-		fmt.Printf("skimatik version %s\n", version)
+		fmt.Printf("skimatik %s\n", getFullVersion())
 		fmt.Println("Database-first code generator for PostgreSQL")
 		fmt.Println("https://github.com/nhalm/skimatik")
 		os.Exit(0)
