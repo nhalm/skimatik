@@ -12,6 +12,8 @@ BINARY_NAME=skimatik
 BINARY_PATH=./bin/$(BINARY_NAME)
 MAIN_PATH=./cmd/skimatik
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
+DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 DOCKER_COMPOSE=docker-compose -f build/docker-compose.yml
 
 # Test parameters
@@ -27,7 +29,7 @@ default: help
 build:
 	@echo "Building $(BINARY_NAME) version $(VERSION)..."
 	@mkdir -p bin
-	$(GOBUILD) -ldflags="-X main.version=$(VERSION)" -o $(BINARY_PATH) $(MAIN_PATH)
+	$(GOBUILD) -ldflags="-s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)" -o $(BINARY_PATH) $(MAIN_PATH)
 	@echo "✅ Binary built: $(BINARY_PATH)"
 
 # Run unit tests only (no database required)

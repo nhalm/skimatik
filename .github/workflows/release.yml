@@ -30,65 +30,13 @@ jobs:
       uses: actions/setup-go@v6
       with:
         go-version: '1.24'
-    
-    - name: Run full test suite
-      run: |
-        echo "Running comprehensive tests for release..."
-        go test -v -race ./...
 
-    - name: Build release binaries
-      run: |
-        TAG_NAME=${GITHUB_REF#refs/tags/}
-        mkdir -p dist
-
-        # Build for multiple platforms
-        GOOS=linux GOARCH=amd64 go build -ldflags="-X main.version=$TAG_NAME" -o dist/skimatik-linux-amd64 ./cmd/skimatik
-        GOOS=linux GOARCH=arm64 go build -ldflags="-X main.version=$TAG_NAME" -o dist/skimatik-linux-arm64 ./cmd/skimatik
-        GOOS=darwin GOARCH=amd64 go build -ldflags="-X main.version=$TAG_NAME" -o dist/skimatik-darwin-amd64 ./cmd/skimatik
-        GOOS=darwin GOARCH=arm64 go build -ldflags="-X main.version=$TAG_NAME" -o dist/skimatik-darwin-arm64 ./cmd/skimatik
-        GOOS=windows GOARCH=amd64 go build -ldflags="-X main.version=$TAG_NAME" -o dist/skimatik-windows-amd64.exe ./cmd/skimatik
-
-        # Create checksums
-        cd dist
-        sha256sum * > checksums.txt
-
-    - name: Generate changelog
-      id: changelog
-      run: |
-        # Get the tag name
-        TAG_NAME=${GITHUB_REF#refs/tags/}
-        echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
-        
-        # Generate changelog from git commits
-        PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
-        if [ -z "$PREVIOUS_TAG" ]; then
-          CHANGELOG=$(git log --pretty=format:"- %s" --reverse)
-        else
-          CHANGELOG=$(git log --pretty=format:"- %s" --reverse $PREVIOUS_TAG..HEAD)
-        fi
-        
-        # Save changelog to file and output
-        {
-          echo "## What's Changed"
-          echo "$CHANGELOG"
-          echo ""
-          echo "**Full Changelog**: https://github.com/${{ github.repository }}/commits/$TAG_NAME"
-        } > changelog.md
-        
-        # Save to output for use in release
-        {
-          echo "changelog<<EOF"
-          cat changelog.md
-          echo "EOF"
-        } >> $GITHUB_OUTPUT
-    
-    - name: Create Release
-      run: |
-        gh release create ${{ steps.changelog.outputs.tag_name }} \
-          --title "Release ${{ steps.changelog.outputs.tag_name }}" \
-          --notes-file changelog.md \
-          $(if [[ "${{ steps.changelog.outputs.tag_name }}" == *"-"* ]]; then echo "--prerelease"; fi) \
-          dist/*
+    - name: Run GoReleaser
+      uses: goreleaser/goreleaser-action@v6
+      with:
+        distribution: goreleaser
+        version: latest
+        args: release --clean
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
