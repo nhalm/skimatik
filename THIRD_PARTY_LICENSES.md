@@ -5,6 +5,7 @@ This project uses the following third-party libraries with their respective lice
 ## pg_query_go
 
 **Repository**: https://github.com/pganalyze/pg_query_go
+**Version**: v6
 **License**: BSD 3-Clause License
 **Copyright**: Copyright (c) 2015, pganalyze
 
