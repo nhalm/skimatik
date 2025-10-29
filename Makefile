@@ -45,7 +45,7 @@ test:
 integration-test: dev-setup
 	@echo "Running integration tests..."
 	$(GOMOD) tidy
-	$(GOTEST) -v -timeout $(TEST_TIMEOUT) ./...
+	TEST_DATABASE_URL=$(TEST_DB_URL) $(GOTEST) -v -timeout $(TEST_TIMEOUT) ./...
 	@echo "✅ Integration tests completed"
 
 # Run all tests (unit + integration)
