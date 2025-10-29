@@ -83,6 +83,7 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 	var queries []Query
 	var currentQuery *Query
 	var sqlLines []string
+	var paramAnnotations []ParameterAnnotation
 
 	scanner := bufio.NewScanner(file)
 	lineNum := 0
@@ -100,6 +101,10 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 				if currentQuery.SQL == "" {
 					return nil, fmt.Errorf("empty query for %s at line %d in %s", currentQuery.Name, lineNum, filename)
 				}
+				currentQuery.ParameterAnnotations = paramAnnotations
+				if err := qp.validateParameterAnnotations(currentQuery); err != nil {
+					return nil, fmt.Errorf("error in query %s: %w", currentQuery.Name, err)
+				}
 				queries = append(queries, *currentQuery)
 			}
 
@@ -111,12 +116,21 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 				Parameters: []Parameter{}, // Will be populated by analyzer
 				Columns:    []Column{},    // Will be populated by analyzer
 			}
-			sqlLines = []string{} // Reset SQL lines
+			sqlLines = []string{}
+			paramAnnotations = []ParameterAnnotation{}
+			continue
+		}
+
+		// Check for parameter annotation
+		if paramAnnotation := qp.parseParameterAnnotation(trimmedLine); paramAnnotation != nil {
+			if currentQuery != nil {
+				paramAnnotations = append(paramAnnotations, *paramAnnotation)
+			}
 			continue
 		}
 
 		// Skip empty lines and comments (except annotations)
-		if trimmedLine == "" || (strings.HasPrefix(trimmedLine, "--") && !strings.Contains(trimmedLine, "name:")) {
+		if trimmedLine == "" || strings.HasPrefix(trimmedLine, "--") {
 			continue
 		}
 
@@ -131,6 +145,10 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 		currentQuery.SQL = strings.TrimSpace(strings.Join(sqlLines, "\n"))
 		if currentQuery.SQL == "" {
 			return nil, fmt.Errorf("empty query for %s in %s", currentQuery.Name, filename)
+		}
+		currentQuery.ParameterAnnotations = paramAnnotations
+		if err := qp.validateParameterAnnotations(currentQuery); err != nil {
+			return nil, fmt.Errorf("error in query %s: %w", currentQuery.Name, err)
 		}
 		queries = append(queries, *currentQuery)
 	}
@@ -257,4 +275,85 @@ func isValidGoIdentifier(name string) bool {
 	}
 
 	return true
+}
+
+// parseParameterAnnotation parses a parameter type annotation
+// Expected format: -- param: $N parameter_name go_type
+func (qp *QueryParser) parseParameterAnnotation(line string) *ParameterAnnotation {
+	// Regex to match: -- param: $N parameter_name go_type
+	paramRegex := regexp.MustCompile(`^--\s*param:\s*\$(\d+)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+(\*?[a-zA-Z_][a-zA-Z0-9_.]*)\s*$`)
+
+	matches := paramRegex.FindStringSubmatch(line)
+	if len(matches) != 4 {
+		return nil
+	}
+
+	position := 0
+	fmt.Sscanf(matches[1], "%d", &position)
+	paramName := strings.TrimSpace(matches[2])
+	goType := strings.TrimSpace(matches[3])
+
+	if position < 1 || paramName == "" || goType == "" {
+		return nil
+	}
+
+	return &ParameterAnnotation{
+		Position: position,
+		Name:     paramName,
+		GoType:   goType,
+	}
+}
+
+// validateParameterAnnotations validates parameter annotations for a query
+func (qp *QueryParser) validateParameterAnnotations(query *Query) error {
+	if len(query.ParameterAnnotations) == 0 {
+		return nil
+	}
+
+	// Check for duplicate positions
+	positionsSeen := make(map[int]bool)
+	for _, pa := range query.ParameterAnnotations {
+		if positionsSeen[pa.Position] {
+			return fmt.Errorf("duplicate parameter annotation for $%d", pa.Position)
+		}
+		positionsSeen[pa.Position] = true
+	}
+
+	// Check that positions are sequential starting at $1
+	for i := 1; i <= len(query.ParameterAnnotations); i++ {
+		if !positionsSeen[i] {
+			return fmt.Errorf("parameter annotations must be sequential starting at $1, missing $%d", i)
+		}
+	}
+
+	// Validate Go type syntax (basic check)
+	for _, pa := range query.ParameterAnnotations {
+		if !isValidGoType(pa.GoType) {
+			return fmt.Errorf("invalid Go type %q for parameter $%d", pa.GoType, pa.Position)
+		}
+	}
+
+	return nil
+}
+
+// isValidGoType performs basic validation of Go type syntax
+func isValidGoType(goType string) bool {
+	if goType == "" {
+		return false
+	}
+
+	// Handle pointer types
+	if strings.HasPrefix(goType, "*") {
+		goType = goType[1:]
+	}
+
+	// Must be a valid Go identifier or qualified identifier (e.g., uuid.UUID, time.Time)
+	parts := strings.Split(goType, ".")
+	for _, part := range parts {
+		if !isValidGoIdentifier(part) {
+			return false
+		}
+	}
+
+	return len(parts) <= 2
 }

@@ -83,11 +83,50 @@ page, err := userRepo.ListPaginated(ctx, ListUsersParams{
 activeUsers, err := userRepo.GetActiveUsers(ctx, 50) // limit parameter
 userByEmail, err := userRepo.GetUserByEmail(ctx, "user@example.com") // email parameter
 searchResults, err := userRepo.SearchUsers(ctx, "john", 20) // searchTerm, limit parameters
+
+// Optional parameters with nullable types
+allUsers, err := userRepo.ListUsersWithFilters(ctx, 100, nil, nil) // all users
+activeOnly := true
+activeUsers, err := userRepo.ListUsersWithFilters(ctx, 100, &activeOnly, nil) // filtered by status
 ```
+
+### Nullable Parameters for Optional Filters
+
+For queries with optional filter parameters, use `-- param:` annotations:
+
+```sql
+-- name: ListUsersWithFilters :many
+-- param: $1 limit int
+-- param: $2 is_active *bool
+-- param: $3 name_filter *string
+SELECT id, name, email, is_active, created_at
+FROM users
+WHERE ($2::boolean IS NULL OR is_active = $2)
+  AND ($3::text IS NULL OR name ILIKE $3)
+ORDER BY created_at DESC
+LIMIT $1;
+```
+
+This generates:
+
+```go
+func (q *Queries) ListUsersWithFilters(
+    ctx context.Context,
+    limit int,
+    isActive *bool,
+    nameFilter *string,
+) ([]ListUsersWithFiltersResult, error)
+```
+
+**Rules:**
+- If ANY parameter has a `-- param:` annotation, ALL parameters must be annotated
+- Parameters must be sequential: `$1, $2, $3, ...`
+- Use pointer types (`*string`, `*int`, etc.) for optional parameters
+- Your SQL must use `IS NULL OR` pattern for optional parameters
 
 ## Requirements
 
-- Go 1.21+
+- Go 1.24+
 - PostgreSQL (any version supported by pgx)
 - Tables must have UUID v7 primary keys for pagination support
 
