@@ -343,9 +343,7 @@ func isValidGoType(goType string) bool {
 	}
 
 	// Handle pointer types
-	if strings.HasPrefix(goType, "*") {
-		goType = goType[1:]
-	}
+	goType = strings.TrimPrefix(goType, "*")
 
 	// Must be a valid Go identifier or qualified identifier (e.g., uuid.UUID, time.Time)
 	parts := strings.Split(goType, ".")
