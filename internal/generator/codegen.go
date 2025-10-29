@@ -906,9 +906,17 @@ func (cg *CodeGenerator) prepareQueryTemplateData(query Query) (map[string]inter
 	var paramDeclarations []string
 	var paramArgs []string
 
-	for _, param := range query.Parameters {
-		paramDeclarations = append(paramDeclarations, fmt.Sprintf("%s %s", param.Name, param.GoType))
-		paramArgs = append(paramArgs, param.Name)
+	if len(query.ParameterAnnotations) > 0 {
+		for _, annotation := range query.ParameterAnnotations {
+			paramName := toCamelCase(annotation.Name)
+			paramDeclarations = append(paramDeclarations, fmt.Sprintf("%s %s", paramName, annotation.GoType))
+			paramArgs = append(paramArgs, paramName)
+		}
+	} else {
+		for _, param := range query.Parameters {
+			paramDeclarations = append(paramDeclarations, fmt.Sprintf("%s %s", param.Name, param.GoType))
+			paramArgs = append(paramArgs, param.Name)
+		}
 	}
 
 	// Build scan arguments for result columns
