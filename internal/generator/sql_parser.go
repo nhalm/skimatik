@@ -1,0 +1,542 @@
+package generator
+
+import (
+	"fmt"
+	"strings"
+	"sync"
+
+	pg_query "github.com/pganalyze/pg_query_go/v6"
+)
+
+// SQLParser provides SQL analysis using PostgreSQL's parser
+type SQLParser struct {
+	cache sync.Map // Thread-safe cache: map[string]*pg_query.ParseResult
+}
+
+// NewSQLParser creates a new SQL parser
+func NewSQLParser() *SQLParser {
+	return &SQLParser{}
+}
+
+// QueryInfo contains extracted metadata from SQL query
+type QueryInfo struct {
+	Type          QueryType
+	Parameters    []ParameterInfo
+	SelectTargets []SelectTarget
+	Tables        []TableRef
+	CTEs          []CTEInfo
+}
+
+// ParameterInfo contains parameter metadata from parse tree
+type ParameterInfo struct {
+	Position   int    // 1-based ($1, $2, etc.)
+	ColumnName string // Column name if detected
+	TableName  string // Table name if detected
+	Operator   string // "=", ">", "IN", "LIKE", etc.
+	IsInWhere  bool   // Found in WHERE clause
+	IsInSet    bool   // Found in UPDATE SET clause
+	IsInLimit  bool   // Found in LIMIT clause
+	IsInOffset bool   // Found in OFFSET clause
+}
+
+// SelectTarget represents a column in SELECT clause
+type SelectTarget struct {
+	Alias      string // Column alias or name
+	IsCount    bool   // COUNT aggregate
+	IsSum      bool   // SUM aggregate
+	IsAvg      bool   // AVG aggregate
+	IsMax      bool   // MAX aggregate
+	IsMin      bool   // MIN aggregate
+	Expression string // Full expression as string
+}
+
+// TableRef represents a table reference in query
+type TableRef struct {
+	Name   string // Table name
+	Alias  string // Table alias (if any)
+	Schema string // Schema name (if specified)
+}
+
+// CTEInfo represents a Common Table Expression
+type CTEInfo struct {
+	Name  string     // CTE name
+	Query *QueryInfo // Recursively parsed CTE query
+}
+
+// Parse analyzes SQL and returns structured metadata
+func (sp *SQLParser) Parse(sql string) (*QueryInfo, error) {
+	if cached, ok := sp.cache.Load(sql); ok {
+		return sp.extractInfoFromCached(cached.(*pg_query.ParseResult))
+	}
+
+	result, err := pg_query.Parse(sql)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse SQL: %w", err)
+	}
+
+	sp.cache.Store(sql, result)
+
+	return sp.extractInfo(result)
+}
+
+// extractInfoFromCached extracts metadata from cached parse result
+func (sp *SQLParser) extractInfoFromCached(result *pg_query.ParseResult) (*QueryInfo, error) {
+	return sp.extractInfo(result)
+}
+
+// extractInfo extracts metadata from parse result
+func (sp *SQLParser) extractInfo(result *pg_query.ParseResult) (*QueryInfo, error) {
+	if len(result.Stmts) == 0 {
+		return nil, fmt.Errorf("no statements found in SQL")
+	}
+
+	info := &QueryInfo{}
+	stmt := result.Stmts[0].Stmt
+
+	info.Type = sp.determineQueryType(stmt)
+	info.Tables = sp.extractTables(stmt)
+	info.Parameters = sp.extractParameters(stmt)
+
+	if selectStmt := stmt.GetSelectStmt(); selectStmt != nil {
+		info.SelectTargets = sp.extractSelectTargets(selectStmt)
+	}
+
+	return info, nil
+}
+
+// determineQueryType determines QueryType from parse tree node
+func (sp *SQLParser) determineQueryType(stmt *pg_query.Node) QueryType {
+	if stmt.GetSelectStmt() != nil {
+		return QueryTypeMany
+	}
+	if stmt.GetInsertStmt() != nil {
+		return QueryTypeExec
+	}
+	if stmt.GetUpdateStmt() != nil {
+		return QueryTypeExec
+	}
+	if stmt.GetDeleteStmt() != nil {
+		return QueryTypeExec
+	}
+	return QueryTypeMany
+}
+
+// extractSelectTargets extracts columns from SELECT clause
+func (sp *SQLParser) extractSelectTargets(selectStmt *pg_query.SelectStmt) []SelectTarget {
+	var targets []SelectTarget
+
+	for _, node := range selectStmt.TargetList {
+		target := sp.analyzeTargetNode(node)
+		if target != nil {
+			targets = append(targets, *target)
+		}
+	}
+
+	return targets
+}
+
+// analyzeTargetNode analyzes a single target node
+func (sp *SQLParser) analyzeTargetNode(node *pg_query.Node) *SelectTarget {
+	resTarget := node.GetResTarget()
+	if resTarget == nil {
+		return nil
+	}
+
+	target := &SelectTarget{
+		Alias: resTarget.Name,
+	}
+
+	// Check if it's a function call (aggregate)
+	if funcCall := resTarget.Val.GetFuncCall(); funcCall != nil {
+		sp.analyzeFuncCall(funcCall, target)
+	}
+
+	// If no alias, try to extract column name
+	if target.Alias == "" {
+		target.Alias = sp.extractColumnNameFromNode(resTarget.Val)
+	}
+
+	return target
+}
+
+// analyzeFuncCall detects aggregate functions
+func (sp *SQLParser) analyzeFuncCall(funcCall *pg_query.FuncCall, target *SelectTarget) {
+	if len(funcCall.Funcname) == 0 {
+		return
+	}
+
+	// Get function name from last element
+	funcName := funcCall.Funcname[len(funcCall.Funcname)-1].GetString_().Sval
+
+	switch strings.ToLower(funcName) {
+	case "count":
+		target.IsCount = true
+	case "sum":
+		target.IsSum = true
+	case "avg":
+		target.IsAvg = true
+	case "max":
+		target.IsMax = true
+	case "min":
+		target.IsMin = true
+	}
+}
+
+// extractColumnNameFromNode attempts to extract column name from expression
+func (sp *SQLParser) extractColumnNameFromNode(node *pg_query.Node) string {
+	if colRef := node.GetColumnRef(); colRef != nil {
+		if len(colRef.Fields) > 0 {
+			if str := colRef.Fields[len(colRef.Fields)-1].GetString_(); str != nil {
+				return str.Sval
+			}
+		}
+	}
+	return ""
+}
+
+// extractParameters extracts all parameters with context
+func (sp *SQLParser) extractParameters(stmt *pg_query.Node) []ParameterInfo {
+	params := make(map[int]*ParameterInfo)
+
+	if selectStmt := stmt.GetSelectStmt(); selectStmt != nil {
+		sp.walkSelectForParams(selectStmt, params)
+	} else if updateStmt := stmt.GetUpdateStmt(); updateStmt != nil {
+		sp.walkUpdateForParams(updateStmt, params)
+	} else if insertStmt := stmt.GetInsertStmt(); insertStmt != nil {
+		sp.walkInsertForParams(insertStmt, params)
+	} else if deleteStmt := stmt.GetDeleteStmt(); deleteStmt != nil {
+		sp.walkDeleteForParams(deleteStmt, params)
+	}
+
+	return sp.sortParameters(params)
+}
+
+// walkSelectForParams walks SELECT statement for parameters
+func (sp *SQLParser) walkSelectForParams(selectStmt *pg_query.SelectStmt, params map[int]*ParameterInfo) {
+	if selectStmt.WhereClause != nil {
+		sp.walkExprForParams(selectStmt.WhereClause, params, true, false)
+	}
+
+	if selectStmt.LimitCount != nil {
+		if paramRef := selectStmt.LimitCount.GetParamRef(); paramRef != nil {
+			pos := int(paramRef.Number)
+			if params[pos] == nil {
+				params[pos] = &ParameterInfo{Position: pos}
+			}
+			params[pos].IsInLimit = true
+		}
+	}
+
+	if selectStmt.LimitOffset != nil {
+		if paramRef := selectStmt.LimitOffset.GetParamRef(); paramRef != nil {
+			pos := int(paramRef.Number)
+			if params[pos] == nil {
+				params[pos] = &ParameterInfo{Position: pos}
+			}
+			params[pos].IsInOffset = true
+		}
+	}
+}
+
+// walkUpdateForParams walks UPDATE statement for parameters
+func (sp *SQLParser) walkUpdateForParams(updateStmt *pg_query.UpdateStmt, params map[int]*ParameterInfo) {
+	tableName := ""
+	if updateStmt.Relation != nil {
+		tableName = updateStmt.Relation.Relname
+	}
+
+	for _, node := range updateStmt.TargetList {
+		if resTarget := node.GetResTarget(); resTarget != nil {
+			columnName := resTarget.Name
+			sp.walkExprForParamsWithColumn(resTarget.Val, params, tableName, columnName, false, true)
+		}
+	}
+
+	if updateStmt.WhereClause != nil {
+		sp.walkExprForParams(updateStmt.WhereClause, params, true, false)
+	}
+}
+
+// walkInsertForParams walks INSERT values for parameters
+func (sp *SQLParser) walkInsertForParams(insertStmt *pg_query.InsertStmt, params map[int]*ParameterInfo) {
+	if insertStmt.SelectStmt == nil {
+		return
+	}
+
+	selectStmt := insertStmt.SelectStmt.GetSelectStmt()
+	if selectStmt == nil {
+		return
+	}
+
+	tableName := ""
+	if insertStmt.Relation != nil {
+		tableName = insertStmt.Relation.Relname
+	}
+
+	columnNames := make([]string, 0)
+	for _, col := range insertStmt.Cols {
+		if resTarget := col.GetResTarget(); resTarget != nil {
+			columnNames = append(columnNames, resTarget.Name)
+		}
+	}
+
+	if len(selectStmt.ValuesLists) > 0 {
+		valuesList := selectStmt.ValuesLists[0]
+		if list := valuesList.GetList(); list != nil {
+			for i, node := range list.Items {
+				if paramRef := node.GetParamRef(); paramRef != nil {
+					pos := int(paramRef.Number)
+					if params[pos] == nil {
+						params[pos] = &ParameterInfo{Position: pos}
+					}
+					if i < len(columnNames) {
+						params[pos].ColumnName = columnNames[i]
+						params[pos].TableName = tableName
+					}
+				}
+			}
+		}
+	}
+}
+
+// walkDeleteForParams walks DELETE statement for parameters
+func (sp *SQLParser) walkDeleteForParams(deleteStmt *pg_query.DeleteStmt, params map[int]*ParameterInfo) {
+	if deleteStmt.WhereClause != nil {
+		sp.walkExprForParams(deleteStmt.WhereClause, params, true, false)
+	}
+}
+
+// walkExprForParams walks an expression tree for parameters
+func (sp *SQLParser) walkExprForParams(node *pg_query.Node, params map[int]*ParameterInfo, isInWhere, isInSet bool) {
+	if node == nil {
+		return
+	}
+
+	if paramRef := node.GetParamRef(); paramRef != nil {
+		pos := int(paramRef.Number)
+		if params[pos] == nil {
+			params[pos] = &ParameterInfo{Position: pos}
+		}
+		params[pos].IsInWhere = params[pos].IsInWhere || isInWhere
+		params[pos].IsInSet = params[pos].IsInSet || isInSet
+		return
+	}
+
+	if aExpr := node.GetAExpr(); aExpr != nil {
+		if colRef := aExpr.Lexpr.GetColumnRef(); colRef != nil {
+			columnName := sp.extractColumnNameFromRef(colRef)
+			tableName := sp.extractTableNameFromRef(colRef)
+
+			if paramRef := aExpr.Rexpr.GetParamRef(); paramRef != nil {
+				pos := int(paramRef.Number)
+				if params[pos] == nil {
+					params[pos] = &ParameterInfo{Position: pos}
+				}
+				params[pos].ColumnName = columnName
+				if tableName != "" {
+					params[pos].TableName = tableName
+				}
+				params[pos].Operator = sp.getOperatorName(aExpr)
+				params[pos].IsInWhere = isInWhere
+			}
+		}
+
+		sp.walkExprForParams(aExpr.Lexpr, params, isInWhere, isInSet)
+		sp.walkExprForParams(aExpr.Rexpr, params, isInWhere, isInSet)
+	}
+
+	if boolExpr := node.GetBoolExpr(); boolExpr != nil {
+		for _, arg := range boolExpr.Args {
+			sp.walkExprForParams(arg, params, isInWhere, isInSet)
+		}
+	}
+
+	if subLink := node.GetSubLink(); subLink != nil {
+		if subLink.Testexpr != nil {
+			sp.walkExprForParams(subLink.Testexpr, params, isInWhere, isInSet)
+		}
+	}
+
+	if funcCall := node.GetFuncCall(); funcCall != nil {
+		for _, arg := range funcCall.Args {
+			sp.walkExprForParams(arg, params, isInWhere, isInSet)
+		}
+	}
+
+	if nullTest := node.GetNullTest(); nullTest != nil {
+		sp.walkExprForParams(nullTest.Arg, params, isInWhere, isInSet)
+	}
+
+	if caseExpr := node.GetCaseExpr(); caseExpr != nil {
+		if caseExpr.Arg != nil {
+			sp.walkExprForParams(caseExpr.Arg, params, isInWhere, isInSet)
+		}
+		for _, whenClause := range caseExpr.Args {
+			if when := whenClause.GetCaseWhen(); when != nil {
+				sp.walkExprForParams(when.Expr, params, isInWhere, isInSet)
+				sp.walkExprForParams(when.Result, params, isInWhere, isInSet)
+			}
+		}
+		if caseExpr.Defresult != nil {
+			sp.walkExprForParams(caseExpr.Defresult, params, isInWhere, isInSet)
+		}
+	}
+}
+
+// walkExprForParamsWithColumn walks expression with known column context
+func (sp *SQLParser) walkExprForParamsWithColumn(node *pg_query.Node, params map[int]*ParameterInfo, tableName, columnName string, isInWhere, isInSet bool) {
+	if node == nil {
+		return
+	}
+
+	if paramRef := node.GetParamRef(); paramRef != nil {
+		pos := int(paramRef.Number)
+		if params[pos] == nil {
+			params[pos] = &ParameterInfo{Position: pos}
+		}
+		params[pos].ColumnName = columnName
+		if tableName != "" {
+			params[pos].TableName = tableName
+		}
+		params[pos].IsInSet = isInSet
+		params[pos].IsInWhere = isInWhere
+		return
+	}
+
+	sp.walkExprForParams(node, params, isInWhere, isInSet)
+}
+
+// extractColumnNameFromRef extracts column name from ColumnRef
+func (sp *SQLParser) extractColumnNameFromRef(colRef *pg_query.ColumnRef) string {
+	if len(colRef.Fields) == 0 {
+		return ""
+	}
+
+	if str := colRef.Fields[len(colRef.Fields)-1].GetString_(); str != nil {
+		return str.Sval
+	}
+
+	return ""
+}
+
+// extractTableNameFromRef extracts table name from qualified ColumnRef
+func (sp *SQLParser) extractTableNameFromRef(colRef *pg_query.ColumnRef) string {
+	if len(colRef.Fields) < 2 {
+		return ""
+	}
+
+	if str := colRef.Fields[0].GetString_(); str != nil {
+		return str.Sval
+	}
+
+	return ""
+}
+
+// getOperatorName extracts operator name from A_Expr
+func (sp *SQLParser) getOperatorName(aExpr *pg_query.A_Expr) string {
+	if len(aExpr.Name) > 0 {
+		if str := aExpr.Name[0].GetString_(); str != nil {
+			return str.Sval
+		}
+	}
+	return ""
+}
+
+// sortParameters converts map to sorted slice
+func (sp *SQLParser) sortParameters(params map[int]*ParameterInfo) []ParameterInfo {
+	if len(params) == 0 {
+		return []ParameterInfo{}
+	}
+
+	maxPos := 0
+	for pos := range params {
+		if pos > maxPos {
+			maxPos = pos
+		}
+	}
+
+	result := make([]ParameterInfo, 0, maxPos)
+	for i := 1; i <= maxPos; i++ {
+		if param, exists := params[i]; exists {
+			result = append(result, *param)
+		} else {
+			result = append(result, ParameterInfo{Position: i})
+		}
+	}
+
+	return result
+}
+
+// extractTables extracts all table references from query
+func (sp *SQLParser) extractTables(stmt *pg_query.Node) []TableRef {
+	var tables []TableRef
+
+	if selectStmt := stmt.GetSelectStmt(); selectStmt != nil {
+		tables = sp.extractTablesFromSelect(selectStmt)
+	} else if updateStmt := stmt.GetUpdateStmt(); updateStmt != nil {
+		if updateStmt.Relation != nil {
+			tables = append(tables, sp.makeTableRef(updateStmt.Relation))
+		}
+	} else if deleteStmt := stmt.GetDeleteStmt(); deleteStmt != nil {
+		if deleteStmt.Relation != nil {
+			tables = append(tables, sp.makeTableRef(deleteStmt.Relation))
+		}
+	} else if insertStmt := stmt.GetInsertStmt(); insertStmt != nil {
+		if insertStmt.Relation != nil {
+			tables = append(tables, sp.makeTableRef(insertStmt.Relation))
+		}
+	}
+
+	return tables
+}
+
+// extractTablesFromSelect extracts tables from SELECT statement
+func (sp *SQLParser) extractTablesFromSelect(selectStmt *pg_query.SelectStmt) []TableRef {
+	var tables []TableRef
+
+	for _, fromNode := range selectStmt.FromClause {
+		tables = append(tables, sp.walkFromClause(fromNode)...)
+	}
+
+	return tables
+}
+
+// walkFromClause walks FROM clause nodes
+func (sp *SQLParser) walkFromClause(node *pg_query.Node) []TableRef {
+	var tables []TableRef
+
+	if rangeVar := node.GetRangeVar(); rangeVar != nil {
+		tables = append(tables, sp.makeTableRef(rangeVar))
+		return tables
+	}
+
+	if joinExpr := node.GetJoinExpr(); joinExpr != nil {
+		tables = append(tables, sp.walkFromClause(joinExpr.Larg)...)
+		tables = append(tables, sp.walkFromClause(joinExpr.Rarg)...)
+		return tables
+	}
+
+	return tables
+}
+
+// makeTableRef creates TableRef from RangeVar
+func (sp *SQLParser) makeTableRef(rangeVar *pg_query.RangeVar) TableRef {
+	ref := TableRef{
+		Name: rangeVar.Relname,
+	}
+
+	if rangeVar.Alias != nil {
+		ref.Alias = rangeVar.Alias.Aliasname
+	}
+
+	if rangeVar.Schemaname != "" {
+		ref.Schema = rangeVar.Schemaname
+	}
+
+	return ref
+}
+
+// extractCTEs will be implemented later
+func (sp *SQLParser) extractCTEs(selectStmt *pg_query.SelectStmt) []CTEInfo {
+	return nil
+}
