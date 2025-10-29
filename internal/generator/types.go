@@ -33,12 +33,13 @@ type Index struct {
 
 // Query represents a parsed SQL query with metadata
 type Query struct {
-	Name       string      `json:"name"`
-	SQL        string      `json:"sql"`
-	Type       QueryType   `json:"type"` // :one, :many, :exec, :paginated
-	Parameters []Parameter `json:"parameters"`
-	Columns    []Column    `json:"columns"` // Result columns (for SELECT queries)
-	SourceFile string      `json:"source_file"`
+	Name                 string                `json:"name"`
+	SQL                  string                `json:"sql"`
+	Type                 QueryType             `json:"type"` // :one, :many, :exec, :paginated
+	Parameters           []Parameter           `json:"parameters"`
+	Columns              []Column              `json:"columns"` // Result columns (for SELECT queries)
+	SourceFile           string                `json:"source_file"`
+	ParameterAnnotations []ParameterAnnotation `json:"parameter_annotations"` // Optional type annotations
 }
 
 // QueryType represents the type of query operation
@@ -60,6 +61,13 @@ type Parameter struct {
 	Nullable   bool   `json:"nullable"`    // Whether the parameter should be nullable (pointer type)
 	TableName  string `json:"table_name"`  // Table name if detected (for nullability lookup)
 	ColumnName string `json:"column_name"` // Column name if detected (for nullability lookup)
+}
+
+// ParameterAnnotation represents an explicit parameter type annotation from SQL comments
+type ParameterAnnotation struct {
+	Position int    `json:"position"` // 1-based parameter position ($1, $2, etc)
+	Name     string `json:"name"`     // Parameter name in snake_case
+	GoType   string `json:"go_type"`  // Go type (supports pointers like "*string")
 }
 
 // GetColumn returns a column by name, or nil if not found
