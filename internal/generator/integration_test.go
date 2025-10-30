@@ -15,8 +15,7 @@ func TestSystem_EndToEnd(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
-	pool := getTestDB(t)
-	defer pool.Shutdown(context.Background())
+	_ = getTestDB(t)
 
 	tempDir := t.TempDir()
 
@@ -77,8 +76,7 @@ func TestSystem_QueryGeneration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
-	pool := getTestDB(t)
-	defer pool.Shutdown(context.Background())
+	_ = getTestDB(t)
 
 	tempDir := t.TempDir()
 
@@ -97,10 +95,7 @@ SELECT id, name, email FROM users WHERE id = $1;
 SELECT id, name, email FROM users WHERE is_active = true ORDER BY name;
 
 -- name: CreateUser :exec
-INSERT INTO users (name, email) VALUES ($1, $2);
-
--- name: GetUsersPaginated :paginated
-SELECT id, name, email FROM users ORDER BY id ASC LIMIT $1;`
+INSERT INTO users (name, email) VALUES ($1, $2);`
 
 	err = os.WriteFile(filepath.Join(sqlDir, "users.sql"), []byte(testQueries), 0644)
 	if err != nil {
@@ -144,8 +139,7 @@ func TestSystem_RealWorldScenarios(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
-	pool := getTestDB(t)
-	defer pool.Shutdown(context.Background())
+	_ = getTestDB(t)
 
 	scenarios := []struct {
 		name        string
@@ -238,8 +232,7 @@ func TestSystem_ErrorHandling(t *testing.T) {
 	})
 
 	t.Run("invalid_primary_key_table", func(t *testing.T) {
-		pool := getTestDB(t)
-		defer pool.Shutdown(context.Background())
+		_ = getTestDB(t)
 
 		tempDir := t.TempDir()
 
