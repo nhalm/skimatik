@@ -381,6 +381,36 @@ func (sp *SQLParser) walkExprForParams(node *pg_query.Node, params map[int]*Para
 			sp.walkExprForParams(caseExpr.Defresult, params, isInWhere, isInSet)
 		}
 	}
+
+	// Handle IN clauses: status IN ($1) becomes ScalarArrayOpExpr
+	if scalarArrayOp := node.GetScalarArrayOpExpr(); scalarArrayOp != nil {
+		// Args[0] is the column, Args[1] is the parameter/array
+		if len(scalarArrayOp.Args) >= 2 {
+			if colRef := scalarArrayOp.Args[0].GetColumnRef(); colRef != nil {
+				columnName := sp.extractColumnNameFromRef(colRef)
+				tableName := sp.extractTableNameFromRef(colRef)
+
+				// Second argument could be a parameter
+				if paramRef := scalarArrayOp.Args[1].GetParamRef(); paramRef != nil {
+					pos := int(paramRef.Number)
+					if params[pos] == nil {
+						params[pos] = &ParameterInfo{Position: pos}
+					}
+					params[pos].ColumnName = columnName
+					if tableName != "" {
+						params[pos].TableName = tableName
+					}
+					params[pos].Operator = "IN"
+					params[pos].IsInWhere = isInWhere
+				}
+			}
+		}
+
+		// Recursively walk all args
+		for _, arg := range scalarArrayOp.Args {
+			sp.walkExprForParams(arg, params, isInWhere, isInSet)
+		}
+	}
 }
 
 // walkExprForParamsWithColumn walks expression with known column context
