@@ -493,7 +493,11 @@ func (qa *QueryAnalyzer) analyzeQueryColumns(ctx context.Context, query *Query) 
 		// Map to Go type
 		goType, err := qa.mapToIntelligentGoType(pgType, isNullable)
 		if err != nil {
-			return fmt.Errorf("failed to map column type for %s: %w", field.Name, err)
+			return fmt.Errorf("failed to map column type for %s (pgType=%s, nullable=%v): %w", field.Name, pgType, isNullable, err)
+		}
+
+		if goType == "" {
+			return fmt.Errorf("empty GoType generated for column %s (pgType=%s, nullable=%v)", field.Name, pgType, isNullable)
 		}
 
 		column := Column{

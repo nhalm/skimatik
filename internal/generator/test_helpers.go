@@ -6,7 +6,11 @@ import (
 	"github.com/nhalm/pgxkit"
 )
 
-// getTestDB creates a connection to the test database using pgxkit
+// packageTestDB is the shared test database connection for all integration tests
+// It is initialized in TestMain (main_test.go)
+var packageTestDB *pgxkit.DB
+
+// getTestDB returns the shared test database connection
 // This function is used across multiple integration test files
 func getTestDB(t *testing.T) *pgxkit.DB {
 	if testing.Short() {
@@ -14,9 +18,12 @@ func getTestDB(t *testing.T) *pgxkit.DB {
 		return nil
 	}
 
-	// Use pgxkit's RequireDB which handles test database setup and skipping
-	testDB := pgxkit.RequireDB(t)
-	return testDB.DB // TestDB embeds *DB
+	if packageTestDB == nil {
+		t.Skip("Test database not available (TEST_DATABASE_URL not set)")
+		return nil
+	}
+
+	return packageTestDB
 }
 
 // getTestTable returns a standardized test table for code generation tests
