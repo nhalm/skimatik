@@ -213,6 +213,12 @@ func (sp *SQLParser) extractParameters(stmt *pg_query.Node) []ParameterInfo {
 
 // walkSelectForParams walks SELECT statement for parameters
 func (sp *SQLParser) walkSelectForParams(selectStmt *pg_query.SelectStmt, params map[int]*ParameterInfo) {
+	for _, target := range selectStmt.TargetList {
+		if resTarget := target.GetResTarget(); resTarget != nil && resTarget.Val != nil {
+			sp.walkExprForParams(resTarget.Val, params, false, false)
+		}
+	}
+
 	if selectStmt.WhereClause != nil {
 		sp.walkExprForParams(selectStmt.WhereClause, params, true, false)
 	}
@@ -248,7 +254,14 @@ func (sp *SQLParser) walkUpdateForParams(updateStmt *pg_query.UpdateStmt, params
 	for _, node := range updateStmt.TargetList {
 		if resTarget := node.GetResTarget(); resTarget != nil {
 			columnName := resTarget.Name
-			sp.walkExprForParamsWithColumn(resTarget.Val, params, tableName, columnName, false, true)
+			targetTable := tableName
+			if len(resTarget.Indirection) > 0 {
+				if str := resTarget.Indirection[len(resTarget.Indirection)-1].GetString_(); str != nil {
+					columnName = str.Sval
+				}
+				targetTable = resTarget.Name
+			}
+			sp.walkExprForParamsWithColumn(resTarget.Val, params, targetTable, columnName, false, true)
 		}
 	}
 
@@ -338,6 +351,21 @@ func (sp *SQLParser) walkExprForParams(node *pg_query.Node, params map[int]*Para
 				}
 				params[pos].Operator = sp.getOperatorName(aExpr)
 				params[pos].IsInWhere = isInWhere
+			} else if list := aExpr.Rexpr.GetList(); list != nil {
+				for _, item := range list.Items {
+					if paramRef := item.GetParamRef(); paramRef != nil {
+						pos := int(paramRef.Number)
+						if params[pos] == nil {
+							params[pos] = &ParameterInfo{Position: pos}
+						}
+						params[pos].ColumnName = columnName
+						if tableName != "" {
+							params[pos].TableName = tableName
+						}
+						params[pos].Operator = sp.getOperatorName(aExpr)
+						params[pos].IsInWhere = isInWhere
+					}
+				}
 			}
 		}
 
@@ -409,6 +437,12 @@ func (sp *SQLParser) walkExprForParams(node *pg_query.Node, params map[int]*Para
 		// Recursively walk all args
 		for _, arg := range scalarArrayOp.Args {
 			sp.walkExprForParams(arg, params, isInWhere, isInSet)
+		}
+	}
+
+	if list := node.GetList(); list != nil {
+		for _, item := range list.Items {
+			sp.walkExprForParams(item, params, isInWhere, isInSet)
 		}
 	}
 }
