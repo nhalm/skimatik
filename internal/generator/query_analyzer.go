@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/nhalm/pgxkit"
 )
 
@@ -483,11 +484,14 @@ func (qa *QueryAnalyzer) analyzeQueryColumns(ctx context.Context, query *Query) 
 		// Map PostgreSQL OID to type name
 		pgType := qa.mapOIDToTypeName(field.DataTypeOID)
 
-		// Determine if the column is nullable (this is a simplified approach)
-		isNullable := true // Default to nullable for query results
+		// Determine if the column is nullable using intelligent detection
+		isNullable, err := qa.isColumnNullable(ctx, field, query.SQL)
+		if err != nil {
+			return fmt.Errorf("failed to determine nullability for %s: %w", field.Name, err)
+		}
 
 		// Map to Go type
-		goType, err := qa.typeMapper.MapType(pgType, isNullable, false)
+		goType, err := qa.mapToIntelligentGoType(pgType, isNullable)
 		if err != nil {
 			return fmt.Errorf("failed to map column type for %s: %w", field.Name, err)
 		}
@@ -504,6 +508,89 @@ func (qa *QueryAnalyzer) analyzeQueryColumns(ctx context.Context, query *Query) 
 
 	query.Columns = columns
 	return nil
+}
+
+// isColumnNullable determines if a column can be NULL based on FieldDescription
+func (qa *QueryAnalyzer) isColumnNullable(ctx context.Context, field pgconn.FieldDescription, sql string) (bool, error) {
+	// If TableOID and TableAttributeNumber are both non-zero, this is a table column
+	if field.TableOID != 0 && field.TableAttributeNumber != 0 {
+		// Query pg_attribute to check if column is NOT NULL
+		var notNull bool
+		err := qa.db.QueryRow(ctx, `
+			SELECT attnotnull
+			FROM pg_attribute
+			WHERE attrelid = $1 AND attnum = $2
+		`, field.TableOID, field.TableAttributeNumber).Scan(&notNull)
+
+		if err != nil {
+			return true, fmt.Errorf("failed to query pg_attribute: %w", err)
+		}
+
+		return !notNull, nil
+	}
+
+	// Computed column (TableOID == 0 or TableAttributeNumber == 0)
+	// Check if it's a COUNT aggregate which is never nullable
+	if qa.isCountAggregate(field.Name, sql) {
+		return false, nil
+	}
+
+	// Other computed columns default to nullable
+	return true, nil
+}
+
+// isCountAggregate checks if a column is a COUNT aggregate
+func (qa *QueryAnalyzer) isCountAggregate(columnName, sql string) bool {
+	// Parse the SQL to check if this column is a COUNT aggregate
+	queryInfo, err := qa.sqlParser.Parse(sql)
+	if err != nil {
+		return false
+	}
+
+	// Check if this column name matches a COUNT target
+	for _, target := range queryInfo.SelectTargets {
+		if strings.EqualFold(target.Alias, columnName) && target.IsCount {
+			return true
+		}
+	}
+
+	return false
+}
+
+// mapToIntelligentGoType maps PostgreSQL type to Go type with intelligent nullability
+func (qa *QueryAnalyzer) mapToIntelligentGoType(pgType string, isNullable bool) (string, error) {
+	// Get base type
+	var baseType string
+	switch strings.ToLower(pgType) {
+	case "uuid":
+		baseType = "uuid.UUID"
+	case "text", "varchar", "character varying", "char", "character":
+		baseType = "string"
+	case "smallint", "int2", "integer", "int", "int4", "bigint", "int8":
+		baseType = "int"
+	case "real", "float4":
+		baseType = "float32"
+	case "double precision", "float8", "numeric", "decimal":
+		baseType = "float64"
+	case "boolean", "bool":
+		baseType = "bool"
+	case "date", "time", "time without time zone", "timetz", "time with time zone",
+		"timestamp", "timestamp without time zone", "timestamptz", "timestamp with time zone":
+		baseType = "time.Time"
+	case "bytea":
+		baseType = "[]byte"
+	case "json", "jsonb":
+		baseType = "json.RawMessage"
+	default:
+		return "", fmt.Errorf("unsupported PostgreSQL type: %s", pgType)
+	}
+
+	// Apply nullable modifier
+	if isNullable {
+		return makePointerType(baseType), nil
+	}
+
+	return baseType, nil
 }
 
 // mapOIDToTypeName maps PostgreSQL OID to type name

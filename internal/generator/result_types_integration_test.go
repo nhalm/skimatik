@@ -82,8 +82,6 @@ SELECT id, status FROM payment_links WHERE id = $1;`
 	if statusCol.IsNullable {
 		t.Errorf("Expected status to be NOT NULL")
 	}
-
-	t.Logf("EXPECTED FAILURE: This test fails because FieldDescriptions-based nullability detection is not yet implemented")
 }
 
 // TestResultTypes_SelectWithNullable tests that nullable columns generate pointer types
@@ -146,8 +144,6 @@ SELECT id, description FROM payment_links WHERE id = $1;`
 	if !descCol.IsNullable {
 		t.Errorf("Expected description to be nullable")
 	}
-
-	t.Logf("EXPECTED FAILURE: This test fails because pointer type generation is not yet implemented")
 }
 
 // TestResultTypes_CountAggregate tests that COUNT aggregates are never nullable
@@ -220,8 +216,6 @@ WHERE payment_link_id = $1;`
 	if !sumCol.IsNullable {
 		t.Errorf("Expected total_amount to be nullable (SUM can return NULL)")
 	}
-
-	t.Logf("EXPECTED FAILURE: COUNT detection and pointer types not yet implemented")
 }
 
 // Helper functions
