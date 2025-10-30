@@ -3,7 +3,6 @@ package generator
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,6 +15,7 @@ import (
 type QueryAnalyzer struct {
 	db         *pgxkit.DB
 	typeMapper *TypeMapper
+	sqlParser  *SQLParser
 }
 
 // NewQueryAnalyzer creates a new query analyzer
@@ -23,6 +23,7 @@ func NewQueryAnalyzer(db *pgxkit.DB) *QueryAnalyzer {
 	return &QueryAnalyzer{
 		db:         db,
 		typeMapper: NewTypeMapper(nil),
+		sqlParser:  NewSQLParser(),
 	}
 }
 
@@ -79,39 +80,30 @@ func (qa *QueryAnalyzer) AnalyzeQuery(ctx context.Context, query *Query) error {
 
 // extractParameters extracts parameter placeholders from the SQL query
 func (qa *QueryAnalyzer) extractParameters(query *Query) error {
-	// Remove string literals and quoted identifiers to avoid false positives
-	cleanSQL := qa.removeQuotedContent(query.SQL)
+	// Use SQLParser to extract parameters
+	queryInfo, err := qa.sqlParser.Parse(query.SQL)
+	if err != nil {
+		// Fall back to basic regex extraction if parsing fails
+		return qa.extractParametersRegex(query)
+	}
 
-	// Find all parameter placeholders ($1, $2, etc.)
-	// Match $digits followed by non-digit or end of string
-	paramRegex := regexp.MustCompile(`\$(\d+)(?:\D|$)`)
-	matches := paramRegex.FindAllStringSubmatch(cleanSQL, -1)
-
-	if len(matches) == 0 {
+	if len(queryInfo.Parameters) == 0 {
 		query.Parameters = []Parameter{}
 		return nil
 	}
 
-	// Create a map to track unique parameter indices
+	// Create parameter list from parse tree
 	paramMap := make(map[int]bool)
-	for _, match := range matches {
-		if len(match) >= 2 {
-			paramNum, err := strconv.Atoi(match[1])
-			if err != nil {
-				return fmt.Errorf("invalid parameter number: %s", match[1])
-			}
-			paramMap[paramNum] = true
-		}
+	for _, paramInfo := range queryInfo.Parameters {
+		paramMap[paramInfo.Position] = true
 	}
 
 	// Create parameter list from the parameters found
 	var parameters []Parameter
 	for paramNum := range paramMap {
-		// For now, we'll use a generic parameter type
-		// In a more advanced implementation, we could try to infer types from context
 		param := Parameter{
 			Name:   fmt.Sprintf("param%d", paramNum),
-			Type:   "text", // Default to text, can be overridden by type inference
+			Type:   "text",
 			GoType: "string",
 			Index:  paramNum,
 		}
@@ -127,125 +119,101 @@ func (qa *QueryAnalyzer) extractParameters(query *Query) error {
 	return nil
 }
 
-// inferParameterNames infers semantic parameter names from SQL context
+// extractParametersRegex is a fallback regex-based parameter extraction
+func (qa *QueryAnalyzer) extractParametersRegex(query *Query) error {
+	// Remove string literals and quoted identifiers to avoid false positives
+	cleanSQL := qa.removeQuotedContent(query.SQL)
+
+	// Find all parameter placeholders ($1, $2, etc.)
+	// This is a simple fallback - the parser should handle most cases
+	paramMap := make(map[int]bool)
+	for i := 0; i < len(cleanSQL); i++ {
+		if cleanSQL[i] == '$' && i+1 < len(cleanSQL) && cleanSQL[i+1] >= '0' && cleanSQL[i+1] <= '9' {
+			numStr := ""
+			j := i + 1
+			for j < len(cleanSQL) && cleanSQL[j] >= '0' && cleanSQL[j] <= '9' {
+				numStr += string(cleanSQL[j])
+				j++
+			}
+			if num, err := strconv.Atoi(numStr); err == nil {
+				paramMap[num] = true
+			}
+		}
+	}
+
+	if len(paramMap) == 0 {
+		query.Parameters = []Parameter{}
+		return nil
+	}
+
+	// Create parameter list
+	var parameters []Parameter
+	for paramNum := range paramMap {
+		param := Parameter{
+			Name:   fmt.Sprintf("param%d", paramNum),
+			Type:   "text",
+			GoType: "string",
+			Index:  paramNum,
+		}
+		parameters = append(parameters, param)
+	}
+
+	sort.Slice(parameters, func(i, j int) bool {
+		return parameters[i].Index < parameters[j].Index
+	})
+
+	query.Parameters = parameters
+	return nil
+}
+
+// inferParameterNames infers semantic parameter names from SQL context using the SQL parser
 func (qa *QueryAnalyzer) inferParameterNames(query *Query) error {
 	if len(query.Parameters) == 0 {
 		return nil
 	}
 
+	// Parse the SQL to get parameter context
+	queryInfo, err := qa.sqlParser.Parse(query.SQL)
+	if err != nil {
+		// If parsing fails, leave parameter names as default "paramN"
+		return nil
+	}
+
 	// Create maps to track inferred data by parameter index
 	inferredNames := make(map[int]string)
-	inferredColumns := make(map[int]string) // column name
-	inferredTables := make(map[int]string)  // table name (if detected)
+	inferredColumns := make(map[int]string)
+	inferredTables := make(map[int]string)
 
-	// Clean SQL for parsing (remove string literals and comments)
-	cleanSQL := qa.removeQuotedContent(query.SQL)
+	// Extract information from parsed parameters
+	for _, paramInfo := range queryInfo.Parameters {
+		pos := paramInfo.Position
 
-	// First, try to detect the primary table from UPDATE statement
-	updateTablePattern := regexp.MustCompile(`UPDATE\s+(\w+)`)
-	if match := updateTablePattern.FindStringSubmatch(cleanSQL); len(match) >= 2 {
-		primaryTable := match[1]
-		// Store this for SET clause parameters
-		inferredTables[0] = primaryTable // Use 0 as a marker for primary table
-	}
-
-	// Pattern 1: column = $N or column IN ($N)
-	// Matches: WHERE email = $1, AND users.id = $2, WHERE status IN ($3)
-	columnEqPattern := regexp.MustCompile(`(?:WHERE|AND|OR|ON)\s+(?:(\w+)\.)?(\w+)\s*(?:=|IN\s*\()\s*\$(\d+)`)
-	matches := columnEqPattern.FindAllStringSubmatch(cleanSQL, -1)
-	for _, match := range matches {
-		if len(match) >= 4 {
-			tableName := match[1] // might be empty
-			columnName := match[2]
-			paramNum, _ := strconv.Atoi(match[3])
-			// Only set if not already inferred
-			if _, exists := inferredNames[paramNum]; !exists {
-				inferredNames[paramNum] = toCamelCase(columnName)
-				inferredColumns[paramNum] = columnName
-				if tableName != "" {
-					inferredTables[paramNum] = tableName
+		// Infer parameter name based on context
+		if paramInfo.IsInLimit {
+			inferredNames[pos] = "limit"
+		} else if paramInfo.IsInOffset {
+			inferredNames[pos] = "offset"
+		} else if paramInfo.ColumnName != "" {
+			// Check if this is a LIKE operator with search term
+			if paramInfo.Operator == "~~" || paramInfo.Operator == "~~*" ||
+			   strings.ToUpper(paramInfo.Operator) == "LIKE" ||
+			   strings.ToUpper(paramInfo.Operator) == "ILIKE" {
+				// Check if this parameter is used multiple times or with different columns
+				// For LIKE patterns, we use "searchTerm" as a generic name
+				if _, exists := inferredNames[pos]; !exists {
+					inferredNames[pos] = "searchTerm"
 				}
+			} else {
+				// Use column name converted to camelCase
+				inferredNames[pos] = toCamelCase(paramInfo.ColumnName)
 			}
-		}
-	}
 
-	// Pattern 2: column operator $N (>, <, >=, <=)
-	// For comparisons, we could use minX/maxX but let's keep it simple with just the column name
-	comparisonPattern := regexp.MustCompile(`(?:(\w+)\.)?(\w+)\s*(?:>|<|>=|<=)\s*\$(\d+)`)
-	matches = comparisonPattern.FindAllStringSubmatch(cleanSQL, -1)
-	for _, match := range matches {
-		if len(match) >= 4 {
-			tableName := match[1]
-			columnName := match[2]
-			paramNum, _ := strconv.Atoi(match[3])
-			if _, exists := inferredNames[paramNum]; !exists {
-				inferredNames[paramNum] = toCamelCase(columnName)
-				inferredColumns[paramNum] = columnName
-				if tableName != "" {
-					inferredTables[paramNum] = tableName
-				}
-			}
-		}
-	}
+			// Track column name for nullability lookup
+			inferredColumns[pos] = paramInfo.ColumnName
 
-	// Pattern 3: LIKE/ILIKE patterns
-	likePattern := regexp.MustCompile(`(?:(\w+)\.)?(\w+)\s+(?:LIKE|ILIKE)\s+\$(\d+)`)
-	matches = likePattern.FindAllStringSubmatch(cleanSQL, -1)
-	for _, match := range matches {
-		if len(match) >= 4 {
-			tableName := match[1]
-			columnName := match[2]
-			paramNum, _ := strconv.Atoi(match[3])
-			// For LIKE patterns, use "searchTerm" if multiple columns use same param
-			if _, exists := inferredNames[paramNum]; !exists {
-				inferredNames[paramNum] = "searchTerm"
-				inferredColumns[paramNum] = columnName
-				if tableName != "" {
-					inferredTables[paramNum] = tableName
-				}
-			}
-		}
-	}
-
-	// Pattern 4: LIMIT $N
-	limitPattern := regexp.MustCompile(`LIMIT\s+\$(\d+)`)
-	matches = limitPattern.FindAllStringSubmatch(cleanSQL, -1)
-	for _, match := range matches {
-		if len(match) >= 2 {
-			paramNum, _ := strconv.Atoi(match[1])
-			inferredNames[paramNum] = "limit"
-		}
-	}
-
-	// Pattern 5: OFFSET $N
-	offsetPattern := regexp.MustCompile(`OFFSET\s+\$(\d+)`)
-	matches = offsetPattern.FindAllStringSubmatch(cleanSQL, -1)
-	for _, match := range matches {
-		if len(match) >= 2 {
-			paramNum, _ := strconv.Atoi(match[1])
-			inferredNames[paramNum] = "offset"
-		}
-	}
-
-	// Pattern 6: UPDATE SET clause
-	// Matches: SET email = $1, SET users.name = $2, , status = $3
-	setPattern := regexp.MustCompile(`(?:SET|,)\s+(?:(\w+)\.)?(\w+)\s*=\s*\$(\d+)`)
-	matches = setPattern.FindAllStringSubmatch(cleanSQL, -1)
-	primaryTable := inferredTables[0] // Get primary table if detected
-	for _, match := range matches {
-		if len(match) >= 4 {
-			tableName := match[1]
-			columnName := match[2]
-			paramNum, _ := strconv.Atoi(match[3])
-			if _, exists := inferredNames[paramNum]; !exists {
-				inferredNames[paramNum] = toCamelCase(columnName)
-				inferredColumns[paramNum] = columnName
-				// For UPDATE SET, use explicit table name or fall back to primary table
-				if tableName != "" {
-					inferredTables[paramNum] = tableName
-				} else if primaryTable != "" {
-					inferredTables[paramNum] = primaryTable
-				}
+			// Track table name if available
+			if paramInfo.TableName != "" {
+				inferredTables[pos] = paramInfo.TableName
 			}
 		}
 	}
@@ -262,7 +230,6 @@ func (qa *QueryAnalyzer) inferParameterNames(query *Query) error {
 		if table, exists := inferredTables[paramIndex]; exists {
 			query.Parameters[i].TableName = table
 		}
-		// Otherwise keep the default "paramN" name set in extractParameters
 	}
 
 	return nil
@@ -337,19 +304,55 @@ func makePointerType(goType string) string {
 
 // removeQuotedContent removes string literals and quoted identifiers to avoid false parameter detection
 func (qa *QueryAnalyzer) removeQuotedContent(sql string) string {
-	// Remove single-quoted string literals
-	singleQuoteRegex := regexp.MustCompile(`'(?:[^']|'')*'`)
-	result := singleQuoteRegex.ReplaceAllString(sql, "''")
+	result := []rune(sql)
+	inSingleQuote := false
+	inDoubleQuote := false
 
-	// Remove double-quoted identifiers
-	doubleQuoteRegex := regexp.MustCompile(`"(?:[^"]|"")*"`)
-	result = doubleQuoteRegex.ReplaceAllString(result, `""`)
+	for i := 0; i < len(result); i++ {
+		if result[i] == '\'' && (i == 0 || result[i-1] != '\\') {
+			if inSingleQuote {
+				// Check for escaped quote ''
+				if i+1 < len(result) && result[i+1] == '\'' {
+					result[i] = ' '
+					result[i+1] = ' '
+					i++
+				} else {
+					inSingleQuote = false
+				}
+			} else if !inDoubleQuote {
+				inSingleQuote = true
+			}
+			if inSingleQuote || (!inSingleQuote && i > 0) {
+				result[i] = ' '
+			}
+		} else if result[i] == '"' && (i == 0 || result[i-1] != '\\') {
+			if inDoubleQuote {
+				// Check for escaped quote ""
+				if i+1 < len(result) && result[i+1] == '"' {
+					result[i] = ' '
+					result[i+1] = ' '
+					i++
+				} else {
+					inDoubleQuote = false
+				}
+			} else if !inSingleQuote {
+				inDoubleQuote = true
+			}
+			if inDoubleQuote || (!inDoubleQuote && i > 0) {
+				result[i] = ' '
+			}
+		} else if inSingleQuote || inDoubleQuote {
+			result[i] = ' '
+		} else if result[i] == '-' && i+1 < len(result) && result[i+1] == '-' {
+			// Remove single-line comments
+			for i < len(result) && result[i] != '\n' && result[i] != '\r' {
+				result[i] = ' '
+				i++
+			}
+		}
+	}
 
-	// Remove single-line comments (-- comments)
-	commentRegex := regexp.MustCompile(`--[^\r\n]*`)
-	result = commentRegex.ReplaceAllString(result, "")
-
-	return result
+	return string(result)
 }
 
 // isSelectQuery checks if the query type requires column analysis
@@ -393,22 +396,57 @@ func (qa *QueryAnalyzer) replaceParametersForExplain(sql string, parameters []Pa
 
 // replaceParameterOutsideQuotes replaces parameter only when it's not inside quotes
 func (qa *QueryAnalyzer) replaceParameterOutsideQuotes(sql, placeholder, replacement string) string {
-	// Use regex to find parameter placeholders that are not inside single quotes
-	// This is a simplified approach - a full SQL parser would be more robust
+	result := []rune(sql)
+	searchRunes := []rune(placeholder)
+	inSingleQuote := false
+	inDoubleQuote := false
 
-	// Pattern to match the placeholder when not inside single quotes
-	// This uses negative lookbehind and lookahead to avoid quoted content
-	pattern := fmt.Sprintf(`(?:'[^']*'|%s)`, regexp.QuoteMeta(placeholder))
-
-	re := regexp.MustCompile(pattern)
-	result := re.ReplaceAllStringFunc(sql, func(match string) string {
-		if match == placeholder {
-			return replacement
+	for i := 0; i < len(result); i++ {
+		if result[i] == '\'' && (i == 0 || result[i-1] != '\\') {
+			if inSingleQuote {
+				if i+1 < len(result) && result[i+1] == '\'' {
+					i++
+				} else {
+					inSingleQuote = false
+				}
+			} else if !inDoubleQuote {
+				inSingleQuote = true
+			}
+		} else if result[i] == '"' && (i == 0 || result[i-1] != '\\') {
+			if inDoubleQuote {
+				if i+1 < len(result) && result[i+1] == '"' {
+					i++
+				} else {
+					inDoubleQuote = false
+				}
+			} else if !inSingleQuote {
+				inDoubleQuote = true
+			}
+		} else if !inSingleQuote && !inDoubleQuote {
+			// Check if we're at the placeholder position
+			match := true
+			if i+len(searchRunes) <= len(result) {
+				for j := 0; j < len(searchRunes); j++ {
+					if result[i+j] != searchRunes[j] {
+						match = false
+						break
+					}
+				}
+				if match {
+					// Replace the placeholder
+					replRunes := []rune(replacement)
+					newResult := make([]rune, 0, len(result)-len(searchRunes)+len(replRunes))
+					newResult = append(newResult, result[:i]...)
+					newResult = append(newResult, replRunes...)
+					newResult = append(newResult, result[i+len(searchRunes):]...)
+					result = newResult
+					i += len(replRunes) - 1
+				}
+			}
 		}
-		return match // Keep quoted content unchanged
-	})
+	}
 
-	return result
+	return string(result)
 }
 
 // getDummyValueForParameter returns a dummy value for a parameter
