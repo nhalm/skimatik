@@ -59,6 +59,11 @@ func (qa *QueryAnalyzer) AnalyzeQuery(ctx context.Context, query *Query) error {
 		if err := qa.analyzeSelectQuery(ctx, query); err != nil {
 			return fmt.Errorf("failed to analyze SELECT query: %w", err)
 		}
+
+		// Apply result annotations after automatic type detection
+		if err := qa.applyResultAnnotations(query); err != nil {
+			return fmt.Errorf("failed to apply result annotations: %w", err)
+		}
 	}
 
 	// Infer parameter types using PostgreSQL PREPARE (for all query types)
@@ -74,6 +79,39 @@ func (qa *QueryAnalyzer) AnalyzeQuery(ctx context.Context, query *Query) error {
 	// Validate query syntax by attempting to prepare it
 	if err := qa.validateQuerySyntax(ctx, query); err != nil {
 		return fmt.Errorf("query syntax validation failed: %w", err)
+	}
+
+	return nil
+}
+
+// applyResultAnnotations applies result type annotations to override automatically detected types
+func (qa *QueryAnalyzer) applyResultAnnotations(query *Query) error {
+	if len(query.ResultAnnotations) == 0 {
+		return nil
+	}
+
+	// Apply each result annotation
+	for _, annotation := range query.ResultAnnotations {
+		// Find the column in query results
+		columnFound := false
+		for i := range query.Columns {
+			if query.Columns[i].Name == annotation.ColumnName {
+				columnFound = true
+
+				// Override GoType with annotation
+				query.Columns[i].GoType = annotation.GoType
+
+				// Update IsNullable based on whether GoType is a pointer
+				query.Columns[i].IsNullable = strings.HasPrefix(annotation.GoType, "*")
+
+				break
+			}
+		}
+
+		// Error if annotation references non-existent column
+		if !columnFound {
+			return fmt.Errorf("result annotation for column '%s' not found in query %s results", annotation.ColumnName, query.Name)
+		}
 	}
 
 	return nil
