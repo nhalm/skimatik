@@ -112,7 +112,7 @@ func TestValidateParameterAnnotations(t *testing.T) {
 			shouldError: false,
 		},
 		{
-			name: "empty annotations is valid",
+			name:        "empty annotations is valid",
 			annotations: []ParameterAnnotation{},
 			shouldError: false,
 		},
@@ -152,6 +152,219 @@ func TestValidateParameterAnnotations(t *testing.T) {
 			}
 
 			err := parser.validateParameterAnnotations(query)
+
+			if tt.shouldError {
+				if err == nil {
+					t.Errorf("expected error containing %q, got nil", tt.errorMsg)
+				} else if tt.errorMsg != "" && !contains(err.Error(), tt.errorMsg) {
+					t.Errorf("expected error containing %q, got %q", tt.errorMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("expected no error, got %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestParseResultAnnotation(t *testing.T) {
+	parser := NewQueryParser("")
+
+	tests := []struct {
+		name     string
+		line     string
+		expected *ResultAnnotation
+	}{
+		{
+			name: "basic non-nullable int",
+			line: "-- result: payment_count int",
+			expected: &ResultAnnotation{
+				ColumnName: "payment_count",
+				GoType:     "int",
+			},
+		},
+		{
+			name: "nullable int pointer",
+			line: "-- result: total_amount *int",
+			expected: &ResultAnnotation{
+				ColumnName: "total_amount",
+				GoType:     "*int",
+			},
+		},
+		{
+			name: "UUID type",
+			line: "-- result: user_id uuid.UUID",
+			expected: &ResultAnnotation{
+				ColumnName: "user_id",
+				GoType:     "uuid.UUID",
+			},
+		},
+		{
+			name: "nullable time pointer",
+			line: "-- result: created_at *time.Time",
+			expected: &ResultAnnotation{
+				ColumnName: "created_at",
+				GoType:     "*time.Time",
+			},
+		},
+		{
+			name: "string type",
+			line: "-- result: name string",
+			expected: &ResultAnnotation{
+				ColumnName: "name",
+				GoType:     "string",
+			},
+		},
+		{
+			name: "nullable string pointer",
+			line: "-- result: description *string",
+			expected: &ResultAnnotation{
+				ColumnName: "description",
+				GoType:     "*string",
+			},
+		},
+		{
+			name: "extra whitespace",
+			line: "-- result:   amount   *int  ",
+			expected: &ResultAnnotation{
+				ColumnName: "amount",
+				GoType:     "*int",
+			},
+		},
+		{
+			name: "json.RawMessage type",
+			line: "-- result: metadata json.RawMessage",
+			expected: &ResultAnnotation{
+				ColumnName: "metadata",
+				GoType:     "json.RawMessage",
+			},
+		},
+		{
+			name:     "invalid - missing type",
+			line:     "-- result: column_name",
+			expected: nil,
+		},
+		{
+			name:     "invalid - missing column name",
+			line:     "-- result: int",
+			expected: nil,
+		},
+		{
+			name:     "invalid - empty annotation",
+			line:     "-- result:",
+			expected: nil,
+		},
+		{
+			name:     "not a result annotation",
+			line:     "-- some other comment",
+			expected: nil,
+		},
+		{
+			name:     "param annotation not result",
+			line:     "-- param: $1 status string",
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parser.parseResultAnnotation(tt.line)
+
+			if tt.expected == nil {
+				if result != nil {
+					t.Errorf("expected nil, got %+v", result)
+				}
+				return
+			}
+
+			if result == nil {
+				t.Fatalf("expected %+v, got nil", tt.expected)
+			}
+
+			if result.ColumnName != tt.expected.ColumnName {
+				t.Errorf("ColumnName: expected %s, got %s", tt.expected.ColumnName, result.ColumnName)
+			}
+			if result.GoType != tt.expected.GoType {
+				t.Errorf("GoType: expected %s, got %s", tt.expected.GoType, result.GoType)
+			}
+		})
+	}
+}
+
+func TestValidateResultAnnotations(t *testing.T) {
+	parser := NewQueryParser("")
+
+	tests := []struct {
+		name        string
+		annotations []ResultAnnotation
+		shouldError bool
+		errorMsg    string
+	}{
+		{
+			name: "valid multiple annotations",
+			annotations: []ResultAnnotation{
+				{ColumnName: "payment_count", GoType: "int"},
+				{ColumnName: "total_amount", GoType: "*int"},
+				{ColumnName: "user_id", GoType: "uuid.UUID"},
+			},
+			shouldError: false,
+		},
+		{
+			name: "valid single annotation",
+			annotations: []ResultAnnotation{
+				{ColumnName: "amount", GoType: "*int"},
+			},
+			shouldError: false,
+		},
+		{
+			name:        "empty annotations is valid",
+			annotations: []ResultAnnotation{},
+			shouldError: false,
+		},
+		{
+			name: "duplicate column name",
+			annotations: []ResultAnnotation{
+				{ColumnName: "payment_count", GoType: "int"},
+				{ColumnName: "payment_count", GoType: "*int"},
+			},
+			shouldError: true,
+			errorMsg:    "duplicate result annotation for column",
+		},
+		{
+			name: "invalid Go type",
+			annotations: []ResultAnnotation{
+				{ColumnName: "amount", GoType: "invalid type"},
+			},
+			shouldError: true,
+			errorMsg:    "invalid Go type",
+		},
+		{
+			name: "invalid Go type with spaces",
+			annotations: []ResultAnnotation{
+				{ColumnName: "name", GoType: "string pointer"},
+			},
+			shouldError: true,
+			errorMsg:    "invalid Go type",
+		},
+		{
+			name: "empty Go type",
+			annotations: []ResultAnnotation{
+				{ColumnName: "amount", GoType: ""},
+			},
+			shouldError: true,
+			errorMsg:    "invalid Go type",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			query := &Query{
+				Name:              "TestQuery",
+				ResultAnnotations: tt.annotations,
+			}
+
+			err := parser.validateResultAnnotations(query)
 
 			if tt.shouldError {
 				if err == nil {

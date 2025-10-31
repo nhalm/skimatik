@@ -84,6 +84,7 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 	var currentQuery *Query
 	var sqlLines []string
 	var paramAnnotations []ParameterAnnotation
+	var resultAnnotations []ResultAnnotation
 
 	scanner := bufio.NewScanner(file)
 	lineNum := 0
@@ -102,7 +103,11 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 					return nil, fmt.Errorf("empty query for %s at line %d in %s", currentQuery.Name, lineNum, filename)
 				}
 				currentQuery.ParameterAnnotations = paramAnnotations
+				currentQuery.ResultAnnotations = resultAnnotations
 				if err := qp.validateParameterAnnotations(currentQuery); err != nil {
+					return nil, fmt.Errorf("error in query %s: %w", currentQuery.Name, err)
+				}
+				if err := qp.validateResultAnnotations(currentQuery); err != nil {
 					return nil, fmt.Errorf("error in query %s: %w", currentQuery.Name, err)
 				}
 				queries = append(queries, *currentQuery)
@@ -118,6 +123,7 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 			}
 			sqlLines = []string{}
 			paramAnnotations = []ParameterAnnotation{}
+			resultAnnotations = []ResultAnnotation{}
 			continue
 		}
 
@@ -125,6 +131,14 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 		if paramAnnotation := qp.parseParameterAnnotation(trimmedLine); paramAnnotation != nil {
 			if currentQuery != nil {
 				paramAnnotations = append(paramAnnotations, *paramAnnotation)
+			}
+			continue
+		}
+
+		// Check for result annotation
+		if resultAnnotation := qp.parseResultAnnotation(trimmedLine); resultAnnotation != nil {
+			if currentQuery != nil {
+				resultAnnotations = append(resultAnnotations, *resultAnnotation)
 			}
 			continue
 		}
@@ -147,7 +161,11 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 			return nil, fmt.Errorf("empty query for %s in %s", currentQuery.Name, filename)
 		}
 		currentQuery.ParameterAnnotations = paramAnnotations
+		currentQuery.ResultAnnotations = resultAnnotations
 		if err := qp.validateParameterAnnotations(currentQuery); err != nil {
+			return nil, fmt.Errorf("error in query %s: %w", currentQuery.Name, err)
+		}
+		if err := qp.validateResultAnnotations(currentQuery); err != nil {
 			return nil, fmt.Errorf("error in query %s: %w", currentQuery.Name, err)
 		}
 		queries = append(queries, *currentQuery)
@@ -304,6 +322,30 @@ func (qp *QueryParser) parseParameterAnnotation(line string) *ParameterAnnotatio
 	}
 }
 
+// parseResultAnnotation parses a result column type annotation
+// Expected format: -- result: column_name go_type
+func (qp *QueryParser) parseResultAnnotation(line string) *ResultAnnotation {
+	// Regex to match: -- result: column_name go_type
+	resultRegex := regexp.MustCompile(`^--\s*result:\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+(\*?[a-zA-Z_][a-zA-Z0-9_.]*)\s*$`)
+
+	matches := resultRegex.FindStringSubmatch(line)
+	if len(matches) != 3 {
+		return nil
+	}
+
+	columnName := strings.TrimSpace(matches[1])
+	goType := strings.TrimSpace(matches[2])
+
+	if columnName == "" || goType == "" {
+		return nil
+	}
+
+	return &ResultAnnotation{
+		ColumnName: columnName,
+		GoType:     goType,
+	}
+}
+
 // validateParameterAnnotations validates parameter annotations for a query
 func (qp *QueryParser) validateParameterAnnotations(query *Query) error {
 	if len(query.ParameterAnnotations) == 0 {
@@ -330,6 +372,31 @@ func (qp *QueryParser) validateParameterAnnotations(query *Query) error {
 	for _, pa := range query.ParameterAnnotations {
 		if !isValidGoType(pa.GoType) {
 			return fmt.Errorf("invalid Go type %q for parameter $%d", pa.GoType, pa.Position)
+		}
+	}
+
+	return nil
+}
+
+// validateResultAnnotations validates result annotations for a query
+func (qp *QueryParser) validateResultAnnotations(query *Query) error {
+	if len(query.ResultAnnotations) == 0 {
+		return nil
+	}
+
+	// Check for duplicate column names
+	columnsSeen := make(map[string]bool)
+	for _, ra := range query.ResultAnnotations {
+		if columnsSeen[ra.ColumnName] {
+			return fmt.Errorf("duplicate result annotation for column %q", ra.ColumnName)
+		}
+		columnsSeen[ra.ColumnName] = true
+	}
+
+	// Validate Go type syntax (basic check)
+	for _, ra := range query.ResultAnnotations {
+		if !isValidGoType(ra.GoType) {
+			return fmt.Errorf("invalid Go type %q for result column %q", ra.GoType, ra.ColumnName)
 		}
 	}
 
