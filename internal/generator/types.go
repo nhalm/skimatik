@@ -40,6 +40,7 @@ type Query struct {
 	Columns              []Column              `json:"columns"` // Result columns (for SELECT queries)
 	SourceFile           string                `json:"source_file"`
 	ParameterAnnotations []ParameterAnnotation `json:"parameter_annotations"` // Optional type annotations
+	ResultAnnotations    []ResultAnnotation    `json:"result_annotations"`    // Optional result column type annotations
 }
 
 // QueryType represents the type of query operation
@@ -68,6 +69,12 @@ type ParameterAnnotation struct {
 	Position int    `json:"position"` // 1-based parameter position ($1, $2, etc)
 	Name     string `json:"name"`     // Parameter name in snake_case
 	GoType   string `json:"go_type"`  // Go type (supports pointers like "*string")
+}
+
+// ResultAnnotation represents an explicit result column type annotation from SQL comments
+type ResultAnnotation struct {
+	ColumnName string `json:"column_name"` // Column name in snake_case
+	GoType     string `json:"go_type"`     // Go type (supports pointers like "*string")
 }
 
 // GetColumn returns a column by name, or nil if not found

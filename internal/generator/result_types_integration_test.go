@@ -2563,3 +2563,196 @@ ORDER BY up.id, c.created_at;`
 		t.Errorf("Expected is_approved to be nullable (from LEFT JOIN)")
 	}
 }
+
+// TestResultTypes_AnnotationOverridesAutoDetection tests that -- result: annotations override automatic type detection
+func TestResultTypes_AnnotationOverridesAutoDetection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	testDB := getTestDB(t)
+	ctx := context.Background()
+
+	tempDir := t.TempDir()
+	sqlDir := filepath.Join(tempDir, "queries")
+	err := os.MkdirAll(sqlDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create SQL directory: %v", err)
+	}
+
+	querySQL := `-- name: GetPostSummary :one
+-- result: total_views int
+SELECT
+    COUNT(*) as post_count,
+    SUM(view_count) as total_views
+FROM posts
+WHERE user_id = $1;`
+
+	err = os.WriteFile(filepath.Join(sqlDir, "payments.sql"), []byte(querySQL), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test query: %v", err)
+	}
+
+	parser := NewQueryParser(sqlDir)
+	queries, err := parser.ParseQueries()
+	if err != nil {
+		t.Fatalf("Failed to parse queries: %v", err)
+	}
+
+	if len(queries) != 1 {
+		t.Fatalf("Expected 1 query, got %d", len(queries))
+	}
+
+	analyzer := NewQueryAnalyzer(testDB)
+	err = analyzer.AnalyzeQuery(ctx, &queries[0])
+	if err != nil {
+		t.Fatalf("Failed to analyze query: %v", err)
+	}
+
+	query := queries[0]
+	if len(query.Columns) != 2 {
+		t.Fatalf("Expected 2 columns, got %d", len(query.Columns))
+	}
+
+	postCountCol := findColumn(query.Columns, "post_count")
+	if postCountCol == nil {
+		t.Fatal("post_count column not found")
+	}
+	if postCountCol.GoType != "int" {
+		t.Errorf("Expected post_count to be int (COUNT auto-detection), got %s", postCountCol.GoType)
+	}
+	if postCountCol.IsNullable {
+		t.Errorf("Expected post_count to be NOT NULL (COUNT never NULL)")
+	}
+
+	totalViewsCol := findColumn(query.Columns, "total_views")
+	if totalViewsCol == nil {
+		t.Fatal("total_views column not found")
+	}
+	if totalViewsCol.GoType != "int" {
+		t.Errorf("Expected total_views to be int (overridden from *int by annotation), got %s", totalViewsCol.GoType)
+	}
+	if totalViewsCol.IsNullable {
+		t.Errorf("Expected total_views to be NOT NULL (forced by annotation)")
+	}
+}
+
+// TestResultTypes_MixAnnotatedAndUnannotated tests mixing annotated and unannotated columns
+func TestResultTypes_MixAnnotatedAndUnannotated(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	testDB := getTestDB(t)
+	ctx := context.Background()
+
+	tempDir := t.TempDir()
+	sqlDir := filepath.Join(tempDir, "queries")
+	err := os.MkdirAll(sqlDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create SQL directory: %v", err)
+	}
+
+	querySQL := `-- name: GetPublishedPosts :many
+-- result: is_published string
+SELECT is_published, published_at
+FROM posts
+WHERE author_id = $1;`
+
+	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test query: %v", err)
+	}
+
+	parser := NewQueryParser(sqlDir)
+	queries, err := parser.ParseQueries()
+	if err != nil {
+		t.Fatalf("Failed to parse queries: %v", err)
+	}
+
+	if len(queries) != 1 {
+		t.Fatalf("Expected 1 query, got %d", len(queries))
+	}
+
+	analyzer := NewQueryAnalyzer(testDB)
+	err = analyzer.AnalyzeQuery(ctx, &queries[0])
+	if err != nil {
+		t.Fatalf("Failed to analyze query: %v", err)
+	}
+
+	query := queries[0]
+	if len(query.Columns) != 2 {
+		t.Fatalf("Expected 2 columns, got %d", len(query.Columns))
+	}
+
+	isPublishedCol := findColumn(query.Columns, "is_published")
+	if isPublishedCol == nil {
+		t.Fatal("is_published column not found")
+	}
+	if isPublishedCol.GoType != "string" {
+		t.Errorf("Expected is_published to be string (overridden from bool by annotation), got %s", isPublishedCol.GoType)
+	}
+	if isPublishedCol.IsNullable {
+		t.Errorf("Expected is_published to be NOT NULL (string annotation without pointer)")
+	}
+
+	publishedAtCol := findColumn(query.Columns, "published_at")
+	if publishedAtCol == nil {
+		t.Fatal("published_at column not found")
+	}
+	if publishedAtCol.GoType != "*time.Time" {
+		t.Errorf("Expected published_at to be *time.Time (auto-detected, nullable), got %s", publishedAtCol.GoType)
+	}
+	if !publishedAtCol.IsNullable {
+		t.Errorf("Expected published_at to be nullable (no annotation, auto-detected)")
+	}
+}
+
+// TestResultTypes_AnnotationNonExistentColumn tests annotation for column not in SELECT
+func TestResultTypes_AnnotationNonExistentColumn(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	testDB := getTestDB(t)
+	ctx := context.Background()
+
+	tempDir := t.TempDir()
+	sqlDir := filepath.Join(tempDir, "queries")
+	err := os.MkdirAll(sqlDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create SQL directory: %v", err)
+	}
+
+	querySQL := `-- name: GetUserBasic :one
+-- result: email string
+SELECT id, name
+FROM users
+WHERE id = $1;`
+
+	err = os.WriteFile(filepath.Join(sqlDir, "users.sql"), []byte(querySQL), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test query: %v", err)
+	}
+
+	parser := NewQueryParser(sqlDir)
+	queries, err := parser.ParseQueries()
+	if err != nil {
+		t.Fatalf("Failed to parse queries: %v", err)
+	}
+
+	if len(queries) != 1 {
+		t.Fatalf("Expected 1 query, got %d", len(queries))
+	}
+
+	analyzer := NewQueryAnalyzer(testDB)
+	err = analyzer.AnalyzeQuery(ctx, &queries[0])
+	if err == nil {
+		t.Fatal("Expected error for annotation on non-existent column, got nil")
+	}
+
+	expectedErrMsg := "email"
+	if !contains(err.Error(), expectedErrMsg) {
+		t.Errorf("Expected error message to contain '%s', got: %s", expectedErrMsg, err.Error())
+	}
+}
