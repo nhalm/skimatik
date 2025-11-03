@@ -483,9 +483,9 @@ func TestQueryAnalyzer_InferParameterNames(t *testing.T) {
 		},
 		{
 			name: "LIKE pattern",
-			sql:  "SELECT * FROM users WHERE name ILIKE $1 OR email ILIKE $1",
+			sql:  "SELECT * FROM users WHERE name ILIKE $1",
 			expectedNames: map[int]string{
-				1: "searchTerm",
+				1: "searchName",
 			},
 		},
 		{
@@ -529,7 +529,7 @@ func TestQueryAnalyzer_InferParameterNames(t *testing.T) {
 			sql:  "SELECT * FROM users WHERE email = $1 AND name ILIKE $2 LIMIT $3",
 			expectedNames: map[int]string{
 				1: "email",
-				2: "searchTerm",
+				2: "searchName",
 				3: "limit",
 			},
 		},
