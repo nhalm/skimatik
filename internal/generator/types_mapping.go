@@ -5,19 +5,26 @@ import (
 	"strings"
 )
 
-// TypeMapper handles mapping PostgreSQL types to Go types
+// TypeMapper maps PostgreSQL types to Go types using intelligent type conventions.
+// It generates consistent, idiomatic Go types with pointer-based nullability:
+// - All integer types (smallint, integer, bigint) map to 'int'
+// - Nullable columns use pointers (*int, *string, etc.)
+// - NOT NULL columns use native Go types (int, string, uuid.UUID, etc.)
 type TypeMapper struct {
 	customMappings map[string]string
 }
 
-// NewTypeMapper creates a new type mapper with optional custom mappings
+// NewTypeMapper creates a new type mapper with optional custom mappings.
+// Custom mappings allow overriding default PostgreSQL to Go type conversions.
 func NewTypeMapper(customMappings map[string]string) *TypeMapper {
 	return &TypeMapper{
 		customMappings: customMappings,
 	}
 }
 
-// MapType converts a PostgreSQL type to the appropriate Go type
+// MapType converts a PostgreSQL type to the appropriate Go type.
+// It applies custom mappings first, then defaults to intelligent type detection.
+// The isNullable flag determines pointer vs value types, and isArray wraps in slices.
 func (tm *TypeMapper) MapType(pgType string, isNullable bool, isArray bool) (string, error) {
 	// Check custom mappings first
 	if customType, exists := tm.customMappings[pgType]; exists {
@@ -149,7 +156,8 @@ func (tm *TypeMapper) makeNullable(goType string) string {
 	return "*" + goType
 }
 
-// GetRequiredImports returns the imports needed for the generated Go types
+// GetRequiredImports returns the imports needed for the generated Go types.
+// It scans all column types and collects necessary package imports (uuid, time, json, etc.).
 func (tm *TypeMapper) GetRequiredImports(columns []Column) []string {
 	imports := make(map[string]bool)
 
@@ -202,7 +210,8 @@ func (tm *TypeMapper) addImportsForType(goType string, imports map[string]bool) 
 	}
 }
 
-// MapTableColumns maps all columns in a table and sets their GoType field
+// MapTableColumns maps all columns in a table and sets their GoType field.
+// This is used during table struct generation from database introspection.
 func (tm *TypeMapper) MapTableColumns(table *Table) error {
 	if table == nil {
 		return fmt.Errorf("table cannot be nil")
@@ -218,26 +227,8 @@ func (tm *TypeMapper) MapTableColumns(table *Table) error {
 	return nil
 }
 
-// MapQueryColumns maps all columns in a query and sets their GoType field
-func (tm *TypeMapper) MapResultColumns(query *Query) error {
-	if query == nil {
-		return fmt.Errorf("query cannot be nil")
-	}
-
-	// Map result column types for SELECT queries
-	// Parameters are already mapped by the query analyzer using database introspection
-	for i := range query.Columns {
-		goType, err := tm.MapType(query.Columns[i].Type, query.Columns[i].IsNullable, query.Columns[i].IsArray)
-		if err != nil {
-			return fmt.Errorf("failed to map type for column %s in query %s: %w", query.Columns[i].Name, query.Name, err)
-		}
-		query.Columns[i].GoType = goType
-	}
-
-	return nil
-}
-
-// ValidateUUIDPrimaryKey ensures a column is a valid UUID type for primary keys
+// ValidateUUIDPrimaryKey ensures a column is a valid UUID type for primary keys.
+// It checks that the column is UUID type, non-nullable, and not an array.
 func (tm *TypeMapper) ValidateUUIDPrimaryKey(column *Column) error {
 	if column == nil {
 		return fmt.Errorf("column cannot be nil")
