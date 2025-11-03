@@ -46,13 +46,9 @@ func (tm *TypeMapper) getBaseGoType(pgType string) (string, error) {
 	case "text", "varchar", "character varying", "char", "character":
 		return "string", nil
 
-	// Integer types
-	case "smallint", "int2":
-		return "int16", nil
-	case "integer", "int", "int4":
-		return "int32", nil
-	case "bigint", "int8":
-		return "int64", nil
+	// Integer types - all map to int for ergonomic, idiomatic Go
+	case "smallint", "int2", "integer", "int", "int4", "bigint", "int8":
+		return "int", nil
 
 	// Floating point types
 	case "real", "float4":
@@ -131,44 +127,25 @@ func (tm *TypeMapper) applyNullableAndArray(baseType string, isNullable bool, is
 	return result
 }
 
-// makeNullable converts a Go type to its nullable equivalent using pgtype
+// makeNullable converts a Go type to its nullable equivalent using pointers
 func (tm *TypeMapper) makeNullable(goType string) string {
-	// Handle special cases first
-	switch goType {
-	case "[]byte":
-		// In pgx v5, there's no pgtype.Bytea, use pointer to []byte
-		return "*[]byte"
-	case "string":
-		return "pgtype.Text"
-	case "int16":
-		return "pgtype.Int2"
-	case "int32":
-		return "pgtype.Int4"
-	case "int64":
-		return "pgtype.Int8"
-	case "float32":
-		return "pgtype.Float4"
-	case "float64":
-		return "pgtype.Float8"
-	case "bool":
-		return "pgtype.Bool"
-	case "time.Time":
-		return "pgtype.Timestamptz"
-	case "uuid.UUID":
-		return "pgtype.UUID"
-	case "json.RawMessage":
-		// In pgx v5, there's no pgtype.JSON, use pointer to json.RawMessage
-		return "*json.RawMessage"
+	// Already a pointer
+	if strings.HasPrefix(goType, "*") {
+		return goType
 	}
 
-	// Handle array types
+	// Special case: []byte represents binary data, nullable should be *[]byte
+	if goType == "[]byte" {
+		return "*[]byte"
+	}
+
+	// Handle array types - make elements nullable
 	if strings.HasPrefix(goType, "[]") {
 		elementType := goType[2:]
 		return "[]" + tm.makeNullable(elementType)
 	}
 
-	// For custom types or types we don't have pgtype equivalents for,
-	// use a pointer to the type
+	// For all types, use pointer for nullable
 	return "*" + goType
 }
 
@@ -222,8 +199,6 @@ func (tm *TypeMapper) addImportsForType(goType string, imports map[string]bool) 
 		imports["time"] = true
 	case strings.Contains(goType, "json.RawMessage"):
 		imports["encoding/json"] = true
-	case strings.Contains(goType, "pgtype."):
-		imports["github.com/jackc/pgx/v5/pgtype"] = true
 	}
 }
 

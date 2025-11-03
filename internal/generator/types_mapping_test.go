@@ -40,27 +40,27 @@ func testTypeMapping(t *testing.T, tm *TypeMapper, pgType, baseType, nullableTyp
 func TestTypeMapper_MapType(t *testing.T) {
 	tm := NewTypeMapper(nil)
 
-	// Test core type mappings with all combinations
-	testTypeMapping(t, tm, "uuid", "uuid.UUID", "pgtype.UUID")
-	testTypeMapping(t, tm, "text", "string", "pgtype.Text")
-	testTypeMapping(t, tm, "varchar", "string", "pgtype.Text")
-	testTypeMapping(t, tm, "integer", "int32", "pgtype.Int4")
-	testTypeMapping(t, tm, "bigint", "int64", "pgtype.Int8")
-	testTypeMapping(t, tm, "boolean", "bool", "pgtype.Bool")
-	testTypeMapping(t, tm, "timestamptz", "time.Time", "pgtype.Timestamptz")
+	// Test core type mappings with all combinations (intelligent types)
+	testTypeMapping(t, tm, "uuid", "uuid.UUID", "*uuid.UUID")
+	testTypeMapping(t, tm, "text", "string", "*string")
+	testTypeMapping(t, tm, "varchar", "string", "*string")
+	testTypeMapping(t, tm, "integer", "int", "*int")
+	testTypeMapping(t, tm, "bigint", "int", "*int")
+	testTypeMapping(t, tm, "boolean", "bool", "*bool")
+	testTypeMapping(t, tm, "timestamptz", "time.Time", "*time.Time")
 	testTypeMapping(t, tm, "jsonb", "json.RawMessage", "*json.RawMessage")
 
-	// Test type aliases
+	// Test type aliases (intelligent types - all integers map to int)
 	aliasTests := []struct {
 		pgType   string
 		expected string
 	}{
 		{"character varying", "string"},
-		{"int", "int32"},
-		{"int4", "int32"},
-		{"int8", "int64"},
-		{"smallint", "int16"},
-		{"int2", "int16"},
+		{"int", "int"},
+		{"int4", "int"},
+		{"int8", "int"},
+		{"smallint", "int"},
+		{"int2", "int"},
 		{"real", "float32"},
 		{"float4", "float32"},
 		{"double precision", "float64"},
@@ -113,7 +113,7 @@ func TestTypeMapper_MapType_NullableArrays(t *testing.T) {
 			pgType:       "text",
 			isNullable:   true,
 			isArray:      true,
-			expectedType: "[]pgtype.Text",
+			expectedType: "[]*string",
 			expectError:  false,
 		},
 		{
@@ -121,7 +121,7 @@ func TestTypeMapper_MapType_NullableArrays(t *testing.T) {
 			pgType:       "uuid",
 			isNullable:   true,
 			isArray:      true,
-			expectedType: "[]pgtype.UUID",
+			expectedType: "[]*uuid.UUID",
 			expectError:  false,
 		},
 		{
@@ -137,7 +137,7 @@ func TestTypeMapper_MapType_NullableArrays(t *testing.T) {
 			pgType:       "text",
 			isNullable:   true,
 			isArray:      false,
-			expectedType: "pgtype.Text",
+			expectedType: "*string",
 			expectError:  false,
 		},
 	}
@@ -296,7 +296,6 @@ func TestTypeMapper_GetRequiredImports(t *testing.T) {
 			expected: []string{
 				"encoding/json",
 				"github.com/google/uuid",
-				"github.com/jackc/pgx/v5/pgtype",
 				"time",
 			},
 		},
@@ -318,7 +317,6 @@ func TestTypeMapper_GetRequiredImports(t *testing.T) {
 			},
 			expected: []string{
 				"github.com/google/uuid",
-				"github.com/jackc/pgx/v5/pgtype",
 			},
 		},
 	}
@@ -369,7 +367,6 @@ func TestTypeMapper_GetRequiredImports_EdgeCases(t *testing.T) {
 			expectedImports: []string{
 				"encoding/json",
 				"github.com/google/uuid",
-				"github.com/jackc/pgx/v5/pgtype",
 				"time",
 			},
 		},
@@ -382,7 +379,6 @@ func TestTypeMapper_GetRequiredImports_EdgeCases(t *testing.T) {
 			},
 			expectedImports: []string{
 				"github.com/google/uuid",
-				"github.com/jackc/pgx/v5/pgtype",
 			},
 		},
 		{
@@ -449,7 +445,7 @@ func TestTypeMapper_MapTableColumns(t *testing.T) {
 		t.Fatalf("MapTableColumns() error = %v", err)
 	}
 
-	expected := []string{"uuid.UUID", "string", "pgtype.Text"}
+	expected := []string{"uuid.UUID", "string", "*string"}
 	for i, col := range table.Columns {
 		if col.GoType != expected[i] {
 			t.Errorf("Column %d GoType = %v, want %v", i, col.GoType, expected[i])
@@ -538,15 +534,15 @@ func TestTypeMapper_makeNullable(t *testing.T) {
 		goType   string
 		expected string
 	}{
-		{"string_type", "string", "pgtype.Text"},
-		{"int32_type", "int32", "pgtype.Int4"},
-		{"int64_type", "int64", "pgtype.Int8"},
-		{"bool_type", "bool", "pgtype.Bool"},
-		{"time.Time_type", "time.Time", "pgtype.Timestamptz"},
-		{"uuid.UUID_type", "uuid.UUID", "pgtype.UUID"},
+		{"string_type", "string", "*string"},
+		{"int_type", "int", "*int"},
+		{"bool_type", "bool", "*bool"},
+		{"time.Time_type", "time.Time", "*time.Time"},
+		{"uuid.UUID_type", "uuid.UUID", "*uuid.UUID"},
 		{"json.RawMessage_type", "json.RawMessage", "*json.RawMessage"},
 		{"[]byte_type", "[]byte", "*[]byte"},
-		{"array_of_strings", "[]string", "[]pgtype.Text"},
+		{"array_of_ints", "[]int", "[]*int"},
+		{"array_of_strings", "[]string", "[]*string"},
 		{"custom_type", "CustomType", "*CustomType"},
 	}
 

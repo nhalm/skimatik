@@ -71,13 +71,13 @@ func TestCodeGenerator_combineImports(t *testing.T) {
 	cg := NewCodeGenerator(getTestConfig())
 
 	list1 := []string{"context", "fmt"}
-	list2 := []string{"fmt", "github.com/jackc/pgx/v5/pgtype", "context"}
+	list2 := []string{"fmt", "time", "context"}
 	list3 := []string{"github.com/google/uuid"}
 
 	combined := cg.combineImports(list1, list2, list3)
 
 	// Check that duplicates are removed and all imports are present
-	expected := []string{"context", "fmt", "github.com/jackc/pgx/v5/pgtype", "github.com/google/uuid"}
+	expected := []string{"context", "fmt", "time", "github.com/google/uuid"}
 	if len(combined) != len(expected) {
 		t.Errorf("Expected %d imports, got %d", len(expected), len(combined))
 	}
