@@ -3,6 +3,7 @@ package generator
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -123,6 +124,9 @@ func (qa *QueryAnalyzer) extractParameters(query *Query) error {
 	queryInfo, err := qa.sqlParser.Parse(query.SQL)
 	if err != nil {
 		// Fall back to basic regex extraction if parsing fails
+		slog.Warn("SQL parser failed, falling back to regex extraction",
+			"query", query.Name,
+			"error", err.Error())
 		return qa.extractParametersRegex(query)
 	}
 
@@ -237,10 +241,9 @@ func (qa *QueryAnalyzer) inferParameterNames(query *Query) error {
 			if paramInfo.Operator == "~~" || paramInfo.Operator == "~~*" ||
 			   strings.ToUpper(paramInfo.Operator) == "LIKE" ||
 			   strings.ToUpper(paramInfo.Operator) == "ILIKE" {
-				// Check if this parameter is used multiple times or with different columns
-				// For LIKE patterns, we use "searchTerm" as a generic name
+				// For LIKE patterns, use "search" prefix with column name to avoid collisions
 				if _, exists := inferredNames[pos]; !exists {
-					inferredNames[pos] = "searchTerm"
+					inferredNames[pos] = "search" + toPascalCase(paramInfo.ColumnName)
 				}
 			} else {
 				// Use column name converted to camelCase
