@@ -239,8 +239,8 @@ func (qa *QueryAnalyzer) inferParameterNames(query *Query) error {
 		} else if paramInfo.ColumnName != "" {
 			// Check if this is a LIKE operator with search term
 			if paramInfo.Operator == "~~" || paramInfo.Operator == "~~*" ||
-			   strings.ToUpper(paramInfo.Operator) == "LIKE" ||
-			   strings.ToUpper(paramInfo.Operator) == "ILIKE" {
+				strings.ToUpper(paramInfo.Operator) == "LIKE" ||
+				strings.ToUpper(paramInfo.Operator) == "ILIKE" {
 				// For LIKE patterns, use "search" prefix with column name to avoid collisions
 				if _, exists := inferredNames[pos]; !exists {
 					inferredNames[pos] = "search" + toPascalCase(paramInfo.ColumnName)
@@ -604,7 +604,12 @@ func (qa *QueryAnalyzer) isCountAggregate(columnName, sql string) bool {
 
 // mapToIntelligentGoType maps PostgreSQL type to Go type with intelligent nullability
 func (qa *QueryAnalyzer) mapToIntelligentGoType(pgType string, isNullable bool) (string, error) {
-	// Get base type
+	// Map PostgreSQL types to Go types for query result columns.
+	// Note: This intentionally differs from TypeMapper for table columns:
+	//   - Result columns use 'int' for all integer types (ergonomic, Go idiomatic)
+	//   - Table columns use int16/int32/int64 (precise, matches schema)
+	// This design choice prioritizes developer experience for query results.
+
 	var baseType string
 	switch strings.ToLower(pgType) {
 	case "uuid":
