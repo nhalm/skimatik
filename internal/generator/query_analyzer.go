@@ -13,14 +13,17 @@ import (
 	"github.com/nhalm/pgxkit"
 )
 
-// QueryAnalyzer analyzes SQL queries using PostgreSQL EXPLAIN to determine column types and validate queries
+// QueryAnalyzer introspects SQL queries using PostgreSQL's PREPARE and EXPLAIN features
+// to determine result column types, parameter types, and nullability.
+// It generates intelligent types that match TypeMapper conventions (int for all integers, pointers for nullability).
 type QueryAnalyzer struct {
 	db         *pgxkit.DB
 	typeMapper *TypeMapper
 	sqlParser  *SQLParser
 }
 
-// NewQueryAnalyzer creates a new query analyzer
+// NewQueryAnalyzer creates a new query analyzer with the given database connection.
+// The database is used to introspect query structure and validate syntax.
 func NewQueryAnalyzer(db *pgxkit.DB) *QueryAnalyzer {
 	return &QueryAnalyzer{
 		db:         db,
@@ -29,7 +32,12 @@ func NewQueryAnalyzer(db *pgxkit.DB) *QueryAnalyzer {
 	}
 }
 
-// AnalyzeQuery analyzes a query using PostgreSQL EXPLAIN to determine column types and parameters
+// AnalyzeQuery performs complete analysis of a SQL query including:
+// - Parameter extraction and naming
+// - Result column type detection (for SELECT queries)
+// - Parameter type inference via PREPARE
+// - Nullability detection from schema and query structure
+// - Query syntax validation
 func (qa *QueryAnalyzer) AnalyzeQuery(ctx context.Context, query *Query) error {
 	if query == nil {
 		return fmt.Errorf("query cannot be nil")
@@ -602,13 +610,9 @@ func (qa *QueryAnalyzer) isCountAggregate(columnName, sql string) bool {
 	return false
 }
 
-// mapToIntelligentGoType maps PostgreSQL type to Go type with intelligent nullability
+// mapToIntelligentGoType maps PostgreSQL types to idiomatic Go types with intelligent nullability.
+// It matches TypeMapper behavior: all integers -> int, nullable -> pointers.
 func (qa *QueryAnalyzer) mapToIntelligentGoType(pgType string, isNullable bool) (string, error) {
-	// Map PostgreSQL types to Go types using intelligent, idiomatic mappings:
-	//   - All integer types map to 'int' (ergonomic, Go idiomatic)
-	//   - Nullable columns use pointers (*int, *string, etc.)
-	//   - NOT NULL columns use native types (int, string, uuid.UUID, etc.)
-	// This matches TypeMapper's behavior for consistent types across table structs and query results.
 
 	var baseType string
 	switch strings.ToLower(pgType) {
@@ -692,7 +696,8 @@ func (qa *QueryAnalyzer) validateQuerySyntax(ctx context.Context, query *Query) 
 	return nil
 }
 
-// inferParameterTypesFromPrepare uses PostgreSQL PREPARE to infer parameter types for all query types
+// inferParameterTypesFromPrepare uses PostgreSQL PREPARE to infer parameter types for all query types.
+// It creates a temporary prepared statement and extracts parameter OIDs, then maps them to Go types.
 func (qa *QueryAnalyzer) inferParameterTypesFromPrepare(ctx context.Context, query *Query) error {
 	// Skip if no parameters
 	if len(query.Parameters) == 0 {
@@ -742,7 +747,9 @@ func (qa *QueryAnalyzer) inferParameterTypesFromPrepare(ctx context.Context, que
 	return nil
 }
 
-// InferParameterTypes attempts to infer parameter types from query context
+// InferParameterTypes attempts to infer parameter types from query context.
+// This is a placeholder for more advanced type inference that could analyze
+// query semantics to determine parameter types without database introspection.
 func (qa *QueryAnalyzer) InferParameterTypes(ctx context.Context, query *Query) error {
 	// This is a more advanced feature that could analyze the query context
 	// to infer parameter types based on how they're used
@@ -750,7 +757,8 @@ func (qa *QueryAnalyzer) InferParameterTypes(ctx context.Context, query *Query) 
 	return nil
 }
 
-// ValidateQueryExecution validates that a query can be executed successfully
+// ValidateQueryExecution validates that a query can be executed successfully.
+// This could be used in testing to ensure queries work with sample data.
 func (qa *QueryAnalyzer) ValidateQueryExecution(ctx context.Context, query *Query) error {
 	// This could be used to validate that the query executes without errors
 	// using test data or in a test transaction
