@@ -2756,3 +2756,70 @@ WHERE id = $1;`
 		t.Errorf("Expected error message to contain '%s', got: %s", expectedErrMsg, err.Error())
 	}
 }
+
+// TestResultTypes_IntegerTypesUseInt tests that all PostgreSQL integer types map to 'int'
+// This verifies that intelligent result types use ergonomic 'int' instead of sized integers
+func TestResultTypes_IntegerTypesUseInt(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	testDB := getTestDB(t)
+	ctx := context.Background()
+
+	tempDir := t.TempDir()
+	sqlDir := filepath.Join(tempDir, "queries")
+	err := os.MkdirAll(sqlDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create SQL directory: %v", err)
+	}
+
+	// Query selecting different integer types from posts table
+	// view_count is INTEGER (int4), like_count is INTEGER (int4)
+	querySQL := `-- name: GetPostCounts :one
+SELECT view_count, like_count FROM posts WHERE id = $1;`
+
+	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test query: %v", err)
+	}
+
+	parser := NewQueryParser(sqlDir)
+	queries, err := parser.ParseQueries()
+	if err != nil {
+		t.Fatalf("Failed to parse queries: %v", err)
+	}
+
+	if len(queries) != 1 {
+		t.Fatalf("Expected 1 query, got %d", len(queries))
+	}
+
+	analyzer := NewQueryAnalyzer(testDB)
+	err = analyzer.AnalyzeQuery(ctx, &queries[0])
+	if err != nil {
+		t.Fatalf("Failed to analyze query: %v", err)
+	}
+
+	query := queries[0]
+	if len(query.Columns) != 2 {
+		t.Fatalf("Expected 2 columns, got %d", len(query.Columns))
+	}
+
+	// Test: view_count should be int (NOT int32)
+	viewCountCol := findColumn(query.Columns, "view_count")
+	if viewCountCol == nil {
+		t.Fatal("view_count column not found")
+	}
+	if viewCountCol.GoType != "int" {
+		t.Errorf("Expected view_count to be 'int' (intelligent type), got '%s'", viewCountCol.GoType)
+	}
+
+	// Test: like_count should be int (NOT int32)
+	likeCountCol := findColumn(query.Columns, "like_count")
+	if likeCountCol == nil {
+		t.Fatal("like_count column not found")
+	}
+	if likeCountCol.GoType != "int" {
+		t.Errorf("Expected like_count to be 'int' (intelligent type), got '%s'", likeCountCol.GoType)
+	}
+}
