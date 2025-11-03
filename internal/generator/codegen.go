@@ -568,12 +568,10 @@ func (cg *CodeGenerator) generateQueryFile(sourceFile string, queries []Query) e
 		return nil
 	}
 
-	// Map result column types for all queries
-	for i := range queries {
-		if err := cg.typeMapper.MapResultColumns(&queries[i]); err != nil {
-			return fmt.Errorf("failed to map result column types for query %s: %w", queries[i].Name, err)
-		}
-	}
+	// NOTE: QueryAnalyzer has already set intelligent types for result columns.
+	// We do NOT call MapResultColumns() here as it would overwrite the intelligent
+	// types (int) with old-style sized integers (int32/int64).
+	// Table columns still use TypeMapper via MapTableColumns() in generateTableCode().
 
 	// Generate the code
 	code, err := cg.generateQueryCode(sourceFile, queries)
