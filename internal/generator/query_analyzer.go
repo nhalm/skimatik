@@ -604,11 +604,11 @@ func (qa *QueryAnalyzer) isCountAggregate(columnName, sql string) bool {
 
 // mapToIntelligentGoType maps PostgreSQL type to Go type with intelligent nullability
 func (qa *QueryAnalyzer) mapToIntelligentGoType(pgType string, isNullable bool) (string, error) {
-	// Map PostgreSQL types to Go types for query result columns.
-	// Note: This intentionally differs from TypeMapper for table columns:
-	//   - Result columns use 'int' for all integer types (ergonomic, Go idiomatic)
-	//   - Table columns use int16/int32/int64 (precise, matches schema)
-	// This design choice prioritizes developer experience for query results.
+	// Map PostgreSQL types to Go types using intelligent, idiomatic mappings:
+	//   - All integer types map to 'int' (ergonomic, Go idiomatic)
+	//   - Nullable columns use pointers (*int, *string, etc.)
+	//   - NOT NULL columns use native types (int, string, uuid.UUID, etc.)
+	// This matches TypeMapper's behavior for consistent types across table structs and query results.
 
 	var baseType string
 	switch strings.ToLower(pgType) {
