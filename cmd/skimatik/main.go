@@ -42,9 +42,9 @@ func getFullVersion() string {
 
 func main() {
 	var (
-		config     = flag.String("config", "skimatik.yaml", "Path to YAML configuration file")
-		verbose    = flag.Bool("verbose", false, "Enable verbose logging output")
-		help       = flag.Bool("help", false, "Show detailed help and examples")
+		config      = flag.String("config", "skimatik.yaml", "Path to YAML configuration file")
+		verbose     = flag.Bool("verbose", false, "Enable verbose logging output")
+		help        = flag.Bool("help", false, "Show detailed help and examples")
 		showVersion = flag.Bool("version", false, "Show version information")
 	)
 

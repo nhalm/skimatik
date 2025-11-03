@@ -599,8 +599,3 @@ func (sp *SQLParser) makeTableRef(rangeVar *pg_query.RangeVar) TableRef {
 
 	return ref
 }
-
-// extractCTEs will be implemented later
-func (sp *SQLParser) extractCTEs(selectStmt *pg_query.SelectStmt) []CTEInfo {
-	return nil
-}

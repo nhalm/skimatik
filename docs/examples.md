@@ -485,7 +485,7 @@ func NewUserRepository(db *pgxkit.DB) *UserRepository {
 }
 
 // Add custom business logic methods
-func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int32) ([]domain.UserSummary, error) {
+func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]domain.UserSummary, error) {
     // Use generated query and convert to domain types
     results, err := r.UsersQueries.GetActiveUsers(ctx, fmt.Sprintf("%d", limit))
     if err != nil {

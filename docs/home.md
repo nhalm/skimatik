@@ -24,18 +24,18 @@ A database-first code generator for PostgreSQL that creates type-safe Go reposit
 ## 📚 Documentation Navigation
 
 ### Getting Started
-- **[Quick Start Guide](Quick-Start-Guide)** - Installation and basic usage
-- **[Examples & Tutorials](Examples-and-Tutorials)** - Hands-on learning with real applications
+- **[Quick Start Guide](quick-start)** - Installation and basic usage
+- **[Examples & Tutorials](examples)** - Hands-on learning with real applications
 
 ### Developer Guides
-- **[Shared Utilities Guide](Shared-Utilities-Guide)** - Database operations, retry logic, and error handling utilities
-- **[Embedding Patterns](Embedding-Patterns)** - Repository composition and extension patterns
-- **[Error Handling Guide](Error-Handling-Guide)** - Comprehensive error management strategies
+- **[Shared Utilities Guide](shared-utilities)** - Database operations, retry logic, and error handling utilities
+- **[Embedding Patterns](embedding-patterns)** - Repository composition and extension patterns
+- **[Error Handling Guide](error-handling)** - Comprehensive error management strategies
 
 ### Reference Documentation
-- **[Configuration Reference](Configuration-Reference)** - Complete configuration options
-- **[Type Mapping Reference](Type-Mapping-Reference)** - PostgreSQL to Go type mappings
-- **[CLI Reference](CLI-Reference)** - Command-line interface documentation
+- **[Configuration Reference](configuration-reference)** - Complete configuration options
+- **[Type Mapping](type-mapping)** - PostgreSQL to Go type mappings
+- **[Database Migrations](database-migrations)** - Schema management with golang-migrate
 
 ## 🚀 Quick Start
 
@@ -56,10 +56,10 @@ skimatik --config="skimatik.yaml"
 ```go
 // users_generated.go
 type Users struct {
-    Id        uuid.UUID          `json:"id" db:"id"`
-    Name      string             `json:"name" db:"name"`
-    Email     string             `json:"email" db:"email"`
-    CreatedAt pgtype.Timestamptz `json:"created_at" db:"created_at"`
+    Id        uuid.UUID  `json:"id" db:"id"`
+    Name      string     `json:"name" db:"name"`
+    Email     *string    `json:"email" db:"email"`
+    CreatedAt time.Time  `json:"created_at" db:"created_at"`
 }
 
 func (u Users) GetID() uuid.UUID { return u.Id }
