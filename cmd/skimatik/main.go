@@ -32,7 +32,11 @@ func getVersion() string {
 func getFullVersion() string {
 	v := getVersion()
 	if commit != "none" {
-		v = fmt.Sprintf("%s (commit: %s)", v, commit[:7])
+		commitHash := commit
+		if len(commit) > 7 {
+			commitHash = commit[:7]
+		}
+		v = fmt.Sprintf("%s (commit: %s)", v, commitHash)
 	}
 	if date != "unknown" {
 		v = fmt.Sprintf("%s built at %s", v, date)
@@ -48,7 +52,6 @@ func main() {
 		showVersion = flag.Bool("version", false, "Show version information")
 	)
 
-	// Custom usage function with better formatting
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, `skimatik - Database-first code generator for PostgreSQL
 
@@ -160,7 +163,6 @@ MORE INFO:
 
 	flag.Parse()
 
-	// Handle help and version flags
 	if *help {
 		flag.Usage()
 		os.Exit(0)
@@ -173,18 +175,15 @@ MORE INFO:
 		os.Exit(0)
 	}
 
-	// Load configuration file
 	cfg, err := generator.LoadConfig(*config)
 	if err != nil {
 		log.Fatalf("Failed to load config file: %v", err)
 	}
 
-	// Override verbose setting from CLI flag if provided
 	if *verbose {
 		cfg.Verbose = true
 	}
 
-	// Create and run generator
 	gen := generator.New(cfg)
 	ctx := context.Background()
 
