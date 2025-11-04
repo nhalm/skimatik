@@ -398,7 +398,7 @@ func (cg *CodeGenerator) prepareCRUDTemplateData(table Table) (map[string]interf
 		"InsertColumns":      strings.Join(insertColumns, ", "),
 		"InsertPlaceholders": strings.Join(insertPlaceholders, ", "),
 		"InsertArgs":         strings.Join(insertArgs, ", "),
-		"UpdateAssignments":  strings.Join(updateAssignments, ", "),
+		"UpdateColumns":      strings.Join(updateAssignments, ", "),
 		"UpdateArgs":         strings.Join(updateArgs, ", "),
 	}, nil
 }

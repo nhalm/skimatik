@@ -99,6 +99,11 @@ func (qa *QueryAnalyzer) applyResultAnnotations(query *Query) error {
 		return nil
 	}
 
+	// Check if query.Columns is nil to avoid panic
+	if query.Columns == nil {
+		return fmt.Errorf("query %s has result annotations but no columns were detected", query.Name)
+	}
+
 	// Apply each result annotation
 	for _, annotation := range query.ResultAnnotations {
 		// Find the column in query results
