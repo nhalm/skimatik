@@ -971,22 +971,22 @@ WHERE id = $1;`
 	if totalEngagementCol == nil {
 		t.Fatal("total_engagement column not found")
 	}
-	if totalEngagementCol.GoType != "int" {
-		t.Errorf("Expected total_engagement to be int (arithmetic on NOT NULL columns), got %s", totalEngagementCol.GoType)
+	if totalEngagementCol.GoType != "*int" {
+		t.Errorf("Expected total_engagement to be *int (arithmetic on nullable columns), got %s", totalEngagementCol.GoType)
 	}
-	if totalEngagementCol.IsNullable {
-		t.Errorf("Expected total_engagement to be NOT NULL (both operands are NOT NULL)")
+	if !totalEngagementCol.IsNullable {
+		t.Errorf("Expected total_engagement to be nullable (view_count and like_count are nullable)")
 	}
 
 	doubledViewsCol := findColumn(query.Columns, "doubled_views")
 	if doubledViewsCol == nil {
 		t.Fatal("doubled_views column not found")
 	}
-	if doubledViewsCol.GoType != "int" {
-		t.Errorf("Expected doubled_views to be int (arithmetic on NOT NULL column), got %s", doubledViewsCol.GoType)
+	if doubledViewsCol.GoType != "*int" {
+		t.Errorf("Expected doubled_views to be *int (arithmetic on nullable column), got %s", doubledViewsCol.GoType)
 	}
-	if doubledViewsCol.IsNullable {
-		t.Errorf("Expected doubled_views to be NOT NULL (operand is NOT NULL)")
+	if !doubledViewsCol.IsNullable {
+		t.Errorf("Expected doubled_views to be nullable (view_count is nullable)")
 	}
 
 	engagementRateCol := findColumn(query.Columns, "engagement_rate")
@@ -1054,22 +1054,22 @@ WHERE id = $1;`
 	if displayNameCol == nil {
 		t.Fatal("display_name column not found")
 	}
-	if displayNameCol.GoType != "string" {
-		t.Errorf("Expected display_name to be string (concatenation of NOT NULL columns), got %s", displayNameCol.GoType)
+	if displayNameCol.GoType != "*string" {
+		t.Errorf("Expected display_name to be *string (|| operator returns computed nullable), got %s", displayNameCol.GoType)
 	}
-	if displayNameCol.IsNullable {
-		t.Errorf("Expected display_name to be NOT NULL (all operands are NOT NULL)")
+	if !displayNameCol.IsNullable {
+		t.Errorf("Expected display_name to be nullable (PostgreSQL types computed expressions as nullable)")
 	}
 
 	prefixedNameCol := findColumn(query.Columns, "prefixed_name")
 	if prefixedNameCol == nil {
 		t.Fatal("prefixed_name column not found")
 	}
-	if prefixedNameCol.GoType != "string" {
-		t.Errorf("Expected prefixed_name to be string (concatenation with literal), got %s", prefixedNameCol.GoType)
+	if prefixedNameCol.GoType != "*string" {
+		t.Errorf("Expected prefixed_name to be *string (|| operator returns computed nullable), got %s", prefixedNameCol.GoType)
 	}
-	if prefixedNameCol.IsNullable {
-		t.Errorf("Expected prefixed_name to be NOT NULL (concatenation with literal)")
+	if !prefixedNameCol.IsNullable {
+		t.Errorf("Expected prefixed_name to be nullable (PostgreSQL types computed expressions as nullable)")
 	}
 
 	avatarCol := findColumn(query.Columns, "avatar")
@@ -1615,8 +1615,11 @@ WHERE user_id = $1;`
 	if viewCountCol == nil {
 		t.Fatal("view_count column not found")
 	}
-	if viewCountCol.GoType != "int" {
-		t.Errorf("Expected view_count to be int, got %s", viewCountCol.GoType)
+	if viewCountCol.GoType != "*int" {
+		t.Errorf("Expected view_count to be *int (nullable in schema), got %s", viewCountCol.GoType)
+	}
+	if !viewCountCol.IsNullable {
+		t.Errorf("Expected view_count to be nullable")
 	}
 }
 
