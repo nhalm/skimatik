@@ -29,7 +29,13 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
-	defer db.Shutdown(context.Background())
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := db.Shutdown(shutdownCtx); err != nil {
+			log.Printf("warning: database shutdown encountered error: %v", err)
+		}
+	}()
 
 	// Test database connection
 	if err := db.HealthCheck(context.Background()); err != nil {
@@ -105,9 +111,9 @@ func main() {
 			r.Put("/{id}/publish", postHandler.PublishPost)
 
 			// Custom repository methods that extend generated functionality
-			r.Get("/featured", postHandler.GetFeaturedPosts)    // Custom business logic
-			r.Get("/statistics", postHandler.GetPostStatistics) // Aggregation across queries
-			r.Get("/tag/{tag}", postHandler.GetPostsByTag)      // Custom filtering
+			r.Get("/featured", postHandler.GetFeaturedPosts)
+			r.Get("/statistics", postHandler.GetPostStatistics)
+			r.Get("/tag/{tag}", postHandler.GetPostsByTag)
 		})
 	})
 
