@@ -1431,17 +1431,17 @@ func TestResultTypes_JoinMixedNullability(t *testing.T) {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
 
-	querySQL := `-- name: GetTagsWithPosts :many
+	querySQL := `-- name: GetCategoriesWithPosts :many
 SELECT
-    t.id as tag_id,
-    t.name as tag_name,
-    t.description as tag_description,
+    c.id as category_id,
+    c.name as category_name,
+    c.description as category_description,
     p.id as post_id,
     p.title as post_title,
     p.published_at
-FROM tags t
-LEFT JOIN post_tags pt ON t.id = pt.tag_id
-LEFT JOIN posts p ON pt.post_id = p.id;`
+FROM categories c
+LEFT JOIN post_categories pc ON c.id = pc.category_id
+LEFT JOIN posts p ON pc.post_id = p.id;`
 
 	err = os.WriteFile(filepath.Join(sqlDir, "tags.sql"), []byte(querySQL), 0644)
 	if err != nil {
@@ -1465,37 +1465,37 @@ LEFT JOIN posts p ON pt.post_id = p.id;`
 		t.Fatalf("Expected 6 columns, got %d", len(query.Columns))
 	}
 
-	tagIDCol := findColumn(query.Columns, "tag_id")
-	if tagIDCol == nil {
-		t.Fatal("tag_id column not found")
+	categoryIDCol := findColumn(query.Columns, "category_id")
+	if categoryIDCol == nil {
+		t.Fatal("category_id column not found")
 	}
-	if tagIDCol.GoType != "uuid.UUID" {
-		t.Errorf("Expected tag_id to be uuid.UUID (left table NOT NULL), got %s", tagIDCol.GoType)
+	if categoryIDCol.GoType != "uuid.UUID" {
+		t.Errorf("Expected category_id to be uuid.UUID (left table NOT NULL), got %s", categoryIDCol.GoType)
 	}
-	if tagIDCol.IsNullable {
-		t.Errorf("Expected tag_id to be NOT NULL (left table preserves NOT NULL)")
-	}
-
-	tagNameCol := findColumn(query.Columns, "tag_name")
-	if tagNameCol == nil {
-		t.Fatal("tag_name column not found")
-	}
-	if tagNameCol.GoType != "string" {
-		t.Errorf("Expected tag_name to be string (left table NOT NULL), got %s", tagNameCol.GoType)
-	}
-	if tagNameCol.IsNullable {
-		t.Errorf("Expected tag_name to be NOT NULL (left table preserves NOT NULL)")
+	if categoryIDCol.IsNullable {
+		t.Errorf("Expected category_id to be NOT NULL (left table preserves NOT NULL)")
 	}
 
-	tagDescCol := findColumn(query.Columns, "tag_description")
-	if tagDescCol == nil {
-		t.Fatal("tag_description column not found")
+	categoryNameCol := findColumn(query.Columns, "category_name")
+	if categoryNameCol == nil {
+		t.Fatal("category_name column not found")
 	}
-	if tagDescCol.GoType != "*string" {
-		t.Errorf("Expected tag_description to be *string (nullable in schema), got %s", tagDescCol.GoType)
+	if categoryNameCol.GoType != "string" {
+		t.Errorf("Expected category_name to be string (left table NOT NULL), got %s", categoryNameCol.GoType)
 	}
-	if !tagDescCol.IsNullable {
-		t.Errorf("Expected tag_description to be nullable (nullable in schema, left table)")
+	if categoryNameCol.IsNullable {
+		t.Errorf("Expected category_name to be NOT NULL (left table preserves NOT NULL)")
+	}
+
+	categoryDescCol := findColumn(query.Columns, "category_description")
+	if categoryDescCol == nil {
+		t.Fatal("category_description column not found")
+	}
+	if categoryDescCol.GoType != "*string" {
+		t.Errorf("Expected category_description to be *string (nullable in schema), got %s", categoryDescCol.GoType)
+	}
+	if !categoryDescCol.IsNullable {
+		t.Errorf("Expected category_description to be nullable (nullable in schema, left table)")
 	}
 
 	postIDCol := findColumn(query.Columns, "post_id")
