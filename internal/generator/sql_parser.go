@@ -404,6 +404,11 @@ func (sp *SQLParser) walkSelectForParams(selectStmt *pg_query.SelectStmt, params
 			params[pos].IsInOffset = true
 		}
 	}
+
+	// Walk HAVING clause for parameters
+	if selectStmt.HavingClause != nil {
+		sp.walkExprForParams(selectStmt.HavingClause, params, false, false)
+	}
 }
 
 // walkUpdateForParams walks UPDATE statement for parameters
