@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/nhalm/pgxkit"
 )
@@ -26,7 +27,11 @@ func TestMain(m *testing.M) {
 
 	// Teardown: Close database connection
 	if packageTestDB != nil {
-		packageTestDB.Shutdown(context.Background())
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := packageTestDB.Shutdown(shutdownCtx); err != nil {
+			panic("Failed to shutdown test database: " + err.Error())
+		}
 	}
 
 	os.Exit(code)

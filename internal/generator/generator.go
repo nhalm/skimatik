@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/nhalm/pgxkit"
 )
@@ -34,7 +35,13 @@ func (g *Generator) Generate(ctx context.Context) error {
 	if err := g.connect(ctx); err != nil {
 		return fmt.Errorf("database connection failed: %w", err)
 	}
-	defer g.db.Shutdown(context.Background())
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := g.db.Shutdown(shutdownCtx); err != nil {
+			log.Printf("warning: database shutdown encountered error: %v", err)
+		}
+	}()
 
 	// Initialize components
 	g.introspect = NewIntrospector(g.db, g.config.Schema)
