@@ -3,15 +3,12 @@ package generator
 import (
 	"fmt"
 	"strings"
-	"sync"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 )
 
 // SQLParser provides SQL analysis using PostgreSQL's parser
-type SQLParser struct {
-	cache sync.Map // Thread-safe cache: map[string]*pg_query.ParseResult
-}
+type SQLParser struct{}
 
 // NewSQLParser creates a new SQL parser
 func NewSQLParser() *SQLParser {
@@ -91,22 +88,11 @@ type JoinInfo struct {
 
 // Parse analyzes SQL and returns structured metadata
 func (sp *SQLParser) Parse(sql string) (*QueryInfo, error) {
-	if cached, ok := sp.cache.Load(sql); ok {
-		return sp.extractInfoFromCached(cached.(*pg_query.ParseResult))
-	}
-
 	result, err := pg_query.Parse(sql)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse SQL: %w", err)
 	}
 
-	sp.cache.Store(sql, result)
-
-	return sp.extractInfo(result)
-}
-
-// extractInfoFromCached extracts metadata from cached parse result
-func (sp *SQLParser) extractInfoFromCached(result *pg_query.ParseResult) (*QueryInfo, error) {
 	return sp.extractInfo(result)
 }
 
