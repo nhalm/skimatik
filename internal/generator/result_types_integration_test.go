@@ -1896,7 +1896,7 @@ func TestResultTypes_WindowFunction_MixedColumns(t *testing.T) {
 SELECT
     p.id,
     p.title,
-    p.view_count,
+    p.comment_count,
     p.published_at,
     u.name as author_name,
     ROW_NUMBER() OVER (PARTITION BY p.user_id ORDER BY p.view_count DESC) as rank_in_user_posts,
@@ -1949,12 +1949,12 @@ ORDER BY p.user_id, p.view_count DESC;`
 		t.Errorf("Expected title to be NOT NULL")
 	}
 
-	viewCountCol := findColumn(query.Columns, "view_count")
-	if viewCountCol == nil {
-		t.Fatal("view_count column not found")
+	commentCountCol := findColumn(query.Columns, "comment_count")
+	if commentCountCol == nil {
+		t.Fatal("comment_count column not found")
 	}
-	if viewCountCol.IsNullable {
-		t.Errorf("Expected view_count to be NOT NULL")
+	if commentCountCol.IsNullable {
+		t.Errorf("Expected comment_count to be NOT NULL")
 	}
 
 	publishedAtCol := findColumn(query.Columns, "published_at")
