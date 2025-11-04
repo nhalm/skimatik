@@ -827,7 +827,13 @@ func (qa *QueryAnalyzer) inferParameterTypesFromPrepare(ctx context.Context, que
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction for type inference: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil && err != pgx.ErrTxClosed {
+			slog.Warn("failed to rollback transaction during type inference",
+				"query", query.Name,
+				"error", err)
+		}
+	}()
 
 	// Prepare the statement with a unique name
 	stmtName := fmt.Sprintf("infer_types_%s", query.Name)
