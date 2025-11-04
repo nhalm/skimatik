@@ -102,8 +102,12 @@ func (sp *SQLParser) extractInfo(result *pg_query.ParseResult) (*QueryInfo, erro
 		return nil, fmt.Errorf("no statements found in SQL")
 	}
 
-	info := &QueryInfo{}
 	stmt := result.Stmts[0].Stmt
+	if stmt == nil {
+		return nil, fmt.Errorf("statement is nil")
+	}
+
+	info := &QueryInfo{}
 
 	info.Type = sp.determineQueryType(stmt)
 	info.Tables = sp.extractTables(stmt)
@@ -261,8 +265,17 @@ func (sp *SQLParser) analyzeFuncCall(funcCall *pg_query.FuncCall, target *Select
 		return
 	}
 
-	// Get function name from last element
-	funcName := funcCall.Funcname[len(funcCall.Funcname)-1].GetString_().Sval
+	lastFunc := funcCall.Funcname[len(funcCall.Funcname)-1]
+	if lastFunc == nil {
+		return
+	}
+
+	strNode := lastFunc.GetString_()
+	if strNode == nil {
+		return
+	}
+
+	funcName := strNode.Sval
 
 	switch strings.ToLower(funcName) {
 	case "count":
@@ -336,10 +349,15 @@ func (sp *SQLParser) isNonNullLiteral(node *pg_query.Node) bool {
 // extractColumnNameFromNode attempts to extract column name from expression
 func (sp *SQLParser) extractColumnNameFromNode(node *pg_query.Node) string {
 	if colRef := node.GetColumnRef(); colRef != nil {
-		if len(colRef.Fields) > 0 {
-			if str := colRef.Fields[len(colRef.Fields)-1].GetString_(); str != nil {
-				return str.Sval
-			}
+		if len(colRef.Fields) == 0 {
+			return ""
+		}
+		lastField := colRef.Fields[len(colRef.Fields)-1]
+		if lastField == nil {
+			return ""
+		}
+		if str := lastField.GetString_(); str != nil {
+			return str.Sval
 		}
 	}
 	return ""
@@ -424,8 +442,11 @@ func (sp *SQLParser) walkUpdateForParams(updateStmt *pg_query.UpdateStmt, params
 			columnName := resTarget.Name
 			targetTable := tableName
 			if len(resTarget.Indirection) > 0 {
-				if str := resTarget.Indirection[len(resTarget.Indirection)-1].GetString_(); str != nil {
-					columnName = str.Sval
+				lastIndirection := resTarget.Indirection[len(resTarget.Indirection)-1]
+				if lastIndirection != nil {
+					if str := lastIndirection.GetString_(); str != nil {
+						columnName = str.Sval
+					}
 				}
 				targetTable = resTarget.Name
 			}
@@ -644,7 +665,12 @@ func (sp *SQLParser) extractColumnNameFromRef(colRef *pg_query.ColumnRef) string
 		return ""
 	}
 
-	if str := colRef.Fields[len(colRef.Fields)-1].GetString_(); str != nil {
+	lastField := colRef.Fields[len(colRef.Fields)-1]
+	if lastField == nil {
+		return ""
+	}
+
+	if str := lastField.GetString_(); str != nil {
 		return str.Sval
 	}
 
@@ -657,7 +683,12 @@ func (sp *SQLParser) extractTableNameFromRef(colRef *pg_query.ColumnRef) string 
 		return ""
 	}
 
-	if str := colRef.Fields[0].GetString_(); str != nil {
+	firstField := colRef.Fields[0]
+	if firstField == nil {
+		return ""
+	}
+
+	if str := firstField.GetString_(); str != nil {
 		return str.Sval
 	}
 
@@ -666,11 +697,19 @@ func (sp *SQLParser) extractTableNameFromRef(colRef *pg_query.ColumnRef) string 
 
 // getOperatorName extracts operator name from A_Expr
 func (sp *SQLParser) getOperatorName(aExpr *pg_query.A_Expr) string {
-	if len(aExpr.Name) > 0 {
-		if str := aExpr.Name[0].GetString_(); str != nil {
-			return str.Sval
-		}
+	if len(aExpr.Name) == 0 {
+		return ""
 	}
+
+	firstOp := aExpr.Name[0]
+	if firstOp == nil {
+		return ""
+	}
+
+	if str := firstOp.GetString_(); str != nil {
+		return str.Sval
+	}
+
 	return ""
 }
 
