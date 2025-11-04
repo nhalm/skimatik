@@ -25,6 +25,7 @@ type QueryInfo struct {
 	SelectTargets []SelectTarget
 	Tables        []TableRef
 	CTEs          []CTEInfo
+	Joins         []JoinInfo
 }
 
 // ParameterInfo contains parameter metadata from parse tree
@@ -41,13 +42,19 @@ type ParameterInfo struct {
 
 // SelectTarget represents a column in SELECT clause
 type SelectTarget struct {
-	Alias      string // Column alias or name
-	IsCount    bool   // COUNT aggregate
-	IsSum      bool   // SUM aggregate
-	IsAvg      bool   // AVG aggregate
-	IsMax      bool   // MAX aggregate
-	IsMin      bool   // MIN aggregate
-	Expression string // Full expression as string
+	Alias              string // Column alias or name
+	IsCount            bool   // COUNT aggregate
+	IsSum              bool   // SUM aggregate
+	IsAvg              bool   // AVG aggregate
+	IsMax              bool   // MAX aggregate
+	IsMin              bool   // MIN aggregate
+	IsCoalesce         bool   // COALESCE function
+	HasNonNullLiteral  bool   // COALESCE/CASE has non-null literal (guarantees non-null)
+	IsCaseWithElse     bool   // CASE expression with ELSE clause
+	IsRowNumber        bool   // ROW_NUMBER() window function
+	IsRank             bool   // RANK() window function
+	IsDenseRank        bool   // DENSE_RANK() window function
+	Expression         string // Full expression as string
 }
 
 // TableRef represents a table reference in query
@@ -61,6 +68,23 @@ type TableRef struct {
 type CTEInfo struct {
 	Name  string     // CTE name
 	Query *QueryInfo // Recursively parsed CTE query
+}
+
+// JoinType represents the type of JOIN operation
+type JoinType int
+
+const (
+	JoinTypeInner JoinType = iota
+	JoinTypeLeft
+	JoinTypeRight
+	JoinTypeFull
+)
+
+// JoinInfo represents a JOIN operation in the query
+type JoinInfo struct {
+	Type       JoinType // Type of join (INNER, LEFT, RIGHT, FULL)
+	LeftTable  string   // Left table name or alias
+	RightTable string   // Right table name or alias
 }
 
 // Parse analyzes SQL and returns structured metadata
@@ -99,6 +123,7 @@ func (sp *SQLParser) extractInfo(result *pg_query.ParseResult) (*QueryInfo, erro
 
 	if selectStmt := stmt.GetSelectStmt(); selectStmt != nil {
 		info.SelectTargets = sp.extractSelectTargets(selectStmt)
+		info.Joins = sp.extractJoins(selectStmt)
 	}
 
 	return info, nil
@@ -119,6 +144,78 @@ func (sp *SQLParser) determineQueryType(stmt *pg_query.Node) QueryType {
 		return QueryTypeExec
 	}
 	return QueryTypeMany
+}
+
+// extractJoins extracts JOIN information from SELECT statement
+func (sp *SQLParser) extractJoins(selectStmt *pg_query.SelectStmt) []JoinInfo {
+	var joins []JoinInfo
+
+	if selectStmt.FromClause == nil {
+		return joins
+	}
+
+	for _, fromNode := range selectStmt.FromClause {
+		sp.extractJoinsFromNode(fromNode, &joins)
+	}
+
+	return joins
+}
+
+// extractJoinsFromNode recursively extracts JOIN info from a node
+func (sp *SQLParser) extractJoinsFromNode(node *pg_query.Node, joins *[]JoinInfo) {
+	joinExpr := node.GetJoinExpr()
+	if joinExpr == nil {
+		return
+	}
+
+	// Recursively process nested joins first (to maintain SQL order)
+	sp.extractJoinsFromNode(joinExpr.Larg, joins)
+	sp.extractJoinsFromNode(joinExpr.Rarg, joins)
+
+	// Map PostgreSQL join type enum to our JoinType
+	var joinType JoinType
+	switch joinExpr.Jointype {
+	case 1: // JOIN_INNER
+		joinType = JoinTypeInner
+	case 2: // JOIN_LEFT
+		joinType = JoinTypeLeft
+	case 3: // JOIN_FULL
+		joinType = JoinTypeFull
+	case 4: // JOIN_RIGHT
+		joinType = JoinTypeRight
+	default:
+		joinType = JoinTypeInner
+	}
+
+	// Extract left and right table names/aliases
+	leftTable := sp.extractTableIdentifier(joinExpr.Larg)
+	rightTable := sp.extractTableIdentifier(joinExpr.Rarg)
+
+	*joins = append(*joins, JoinInfo{
+		Type:       joinType,
+		LeftTable:  leftTable,
+		RightTable: rightTable,
+	})
+}
+
+// extractTableIdentifier extracts table name or alias from a range node
+func (sp *SQLParser) extractTableIdentifier(node *pg_query.Node) string {
+	if rangeVar := node.GetRangeVar(); rangeVar != nil {
+		// Prefer alias if available, otherwise use table name
+		if rangeVar.Alias != nil && rangeVar.Alias.Aliasname != "" {
+			return rangeVar.Alias.Aliasname
+		}
+		return rangeVar.Relname
+	}
+
+	// Check for subquery
+	if rangeSubselect := node.GetRangeSubselect(); rangeSubselect != nil {
+		if rangeSubselect.Alias != nil {
+			return rangeSubselect.Alias.Aliasname
+		}
+	}
+
+	return ""
 }
 
 // extractSelectTargets extracts columns from SELECT clause
@@ -146,9 +243,19 @@ func (sp *SQLParser) analyzeTargetNode(node *pg_query.Node) *SelectTarget {
 		Alias: resTarget.Name,
 	}
 
-	// Check if it's a function call (aggregate)
+	// Check if it's a function call (aggregate or special function)
 	if funcCall := resTarget.Val.GetFuncCall(); funcCall != nil {
 		sp.analyzeFuncCall(funcCall, target)
+	}
+
+	// Check if it's a COALESCE expression
+	if coalesceExpr := resTarget.Val.GetCoalesceExpr(); coalesceExpr != nil {
+		sp.analyzeCoalesceExpr(coalesceExpr, target)
+	}
+
+	// Check if it's a CASE expression
+	if caseExpr := resTarget.Val.GetCaseExpr(); caseExpr != nil {
+		sp.analyzeCaseExpr(caseExpr, target)
 	}
 
 	// If no alias, try to extract column name
@@ -159,7 +266,7 @@ func (sp *SQLParser) analyzeTargetNode(node *pg_query.Node) *SelectTarget {
 	return target
 }
 
-// analyzeFuncCall detects aggregate functions
+// analyzeFuncCall detects aggregate and special functions
 func (sp *SQLParser) analyzeFuncCall(funcCall *pg_query.FuncCall, target *SelectTarget) {
 	if len(funcCall.Funcname) == 0 {
 		return
@@ -179,7 +286,62 @@ func (sp *SQLParser) analyzeFuncCall(funcCall *pg_query.FuncCall, target *Select
 		target.IsMax = true
 	case "min":
 		target.IsMin = true
+	case "coalesce":
+		target.IsCoalesce = true
+		target.HasNonNullLiteral = sp.hasNonNullLiteralArg(funcCall.Args)
+	case "row_number":
+		target.IsRowNumber = true
+	case "rank":
+		target.IsRank = true
+	case "dense_rank":
+		target.IsDenseRank = true
 	}
+}
+
+// analyzeCoalesceExpr detects COALESCE expressions
+func (sp *SQLParser) analyzeCoalesceExpr(coalesceExpr *pg_query.CoalesceExpr, target *SelectTarget) {
+	target.IsCoalesce = true
+	// Check if any argument is a non-null literal
+	target.HasNonNullLiteral = sp.hasNonNullLiteralArg(coalesceExpr.Args)
+}
+
+// analyzeCaseExpr detects CASE expressions and checks for ELSE clause
+func (sp *SQLParser) analyzeCaseExpr(caseExpr *pg_query.CaseExpr, target *SelectTarget) {
+	// Check if there's an ELSE clause (defresult)
+	if caseExpr.Defresult != nil {
+		target.IsCaseWithElse = true
+		// Check if the ELSE result is a non-null literal
+		target.HasNonNullLiteral = sp.isNonNullLiteral(caseExpr.Defresult)
+	}
+}
+
+// hasNonNullLiteralArg checks if function args contain a non-null literal
+func (sp *SQLParser) hasNonNullLiteralArg(args []*pg_query.Node) bool {
+	for _, arg := range args {
+		if sp.isNonNullLiteral(arg) {
+			return true
+		}
+	}
+	return false
+}
+
+// isNonNullLiteral checks if a node is a non-null literal value
+func (sp *SQLParser) isNonNullLiteral(node *pg_query.Node) bool {
+	if node == nil {
+		return false
+	}
+
+	// Check for A_Const (constant value)
+	if aConst := node.GetAConst(); aConst != nil {
+		// If it has any value (string, int, float, bool), it's non-null
+		if aConst.GetIsnull() {
+			return false
+		}
+		return aConst.GetSval() != nil || aConst.GetIval() != nil ||
+		       aConst.GetFval() != nil || aConst.GetBoolval() != nil
+	}
+
+	return false
 }
 
 // extractColumnNameFromNode attempts to extract column name from expression

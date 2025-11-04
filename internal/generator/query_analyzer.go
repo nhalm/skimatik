@@ -579,17 +579,99 @@ func (qa *QueryAnalyzer) isColumnNullable(ctx context.Context, field pgconn.Fiel
 			return true, fmt.Errorf("failed to query pg_attribute: %w", err)
 		}
 
+		// Get the table name from OID to check JOIN rules
+		var tableName string
+		err = qa.db.QueryRow(ctx, `
+			SELECT relname FROM pg_class WHERE oid = $1
+		`, field.TableOID).Scan(&tableName)
+		if err != nil {
+			return true, fmt.Errorf("failed to query pg_class: %w", err)
+		}
+
+		// Check if this table is on the nullable side of an outer join
+		isNullableFromJoin := qa.isTableNullableFromJoin(tableName, sql)
+		if isNullableFromJoin {
+			return true, nil // Outer join makes column nullable
+		}
+
 		return !notNull, nil
 	}
 
 	// Computed column (TableOID == 0 or TableAttributeNumber == 0)
-	// Check if it's a COUNT aggregate which is never nullable
-	if qa.isCountAggregate(field.Name, sql) {
-		return false, nil
+	// Parse SQL to check expression type
+	queryInfo, err := qa.sqlParser.Parse(sql)
+	if err != nil {
+		// If parsing fails, default to nullable
+		return true, nil
+	}
+
+	// Find the target matching this column name
+	for _, target := range queryInfo.SelectTargets {
+		if strings.EqualFold(target.Alias, field.Name) {
+			// Check various expression types that guarantee non-null
+			if target.IsCount {
+				return false, nil // COUNT never returns NULL
+			}
+			if target.IsRowNumber || target.IsRank || target.IsDenseRank {
+				return false, nil // Window ranking functions never return NULL
+			}
+			if target.IsCoalesce && target.HasNonNullLiteral {
+				return false, nil // COALESCE with non-null literal guarantees non-null
+			}
+			if target.IsCaseWithElse && target.HasNonNullLiteral {
+				return false, nil // CASE with non-null ELSE literal guarantees non-null
+			}
+		}
 	}
 
 	// Other computed columns default to nullable
 	return true, nil
+}
+
+// isTableNullableFromJoin checks if a table is on the nullable side of an outer join
+func (qa *QueryAnalyzer) isTableNullableFromJoin(tableName, sql string) bool {
+	queryInfo, err := qa.sqlParser.Parse(sql)
+	if err != nil {
+		return false
+	}
+
+	// Build a map of table names to their aliases
+	tableAliases := make(map[string]string) // maps table name -> alias
+	for _, table := range queryInfo.Tables {
+		if table.Alias != "" {
+			tableAliases[table.Name] = table.Alias
+		}
+	}
+
+	// Check each JOIN to see if this table is on the nullable side
+	// JOINs use aliases, so we need to check if the alias matches
+	tableIdentifier := tableName
+	if alias, hasAlias := tableAliases[tableName]; hasAlias {
+		tableIdentifier = alias
+	}
+
+	for _, join := range queryInfo.Joins {
+		switch join.Type {
+		case JoinTypeLeft:
+			// Right table becomes nullable in LEFT JOIN
+			if join.RightTable == tableIdentifier || join.RightTable == tableName {
+				return true
+			}
+		case JoinTypeRight:
+			// Left table becomes nullable in RIGHT JOIN
+			if join.LeftTable == tableIdentifier || join.LeftTable == tableName {
+				return true
+			}
+		case JoinTypeFull:
+			// Both tables become nullable in FULL OUTER JOIN
+			if join.LeftTable == tableIdentifier || join.LeftTable == tableName ||
+				join.RightTable == tableIdentifier || join.RightTable == tableName {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // isCountAggregate checks if a column is a COUNT aggregate
