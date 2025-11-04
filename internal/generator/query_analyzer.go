@@ -410,21 +410,10 @@ func (qa *QueryAnalyzer) isSelectQuery(queryType QueryType) bool {
 	return queryType == QueryTypeOne || queryType == QueryTypeMany || queryType == QueryTypePaginated
 }
 
-// analyzeSelectQuery uses EXPLAIN to analyze a SELECT query and determine column types
+// analyzeSelectQuery analyzes a SELECT query and determines column types
 func (qa *QueryAnalyzer) analyzeSelectQuery(ctx context.Context, query *Query) error {
-	// Replace parameters with dummy values for EXPLAIN
-	analyzableSQL := qa.replaceParametersForExplain(query.SQL, query.Parameters)
-	explainSQL := fmt.Sprintf("EXPLAIN (FORMAT JSON) %s", analyzableSQL)
-
-	// Execute EXPLAIN query
-	rows, err := qa.db.Query(ctx, explainSQL)
-	if err != nil {
-		return fmt.Errorf("failed to execute EXPLAIN query: %w", err)
-	}
-	defer rows.Close()
-
-	// For now, we'll use a simpler approach: try to execute the query with dummy parameters
-	// to get the column information from the result set
+	// Analyze query columns by executing with NULL parameters
+	// This approach works for all queries including those with parameters in HAVING, WHERE, etc.
 	return qa.analyzeQueryColumns(ctx, query)
 }
 
@@ -511,15 +500,18 @@ func (qa *QueryAnalyzer) analyzeQueryColumns(ctx context.Context, query *Query) 
 	sql := strings.TrimSpace(query.SQL)
 	sql = strings.TrimSuffix(sql, ";")
 
-	// Create a modified query that returns column information
-	// We'll use a LIMIT 0 query to get column metadata without executing the full query
-	limitedSQL := fmt.Sprintf("SELECT * FROM (%s) AS subquery LIMIT 0", sql)
+	// Add LIMIT 0 to avoid executing the full query
+	// We append directly to preserve parameter placeholders for binding
+	limitedSQL := fmt.Sprintf("%s LIMIT 0", sql)
 
-	// Replace parameters with dummy values
-	analyzableSQL := qa.replaceParametersForExplain(limitedSQL, query.Parameters)
+	// Prepare dummy parameter values for execution
+	var paramValues []interface{}
+	for range query.Parameters {
+		paramValues = append(paramValues, nil) // Use nil for all parameters
+	}
 
-	// Execute the query to get column information
-	rows, err := qa.db.Query(ctx, analyzableSQL)
+	// Execute the query with actual parameters to get column information
+	rows, err := qa.db.Query(ctx, limitedSQL, paramValues...)
 	if err != nil {
 		return fmt.Errorf("failed to analyze query columns: %w", err)
 	}
