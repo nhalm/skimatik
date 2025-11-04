@@ -59,9 +59,11 @@ type SelectTarget struct {
 
 // TableRef represents a table reference in query
 type TableRef struct {
-	Name   string // Table name
-	Alias  string // Table alias (if any)
-	Schema string // Schema name (if specified)
+	Name         string     // Table name (empty for subqueries)
+	Alias        string     // Table alias (if any)
+	Schema       string     // Schema name (if specified)
+	IsSubquery   bool       // True if this is a subquery in FROM
+	SubqueryInfo *QueryInfo // Parsed subquery (if IsSubquery is true)
 }
 
 // CTEInfo represents a Common Table Expression
@@ -741,6 +743,11 @@ func (sp *SQLParser) walkFromClause(node *pg_query.Node) []TableRef {
 		return tables
 	}
 
+	if rangeSubselect := node.GetRangeSubselect(); rangeSubselect != nil {
+		tables = append(tables, sp.makeSubqueryTableRef(rangeSubselect))
+		return tables
+	}
+
 	if joinExpr := node.GetJoinExpr(); joinExpr != nil {
 		tables = append(tables, sp.walkFromClause(joinExpr.Larg)...)
 		tables = append(tables, sp.walkFromClause(joinExpr.Rarg)...)
@@ -765,4 +772,35 @@ func (sp *SQLParser) makeTableRef(rangeVar *pg_query.RangeVar) TableRef {
 	}
 
 	return ref
+}
+
+// makeSubqueryTableRef creates TableRef from RangeSubselect
+func (sp *SQLParser) makeSubqueryTableRef(rangeSubselect *pg_query.RangeSubselect) TableRef {
+	ref := TableRef{
+		IsSubquery: true,
+	}
+
+	if rangeSubselect.Alias != nil {
+		ref.Alias = rangeSubselect.Alias.Aliasname
+	}
+
+	if rangeSubselect.Subquery != nil {
+		if selectStmt := rangeSubselect.Subquery.GetSelectStmt(); selectStmt != nil {
+			subqueryInfo := sp.extractInfoFromSelectStmt(selectStmt)
+			ref.SubqueryInfo = subqueryInfo
+		}
+	}
+
+	return ref
+}
+
+// extractInfoFromSelectStmt extracts QueryInfo from a SelectStmt node
+func (sp *SQLParser) extractInfoFromSelectStmt(selectStmt *pg_query.SelectStmt) *QueryInfo {
+	info := &QueryInfo{
+		Type:          QueryTypeMany,
+		SelectTargets: sp.extractSelectTargets(selectStmt),
+		Joins:         sp.extractJoins(selectStmt),
+		Tables:        sp.extractTablesFromSelect(selectStmt),
+	}
+	return info
 }
