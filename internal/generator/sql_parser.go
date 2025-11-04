@@ -126,6 +126,7 @@ func (sp *SQLParser) extractInfo(result *pg_query.ParseResult) (*QueryInfo, erro
 	if selectStmt := stmt.GetSelectStmt(); selectStmt != nil {
 		info.SelectTargets = sp.extractSelectTargets(selectStmt)
 		info.Joins = sp.extractJoins(selectStmt)
+		info.CTEs = sp.extractCTEs(selectStmt)
 	}
 
 	return info, nil
@@ -363,6 +364,18 @@ func (sp *SQLParser) extractParameters(stmt *pg_query.Node) []ParameterInfo {
 	params := make(map[int]*ParameterInfo)
 
 	if selectStmt := stmt.GetSelectStmt(); selectStmt != nil {
+		// Walk CTEs first
+		if selectStmt.WithClause != nil {
+			for _, cteNode := range selectStmt.WithClause.Ctes {
+				if commonTableExpr := cteNode.GetCommonTableExpr(); commonTableExpr != nil {
+					if commonTableExpr.Ctequery != nil {
+						if cteSelect := commonTableExpr.Ctequery.GetSelectStmt(); cteSelect != nil {
+							sp.walkSelectForParams(cteSelect, params)
+						}
+					}
+				}
+			}
+		}
 		sp.walkSelectForParams(selectStmt, params)
 	} else if updateStmt := stmt.GetUpdateStmt(); updateStmt != nil {
 		sp.walkUpdateForParams(updateStmt, params)
@@ -732,6 +745,34 @@ func (sp *SQLParser) extractTablesFromSelect(selectStmt *pg_query.SelectStmt) []
 	}
 
 	return tables
+}
+
+// extractCTEs extracts Common Table Expressions (WITH clause) from SELECT statement
+func (sp *SQLParser) extractCTEs(selectStmt *pg_query.SelectStmt) []CTEInfo {
+	var ctes []CTEInfo
+
+	if selectStmt.WithClause == nil {
+		return ctes
+	}
+
+	for _, cteNode := range selectStmt.WithClause.Ctes {
+		if commonTableExpr := cteNode.GetCommonTableExpr(); commonTableExpr != nil {
+			cte := CTEInfo{
+				Name: commonTableExpr.Ctename,
+			}
+
+			if commonTableExpr.Ctequery != nil {
+				if cteSelect := commonTableExpr.Ctequery.GetSelectStmt(); cteSelect != nil {
+					cteQueryInfo := sp.extractInfoFromSelectStmt(cteSelect)
+					cte.Query = cteQueryInfo
+				}
+			}
+
+			ctes = append(ctes, cte)
+		}
+	}
+
+	return ctes
 }
 
 // walkFromClause walks FROM clause nodes
