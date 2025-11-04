@@ -210,9 +210,9 @@ func TestQueryAnalyzer_ComplexQueries(t *testing.T) {
 			query: Query{
 				Name: "CTEQuery",
 				SQL: `WITH user_posts AS (
-					SELECT user_id, COUNT(*) as post_count 
-					FROM posts 
-					WHERE created_at > $1 
+					SELECT user_id, COUNT(*) as post_count
+					FROM posts
+					WHERE created_at > $1
 					GROUP BY user_id
 				)
 				SELECT u.id, u.name, up.post_count
@@ -228,9 +228,9 @@ func TestQueryAnalyzer_ComplexQueries(t *testing.T) {
 			name: "subquery",
 			query: Query{
 				Name: "SubqueryExample",
-				SQL: `SELECT id, name FROM users 
+				SQL: `SELECT id, name FROM users
 				WHERE id IN (
-					SELECT user_id FROM posts 
+					SELECT user_id FROM posts
 					WHERE category_id = $1 AND created_at > $2
 				) AND status = $3`,
 				Type: QueryTypeMany,
@@ -242,10 +242,10 @@ func TestQueryAnalyzer_ComplexQueries(t *testing.T) {
 			name: "window function",
 			query: Query{
 				Name: "WindowFunctionQuery",
-				SQL: `SELECT 
+				SQL: `SELECT
 					id, name,
 					ROW_NUMBER() OVER (PARTITION BY department ORDER BY salary DESC) as rank
-				FROM employees 
+				FROM employees
 				WHERE department = $1 AND salary > $2`,
 				Type: QueryTypeMany,
 			},
@@ -256,7 +256,7 @@ func TestQueryAnalyzer_ComplexQueries(t *testing.T) {
 			name: "array operations",
 			query: Query{
 				Name: "ArrayQuery",
-				SQL: `SELECT id, tags FROM posts 
+				SQL: `SELECT id, tags FROM posts
 				WHERE $1 = ANY(tags) AND category_id = $2`,
 				Type: QueryTypeMany,
 			},
@@ -271,8 +271,8 @@ func TestQueryAnalyzer_ComplexQueries(t *testing.T) {
 				FROM users u
 				JOIN posts p ON u.id = p.user_id
 				JOIN categories c ON p.category_id = c.id
-				WHERE u.created_at > $1 
-				AND p.status = $2 
+				WHERE u.created_at > $1
+				AND p.status = $2
 				AND c.active = $3`,
 				Type: QueryTypeMany,
 			},
@@ -772,6 +772,146 @@ func TestMakePointerType(t *testing.T) {
 			result := makePointerType(tt.input)
 			if result != tt.expected {
 				t.Errorf("makePointerType(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestQueryAnalyzer_ApplyResultAnnotations(t *testing.T) {
+	analyzer := NewQueryAnalyzer(nil)
+
+	tests := []struct {
+		name        string
+		query       Query
+		expectError bool
+		errorMsg    string
+		description string
+	}{
+		{
+			name: "nil columns with no annotations",
+			query: Query{
+				Name:              "TestQuery",
+				Columns:           nil,
+				ResultAnnotations: []ResultAnnotation{},
+			},
+			expectError: false,
+			description: "No error expected when columns is nil but no annotations exist",
+		},
+		{
+			name: "nil columns with annotations",
+			query: Query{
+				Name:    "TestQuery",
+				Columns: nil,
+				ResultAnnotations: []ResultAnnotation{
+					{ColumnName: "user_id", GoType: "*int"},
+				},
+			},
+			expectError: true,
+			errorMsg:    "query TestQuery has result annotations but no columns were detected",
+			description: "Error expected when columns is nil and annotations exist",
+		},
+		{
+			name: "empty columns with annotations",
+			query: Query{
+				Name:    "TestQuery",
+				Columns: []Column{},
+				ResultAnnotations: []ResultAnnotation{
+					{ColumnName: "user_id", GoType: "*int"},
+				},
+			},
+			expectError: true,
+			errorMsg:    "result annotation for column 'user_id' not found in query TestQuery results",
+			description: "Error expected when annotation column doesn't exist",
+		},
+		{
+			name: "valid annotation applied",
+			query: Query{
+				Name: "TestQuery",
+				Columns: []Column{
+					{Name: "user_id", Type: "integer", GoType: "int", IsNullable: false},
+					{Name: "email", Type: "text", GoType: "string", IsNullable: false},
+				},
+				ResultAnnotations: []ResultAnnotation{
+					{ColumnName: "user_id", GoType: "*int"},
+				},
+			},
+			expectError: false,
+			description: "Annotation should be applied successfully",
+		},
+		{
+			name: "non-existent column annotation",
+			query: Query{
+				Name: "TestQuery",
+				Columns: []Column{
+					{Name: "user_id", Type: "integer", GoType: "int", IsNullable: false},
+				},
+				ResultAnnotations: []ResultAnnotation{
+					{ColumnName: "nonexistent", GoType: "*int"},
+				},
+			},
+			expectError: true,
+			errorMsg:    "result annotation for column 'nonexistent' not found in query TestQuery results",
+			description: "Error expected when annotation references non-existent column",
+		},
+		{
+			name: "multiple annotations",
+			query: Query{
+				Name: "TestQuery",
+				Columns: []Column{
+					{Name: "user_id", Type: "integer", GoType: "int", IsNullable: false},
+					{Name: "email", Type: "text", GoType: "string", IsNullable: false},
+					{Name: "name", Type: "text", GoType: "string", IsNullable: false},
+				},
+				ResultAnnotations: []ResultAnnotation{
+					{ColumnName: "user_id", GoType: "*int"},
+					{ColumnName: "email", GoType: "*string"},
+				},
+			},
+			expectError: false,
+			description: "Multiple annotations should be applied successfully",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			query := tt.query
+			err := analyzer.applyResultAnnotations(&query)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected error for %s, but got none", tt.description)
+				} else if tt.errorMsg != "" && err.Error() != tt.errorMsg {
+					t.Errorf("Expected error message %q, got %q", tt.errorMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error for %s: %v", tt.description, err)
+				}
+
+				// If no error, verify annotations were applied
+				if len(tt.query.ResultAnnotations) > 0 && len(query.Columns) > 0 {
+					for _, annotation := range tt.query.ResultAnnotations {
+						found := false
+						for _, col := range query.Columns {
+							if col.Name == annotation.ColumnName {
+								found = true
+								if col.GoType != annotation.GoType {
+									t.Errorf("Column %s: expected GoType %q, got %q",
+										col.Name, annotation.GoType, col.GoType)
+								}
+								expectedNullable := strings.HasPrefix(annotation.GoType, "*")
+								if col.IsNullable != expectedNullable {
+									t.Errorf("Column %s: expected IsNullable %v, got %v",
+										col.Name, expectedNullable, col.IsNullable)
+								}
+								break
+							}
+						}
+						if !found && !tt.expectError {
+							t.Errorf("Annotation for column %s was not applied", annotation.ColumnName)
+						}
+					}
+				}
 			}
 		})
 	}
