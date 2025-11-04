@@ -616,8 +616,46 @@ func (qa *QueryAnalyzer) isColumnNullable(ctx context.Context, field pgconn.Fiel
 		}
 	}
 
+	// Check if this column comes from a subquery or CTE
+	columnName := field.Name
+
+	// Check all subqueries for a matching column
+	for _, table := range queryInfo.Tables {
+		if table.IsSubquery && table.SubqueryInfo != nil {
+			if nullable, found := qa.checkTargetNullability(table.SubqueryInfo.SelectTargets, columnName); found {
+				return nullable, nil
+			}
+		}
+	}
+
+	// Check all CTEs for a matching column
+	for _, cte := range queryInfo.CTEs {
+		if cte.Query != nil {
+			if nullable, found := qa.checkTargetNullability(cte.Query.SelectTargets, columnName); found {
+				return nullable, nil
+			}
+		}
+	}
+
 	// Other computed columns default to nullable
 	return true, nil
+}
+
+// checkTargetNullability checks if a SelectTarget guarantees non-null based on expression type
+func (qa *QueryAnalyzer) checkTargetNullability(targets []SelectTarget, columnName string) (nullable bool, found bool) {
+	for _, target := range targets {
+		if strings.EqualFold(target.Alias, columnName) {
+			if target.IsCount || target.IsRowNumber || target.IsRank || target.IsDenseRank {
+				return false, true // These functions never return NULL
+			}
+			if (target.IsCoalesce || target.IsCaseWithElse) && target.HasNonNullLiteral {
+				return false, true // Non-null literal guarantees non-null
+			}
+			// Found the target but it's nullable
+			return true, true
+		}
+	}
+	return true, false // Not found
 }
 
 // isTableNullableFromJoin checks if a table is on the nullable side of an outer join
