@@ -542,3 +542,176 @@ func TestQueryParser_IsValidGoType(t *testing.T) {
 		})
 	}
 }
+
+func TestQueryParser_ParseParameterAnnotation(t *testing.T) {
+	parser := NewQueryParser("")
+
+	tests := []struct {
+		name     string
+		line     string
+		expected *ParameterAnnotation
+	}{
+		{
+			name: "basic nullable string",
+			line: "-- param: $1 status *string",
+			expected: &ParameterAnnotation{
+				Position: 1,
+				Name:     "status",
+				GoType:   "*string",
+			},
+		},
+		{
+			name: "non-nullable UUID",
+			line: "-- param: $2 tenant_id uuid.UUID",
+			expected: &ParameterAnnotation{
+				Position: 2,
+				Name:     "tenant_id",
+				GoType:   "uuid.UUID",
+			},
+		},
+		{
+			name: "nullable time",
+			line: "-- param: $3 created_after *time.Time",
+			expected: &ParameterAnnotation{
+				Position: 3,
+				Name:     "created_after",
+				GoType:   "*time.Time",
+			},
+		},
+		{
+			name: "nullable int",
+			line: "-- param: $4 limit *int",
+			expected: &ParameterAnnotation{
+				Position: 4,
+				Name:     "limit",
+				GoType:   "*int",
+			},
+		},
+		{
+			name:     "invalid - no dollar sign",
+			line:     "-- param: 1 status string",
+			expected: nil,
+		},
+		{
+			name:     "invalid - missing type",
+			line:     "-- param: $1 status",
+			expected: nil,
+		},
+		{
+			name:     "not a param annotation",
+			line:     "-- some other comment",
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parser.parseParameterAnnotation(tt.line)
+
+			if tt.expected == nil {
+				if result != nil {
+					t.Errorf("expected nil, got %+v", result)
+				}
+				return
+			}
+
+			if result == nil {
+				t.Fatalf("expected %+v, got nil", tt.expected)
+			}
+
+			if result.Position != tt.expected.Position {
+				t.Errorf("Position: expected %d, got %d", tt.expected.Position, result.Position)
+			}
+			if result.Name != tt.expected.Name {
+				t.Errorf("Name: expected %s, got %s", tt.expected.Name, result.Name)
+			}
+			if result.GoType != tt.expected.GoType {
+				t.Errorf("GoType: expected %s, got %s", tt.expected.GoType, result.GoType)
+			}
+		})
+	}
+}
+
+func TestQueryParser_ValidateParameterAnnotations(t *testing.T) {
+	parser := NewQueryParser("")
+
+	tests := []struct {
+		name        string
+		annotations []ParameterAnnotation
+		shouldError bool
+		errorMsg    string
+	}{
+		{
+			name: "valid sequential annotations",
+			annotations: []ParameterAnnotation{
+				{Position: 1, Name: "tenant_id", GoType: "uuid.UUID"},
+				{Position: 2, Name: "status", GoType: "*string"},
+				{Position: 3, Name: "limit", GoType: "int"},
+			},
+			shouldError: false,
+		},
+		{
+			name:        "empty annotations is valid",
+			annotations: []ParameterAnnotation{},
+			shouldError: false,
+		},
+		{
+			name: "duplicate position",
+			annotations: []ParameterAnnotation{
+				{Position: 1, Name: "tenant_id", GoType: "uuid.UUID"},
+				{Position: 1, Name: "status", GoType: "string"},
+			},
+			shouldError: true,
+			errorMsg:    "duplicate parameter annotation for $1",
+		},
+		{
+			name: "non-sequential (missing $2)",
+			annotations: []ParameterAnnotation{
+				{Position: 1, Name: "tenant_id", GoType: "uuid.UUID"},
+				{Position: 3, Name: "limit", GoType: "int"},
+			},
+			shouldError: true,
+			errorMsg:    "parameter annotations must be sequential starting at $1, missing $2",
+		},
+		{
+			name: "invalid Go type",
+			annotations: []ParameterAnnotation{
+				{Position: 1, Name: "tenant_id", GoType: "invalid type"},
+			},
+			shouldError: true,
+			errorMsg:    "invalid Go type",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			query := &Query{
+				Name:                 "TestQuery",
+				ParameterAnnotations: tt.annotations,
+			}
+
+			err := parser.validateParameterAnnotations(query)
+
+			if tt.shouldError {
+				if err == nil {
+					t.Errorf("expected error containing %q, got nil", tt.errorMsg)
+				} else if tt.errorMsg != "" && !contains(err.Error(), tt.errorMsg) {
+					t.Errorf("expected error containing %q, got %q", tt.errorMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("expected no error, got %v", err)
+				}
+			}
+		})
+	}
+}
+
+func contains(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
