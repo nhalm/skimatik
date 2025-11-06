@@ -77,6 +77,17 @@ func (g *Generator) Generate(ctx context.Context) error {
 
 	// Generate query-based code
 	if g.config.QueriesDir != "" {
+		// Ensure shared database operations exist for queries even if tables are disabled
+		if !g.config.Tables {
+			if err := g.generateSharedErrors(); err != nil {
+				return fmt.Errorf("shared error handling generation failed: %w", err)
+			}
+
+			if err := g.generateSharedDatabaseOperations(); err != nil {
+				return fmt.Errorf("shared database operations generation failed: %w", err)
+			}
+		}
+
 		if err := g.generateQueries(ctx); err != nil {
 			return fmt.Errorf("query generation failed: %w", err)
 		}
