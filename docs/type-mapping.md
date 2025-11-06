@@ -1,15 +1,13 @@
 # Type Mapping Reference
 
-Skimatik uses intelligent, idiomatic Go type mappings for both table structs and query results.
+Skimatik uses intelligent, idiomatic Go type mappings that prioritize ergonomics and type safety.
 
 ## Design Philosophy
 
-Skimatik generates **consistent, ergonomic Go types** that prioritize developer experience:
-
 - **All integers map to `int`** - Whether your column is `SMALLINT`, `INTEGER`, or `BIGINT`, it maps to Go's native `int`
-- **Nullable columns use pointers** - `NULL` support via `*int`, `*string`, `*uuid.UUID`, etc.
-- **NOT NULL columns use value types** - Direct types like `int`, `string`, `uuid.UUID`
-- **No pgtype dependencies** - Generated code uses standard Go types only
+- **NOT NULL columns use native Go types** - Direct types like `int`, `string`, `uuid.UUID`, `time.Time`
+- **Nullable columns use pointers** - NULL support via `*int`, `*string`, `*uuid.UUID`, `*time.Time`
+- **No dependencies on pgtype** - Pure Go types only
 
 ## Type Mapping Table
 
@@ -58,18 +56,18 @@ Skimatik generates:
 
 ```go
 type Users struct {
-    Id        uuid.UUID  `json:"id" db:"id"`
-    Name      string     `json:"name" db:"name"`
-    Email     *string    `json:"email" db:"email"`        // pointer for nullable
-    Age       int        `json:"age" db:"age"`            // int for INTEGER
-    Score     *int       `json:"score" db:"score"`        // pointer for nullable BIGINT
-    CreatedAt time.Time  `json:"created_at" db:"created_at"`
+    Id        uuid.UUID   `json:"id" db:"id"`
+    Name      string      `json:"name" db:"name"`
+    Email     *string     `json:"email" db:"email"`        // pointer for nullable
+    Age       int         `json:"age" db:"age"`            // int for INTEGER
+    Score     *int        `json:"score" db:"score"`        // pointer for nullable BIGINT
+    CreatedAt time.Time   `json:"created_at" db:"created_at"`
 }
 ```
 
 ## Example: Query Results
 
-Custom queries use the same type mappings:
+Custom queries use the same intelligent type mappings:
 
 ```sql
 -- queries/users.sql
@@ -85,9 +83,9 @@ Generates:
 
 ```go
 type GetUserStatsResult struct {
-    UserCount int      `json:"user_count" db:"user_count"`
-    AvgAge    *float64 `json:"avg_age" db:"avg_age"`      // aggregate can be NULL
-    MaxScore  *int     `json:"max_score" db:"max_score"`  // MAX can be NULL
+    UserCount int       `json:"user_count" db:"user_count"`  // COUNT never NULL
+    AvgAge    *float64  `json:"avg_age" db:"avg_age"`        // AVG can be NULL
+    MaxScore  *int      `json:"max_score" db:"max_score"`    // MAX can be NULL
 }
 ```
 
@@ -130,13 +128,13 @@ Skimatik automatically generates the necessary imports:
 
 ```go
 import (
-    "encoding/json"      // for json.RawMessage
-    "time"               // for time.Time
+    "encoding/json"           // for json.RawMessage
+    "time"                    // for time.Time
     "github.com/google/uuid"  // for uuid.UUID
 )
 ```
 
-No `github.com/jackc/pgx/v5/pgtype` imports in generated code!
+No pgtype dependencies needed!
 
 ## Working with Nullable Fields
 
