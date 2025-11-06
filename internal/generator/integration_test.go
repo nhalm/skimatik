@@ -71,13 +71,85 @@ func TestSystem_EndToEnd(t *testing.T) {
 	t.Log("✅ End-to-end system test passed: DB → Generation → Compilation → Formatting")
 }
 
-// TestSystem_QueryGeneration tests query-based code generation workflow
-// TestSystem_QueryGeneration is disabled - query generation requires table generation
-// to create shared database operations. This architectural issue needs to be resolved.
-// See: query code depends on ExecuteQueryRow, HandleQueryRowError, etc. from database_operations.go
-// which is only generated when Tables: true
+// TestSystem_QueryGeneration tests query-based code generation workflow with tables disabled
 func TestSystem_QueryGeneration(t *testing.T) {
-	t.Skip("Query generation test disabled - architectural issue with shared database operations")
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	_ = getTestDB(t)
+
+	tempDir := t.TempDir()
+
+	// Create a simple test query directory
+	queriesDir := filepath.Join(tempDir, "queries")
+	if err := os.MkdirAll(queriesDir, 0755); err != nil {
+		t.Fatalf("Failed to create queries directory: %v", err)
+	}
+
+	// Write a simple test query file with columns that actually exist
+	queryContent := `-- name: GetUserByEmail :one
+SELECT id, name, email, is_active, created_at, updated_at
+FROM users
+WHERE email = $1 AND is_active = true;
+
+-- name: GetActiveUsers :many
+SELECT id, name, email, is_active, created_at, updated_at
+FROM users
+WHERE is_active = true
+ORDER BY created_at DESC
+LIMIT $1;
+
+-- name: DeactivateUser :exec
+UPDATE users SET is_active = false WHERE id = $1;
+`
+	if err := os.WriteFile(filepath.Join(queriesDir, "users.sql"), []byte(queryContent), 0644); err != nil {
+		t.Fatalf("Failed to write query file: %v", err)
+	}
+
+	// Configure for query-only generation (tables disabled)
+	config := &Config{
+		DSN:         "postgres://skimatik:skimatik_test_password@localhost:5432/skimatik_test",
+		Schema:      "public",
+		OutputDir:   tempDir,
+		PackageName: "testgen",
+		Tables:      false, // Tables disabled - this is the key test case
+		QueriesDir:  queriesDir,
+		Verbose:     true,
+	}
+
+	// Test: System generates query code without errors
+	generator := New(config)
+	ctx := context.Background()
+	err := generator.Generate(ctx)
+	if err != nil {
+		t.Fatalf("Query generation failed: %v", err)
+	}
+
+	// Test: Required shared files are created even with tables disabled
+	requiredFiles := []string{
+		"errors.go",
+		"database_operations.go",
+		"users_queries_generated.go",
+	}
+
+	for _, filename := range requiredFiles {
+		filepath := filepath.Join(tempDir, filename)
+		if _, err := os.Stat(filepath); os.IsNotExist(err) {
+			t.Errorf("Expected file %s was not generated", filename)
+		}
+	}
+
+	// Test: Generated code compiles
+	if !compileGeneratedCode(t, tempDir) {
+		t.Fatal("Generated query code failed to compile")
+	}
+
+	// Test: Generated code is properly formatted
+	if !verifyCodeFormatting(t, tempDir) {
+		t.Fatal("Generated query code is not properly formatted")
+	}
+
+	t.Log("✅ Query-only generation test passed: queries work with tables disabled")
 }
 
 // TestSystem_RealWorldScenarios tests representative table scenarios
