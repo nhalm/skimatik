@@ -247,8 +247,18 @@ tables:
 	}
 }
 
-func TestBackwardCompatibility(t *testing.T) {
-	yamlContent := `
+func TestConfigurationFormats(t *testing.T) {
+	tests := []struct {
+		name        string
+		yamlContent string
+		checks      []struct {
+			table    string
+			expected []string
+		}
+	}{
+		{
+			name: "backward_compatibility",
+			yamlContent: `
 database:
   dsn: "postgres://test"
 output:
@@ -258,46 +268,19 @@ tables:
     functions: ["create", "get", "update"]
   posts:
     functions: ["create", "list"]
-`
-
-	// Create temporary config file
-	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "config.yaml")
-
-	err := os.WriteFile(configPath, []byte(yamlContent), 0644)
-	if err != nil {
-		t.Fatalf("Failed to write test config file: %v", err)
-	}
-
-	// Load config
-	config, err := LoadConfig(configPath)
-	if err != nil {
-		t.Fatalf("LoadConfig() failed: %v", err)
-	}
-
-	// Test that existing table configurations still work
-	usersFunctions := config.GetTableFunctions("users")
-	expectedUsers := []string{"create", "get", "update"}
-	if !stringSlicesEqual(usersFunctions, expectedUsers) {
-		t.Errorf("GetTableFunctions('users') = %v, want %v", usersFunctions, expectedUsers)
-	}
-
-	postsFunctions := config.GetTableFunctions("posts")
-	expectedPosts := []string{"create", "list"}
-	if !stringSlicesEqual(postsFunctions, expectedPosts) {
-		t.Errorf("GetTableFunctions('posts') = %v, want %v", postsFunctions, expectedPosts)
-	}
-
-	// Test that unconfigured tables get default behavior
-	commentsFunctions := config.GetTableFunctions("comments")
-	expectedComments := []string{"create", "get", "update", "delete", "list", "paginate"}
-	if !stringSlicesEqual(commentsFunctions, expectedComments) {
-		t.Errorf("GetTableFunctions('comments') = %v, want %v", commentsFunctions, expectedComments)
-	}
-}
-
-func TestNewConfigurationFormat(t *testing.T) {
-	yamlContent := `
+`,
+			checks: []struct {
+				table    string
+				expected []string
+			}{
+				{"users", []string{"create", "get", "update"}},
+				{"posts", []string{"create", "list"}},
+				{"comments", []string{"create", "get", "update", "delete", "list", "paginate"}},
+			},
+		},
+		{
+			name: "new_configuration_format",
+			yamlContent: `
 database:
   dsn: "postgres://test"
 output:
@@ -308,41 +291,40 @@ tables:
   posts:
   audit_logs:
     functions: ["create", "list"]
-`
-
-	// Create temporary config file
-	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "config.yaml")
-
-	err := os.WriteFile(configPath, []byte(yamlContent), 0644)
-	if err != nil {
-		t.Fatalf("Failed to write test config file: %v", err)
+`,
+			checks: []struct {
+				table    string
+				expected []string
+			}{
+				{"users", []string{"create", "get", "update", "delete", "list", "paginate"}},
+				{"posts", []string{"create", "get", "update", "delete", "list", "paginate"}},
+				{"audit_logs", []string{"create", "list"}},
+			},
+		},
 	}
 
-	// Load config
-	config, err := LoadConfig(configPath)
-	if err != nil {
-		t.Fatalf("LoadConfig() failed: %v", err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			configPath := filepath.Join(tempDir, "config.yaml")
 
-	// Test that tables without functions get default_functions
-	expectedAll := []string{"create", "get", "update", "delete", "list", "paginate"}
+			err := os.WriteFile(configPath, []byte(tt.yamlContent), 0644)
+			if err != nil {
+				t.Fatalf("Failed to write test config file: %v", err)
+			}
 
-	usersFunctions := config.GetTableFunctions("users")
-	if !stringSlicesEqual(usersFunctions, expectedAll) {
-		t.Errorf("GetTableFunctions('users') = %v, want %v", usersFunctions, expectedAll)
-	}
+			config, err := LoadConfig(configPath)
+			if err != nil {
+				t.Fatalf("LoadConfig() failed: %v", err)
+			}
 
-	postsFunctions := config.GetTableFunctions("posts")
-	if !stringSlicesEqual(postsFunctions, expectedAll) {
-		t.Errorf("GetTableFunctions('posts') = %v, want %v", postsFunctions, expectedAll)
-	}
-
-	// Test that explicit functions override default_functions
-	auditLogsFunctions := config.GetTableFunctions("audit_logs")
-	expectedAuditLogs := []string{"create", "list"}
-	if !stringSlicesEqual(auditLogsFunctions, expectedAuditLogs) {
-		t.Errorf("GetTableFunctions('audit_logs') = %v, want %v", auditLogsFunctions, expectedAuditLogs)
+			for _, check := range tt.checks {
+				result := config.GetTableFunctions(check.table)
+				if !stringSlicesEqual(result, check.expected) {
+					t.Errorf("GetTableFunctions(%q) = %v, want %v", check.table, result, check.expected)
+				}
+			}
+		})
 	}
 }
 
