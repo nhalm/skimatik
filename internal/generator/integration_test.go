@@ -9,15 +9,20 @@ import (
 	"testing"
 )
 
-// TestSystem_EndToEnd tests the complete system workflow:
-// Connect to DB → Generate code → Code compiles → Code works
-func TestSystem_EndToEnd(t *testing.T) {
+// setupIntegrationTest performs common integration test setup
+func setupIntegrationTest(t *testing.T) string {
+	t.Helper()
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
 	_ = getTestDB(t)
+	return t.TempDir()
+}
 
-	tempDir := t.TempDir()
+// TestSystem_EndToEnd tests the complete system workflow:
+// Connect to DB → Generate code → Code compiles → Code works
+func TestSystem_EndToEnd(t *testing.T) {
+	tempDir := setupIntegrationTest(t)
 
 	// Configure for end-to-end generation
 	config := &Config{
@@ -73,12 +78,7 @@ func TestSystem_EndToEnd(t *testing.T) {
 
 // TestSystem_QueryGeneration tests query-based code generation workflow with tables disabled
 func TestSystem_QueryGeneration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-	_ = getTestDB(t)
-
-	tempDir := t.TempDir()
+	tempDir := setupIntegrationTest(t)
 
 	// Create a simple test query directory
 	queriesDir := filepath.Join(tempDir, "queries")
@@ -154,10 +154,7 @@ UPDATE users SET is_active = false WHERE id = $1;
 
 // TestSystem_RealWorldScenarios tests representative table scenarios
 func TestSystem_RealWorldScenarios(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-	_ = getTestDB(t)
+	setupIntegrationTest(t)
 
 	scenarios := []struct {
 		name        string
@@ -218,9 +215,8 @@ func TestSystem_RealWorldScenarios(t *testing.T) {
 
 // TestSystem_ErrorHandling tests system error handling
 func TestSystem_ErrorHandling(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
+	setupIntegrationTest(t)
+
 	t.Run("invalid_database_connection", func(t *testing.T) {
 		tempDir := t.TempDir()
 
@@ -250,8 +246,6 @@ func TestSystem_ErrorHandling(t *testing.T) {
 	})
 
 	t.Run("invalid_primary_key_table", func(t *testing.T) {
-		_ = getTestDB(t)
-
 		tempDir := t.TempDir()
 
 		config := &Config{
