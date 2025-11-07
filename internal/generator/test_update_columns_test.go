@@ -8,7 +8,7 @@ import (
 
 func TestCodeGenerator_GeneratedUpdateQuery(t *testing.T) {
 	config := getTestConfigWithTempDir(t)
-	cg := NewCodeGenerator(config)
+	cg := NewCodeGenerator(config, "test")
 	table := getTestTable()
 
 	err := cg.GenerateTableRepository(table)

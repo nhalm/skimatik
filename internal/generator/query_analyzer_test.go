@@ -7,7 +7,7 @@ import (
 )
 
 func TestQueryAnalyzer_ExtractParameters(t *testing.T) {
-	analyzer := NewQueryAnalyzer(nil) // No database needed for parameter extraction
+	analyzer := NewQueryAnalyzer(nil, "public") // No database needed for parameter extraction
 
 	tests := []struct {
 		name           string
@@ -106,7 +106,7 @@ func TestQueryAnalyzer_ExtractParameters(t *testing.T) {
 }
 
 func TestQueryAnalyzer_EdgeCases(t *testing.T) {
-	analyzer := NewQueryAnalyzer(nil)
+	analyzer := NewQueryAnalyzer(nil, "public")
 
 	tests := []struct {
 		name        string
@@ -197,7 +197,7 @@ func TestQueryAnalyzer_EdgeCases(t *testing.T) {
 }
 
 func TestQueryAnalyzer_ComplexQueries(t *testing.T) {
-	analyzer := NewQueryAnalyzer(nil)
+	analyzer := NewQueryAnalyzer(nil, "public")
 
 	tests := []struct {
 		name           string
@@ -310,7 +310,7 @@ func TestQueryAnalyzer_IsSelectQuery(t *testing.T) {
 		{"QueryTypeExec", QueryTypeExec, false},
 	}
 
-	analyzer := NewQueryAnalyzer(nil)
+	analyzer := NewQueryAnalyzer(nil, "public")
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -351,7 +351,7 @@ func TestQueryAnalyzer_MapOIDToTypeName(t *testing.T) {
 		{"unknown type", 99999, "unknown"},
 	}
 
-	analyzer := NewQueryAnalyzer(nil)
+	analyzer := NewQueryAnalyzer(nil, "public")
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -386,7 +386,7 @@ func TestQueryAnalyzer_IsArrayOID(t *testing.T) {
 		{"unknown type", 99999, false},
 	}
 
-	analyzer := NewQueryAnalyzer(nil)
+	analyzer := NewQueryAnalyzer(nil, "public")
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -399,7 +399,7 @@ func TestQueryAnalyzer_IsArrayOID(t *testing.T) {
 }
 
 func TestQueryAnalyzer_OIDMapping_Synchronization(t *testing.T) {
-	analyzer := NewQueryAnalyzer(nil)
+	analyzer := NewQueryAnalyzer(nil, "public")
 
 	// All known array OIDs that should be in both functions
 	arrayOIDs := []uint32{
@@ -537,7 +537,7 @@ func TestQueryAnalyzer_ReplaceParametersForExplain(t *testing.T) {
 		},
 	}
 
-	analyzer := NewQueryAnalyzer(nil)
+	analyzer := NewQueryAnalyzer(nil, "public")
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -568,7 +568,7 @@ func TestQueryAnalyzer_GetDummyValueForParameter(t *testing.T) {
 		{"tenth parameter", 10, "NULL"},
 	}
 
-	analyzer := NewQueryAnalyzer(nil)
+	analyzer := NewQueryAnalyzer(nil, "public")
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -581,7 +581,7 @@ func TestQueryAnalyzer_GetDummyValueForParameter(t *testing.T) {
 }
 
 func TestQueryAnalyzer_AnalyzeQuery_ParameterExtraction(t *testing.T) {
-	analyzer := NewQueryAnalyzer(nil) // No database needed for parameter extraction only
+	analyzer := NewQueryAnalyzer(nil, "public") // No database needed for parameter extraction only
 
 	query := Query{
 		Name: "TestQuery",
@@ -596,7 +596,7 @@ func TestQueryAnalyzer_AnalyzeQuery_ParameterExtraction(t *testing.T) {
 }
 
 func TestQueryAnalyzer_AnalyzeQuery_NilQuery(t *testing.T) {
-	analyzer := NewQueryAnalyzer(nil)
+	analyzer := NewQueryAnalyzer(nil, "public")
 
 	query := Query{}
 	err := analyzer.AnalyzeQuery(context.Background(), &query)
@@ -610,7 +610,7 @@ func TestQueryAnalyzer_AnalyzeQuery_NilQuery(t *testing.T) {
 }
 
 func TestQueryAnalyzer_InferParameterNames(t *testing.T) {
-	analyzer := NewQueryAnalyzer(nil)
+	analyzer := NewQueryAnalyzer(nil, "public")
 
 	tests := []struct {
 		name          string
@@ -802,7 +802,7 @@ func TestToCamelCase(t *testing.T) {
 }
 
 func TestQueryAnalyzer_TableColumnTracking(t *testing.T) {
-	analyzer := NewQueryAnalyzer(nil)
+	analyzer := NewQueryAnalyzer(nil, "public")
 
 	tests := []struct {
 		name           string
@@ -929,7 +929,7 @@ func TestMakePointerType(t *testing.T) {
 }
 
 func TestQueryAnalyzer_ApplyResultAnnotations(t *testing.T) {
-	analyzer := NewQueryAnalyzer(nil)
+	analyzer := NewQueryAnalyzer(nil, "public")
 
 	tests := []struct {
 		name        string

@@ -41,7 +41,7 @@ func TestSystem_EndToEnd(t *testing.T) {
 	}
 
 	// Test: System generates code without errors
-	generator := New(config)
+	generator := New(config, "test")
 	ctx := context.Background()
 	err := generator.Generate(ctx)
 	if err != nil {
@@ -118,7 +118,7 @@ UPDATE users SET is_active = false WHERE id = $1;
 	}
 
 	// Test: System generates query code without errors
-	generator := New(config)
+	generator := New(config, "test")
 	ctx := context.Background()
 	err := generator.Generate(ctx)
 	if err != nil {
@@ -196,7 +196,7 @@ func TestSystem_RealWorldScenarios(t *testing.T) {
 			}
 
 			// Test: Table-specific generation works
-			generator := New(config)
+			generator := New(config, "test")
 			ctx := context.Background()
 			err := generator.Generate(ctx)
 			if err != nil {
@@ -218,7 +218,7 @@ func TestSystem_ArrayColumnSupport(t *testing.T) {
 	db := getTestDB(t)
 	ctx := context.Background()
 
-	analyzer := NewQueryAnalyzer(db)
+	analyzer := NewQueryAnalyzer(db, "public")
 
 	tests := []struct {
 		name           string
@@ -321,7 +321,7 @@ func TestSystem_ErrorHandling(t *testing.T) {
 			Verbose:     false,
 		}
 
-		generator := New(config)
+		generator := New(config, "test")
 		ctx := context.Background()
 		err := generator.Generate(ctx)
 
@@ -352,7 +352,7 @@ func TestSystem_ErrorHandling(t *testing.T) {
 			Verbose: false,
 		}
 
-		generator := New(config)
+		generator := New(config, "test")
 		ctx := context.Background()
 		err := generator.Generate(ctx)
 

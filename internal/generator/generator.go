@@ -3,7 +3,7 @@ package generator
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/nhalm/pgxkit"
@@ -15,12 +15,14 @@ type Generator struct {
 	db         *pgxkit.DB
 	introspect *Introspector
 	codegen    *CodeGenerator
+	version    string
 }
 
 // New creates a new generator instance
-func New(config *Config) *Generator {
+func New(config *Config, version string) *Generator {
 	return &Generator{
-		config: config,
+		config:  config,
+		version: version,
 	}
 }
 
@@ -39,16 +41,16 @@ func (g *Generator) Generate(ctx context.Context) error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := g.db.Shutdown(shutdownCtx); err != nil {
-			log.Printf("warning: database shutdown encountered error: %v", err)
+			slog.Warn("database shutdown encountered error", "error", err)
 		}
 	}()
 
 	// Initialize components
 	g.introspect = NewIntrospector(g.db, g.config.Schema)
-	g.codegen = NewCodeGenerator(g.config)
+	g.codegen = NewCodeGenerator(g.config, g.version)
 
 	if g.config.Verbose {
-		log.Printf("Connected to database, schema: %s", g.config.Schema)
+		slog.Info("Connected to database", "schema", g.config.Schema)
 	}
 
 	// Generate table-based repositories
@@ -94,7 +96,7 @@ func (g *Generator) Generate(ctx context.Context) error {
 	}
 
 	if g.config.Verbose {
-		log.Printf("Successfully generated code in %s", g.config.OutputDir)
+		slog.Info("Successfully generated code", "output_dir", g.config.OutputDir)
 	}
 
 	return nil
@@ -116,7 +118,7 @@ func (g *Generator) connect(ctx context.Context) error {
 // generateTables generates repositories for database tables
 func (g *Generator) generateTables(ctx context.Context) error {
 	if g.config.Verbose {
-		log.Println("Starting table introspection...")
+		slog.Info("Starting table introspection")
 	}
 
 	// Get all tables in the schema
@@ -126,7 +128,7 @@ func (g *Generator) generateTables(ctx context.Context) error {
 	}
 
 	if g.config.Verbose {
-		log.Printf("Found %d tables in schema '%s'", len(tables), g.config.Schema)
+		slog.Info("Found tables in schema", "count", len(tables), "schema", g.config.Schema)
 	}
 
 	// Filter tables based on include patterns
@@ -138,13 +140,13 @@ func (g *Generator) generateTables(ctx context.Context) error {
 	}
 
 	if g.config.Verbose {
-		log.Printf("Generating code for %d tables after filtering", len(filteredTables))
+		slog.Info("Generating code for tables after filtering", "count", len(filteredTables))
 	}
 
 	// Generate code for each table
 	for _, table := range filteredTables {
 		if g.config.Verbose {
-			log.Printf("Generating repository for table: %s", table.Name)
+			slog.Info("Generating repository for table", "table", table.Name)
 		}
 
 		// Validate table has UUID primary key
@@ -184,7 +186,7 @@ func (g *Generator) generateSharedRetryOperations() error {
 // generateQueries generates code from SQL query files
 func (g *Generator) generateQueries(ctx context.Context) error {
 	if g.config.Verbose {
-		log.Printf("Starting query generation from directory: %s", g.config.QueriesDir)
+		slog.Info("Starting query generation from directory", "dir", g.config.QueriesDir)
 	}
 
 	// Parse SQL files
@@ -195,14 +197,14 @@ func (g *Generator) generateQueries(ctx context.Context) error {
 	}
 
 	if g.config.Verbose {
-		log.Printf("Found %d queries to generate", len(queries))
+		slog.Info("Found queries to generate", "count", len(queries))
 	}
 
 	// Analyze queries against database
-	analyzer := NewQueryAnalyzer(g.db)
+	analyzer := NewQueryAnalyzer(g.db, g.config.Schema)
 	for i := range queries {
 		if g.config.Verbose {
-			log.Printf("Analyzing query: %s", queries[i].Name)
+			slog.Info("Analyzing query", "name", queries[i].Name)
 		}
 
 		if err := analyzer.AnalyzeQuery(ctx, &queries[i]); err != nil {

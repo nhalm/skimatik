@@ -43,7 +43,7 @@ SELECT id, status FROM payment_links WHERE id = $1;`
 		t.Fatalf("Expected 1 query, got %d", len(queries))
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -107,7 +107,7 @@ SELECT id, description FROM payment_links WHERE id = $1;`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -169,7 +169,7 @@ WHERE payment_link_id = $1;`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -238,7 +238,7 @@ WHERE user_id = $1;`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -319,7 +319,7 @@ WHERE post_id = $1;`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -414,7 +414,7 @@ ORDER BY post_count DESC;`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -530,7 +530,7 @@ ORDER BY post_count DESC;`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -612,7 +612,7 @@ WHERE status = $1;`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -716,7 +716,7 @@ WHERE id = $1;`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -803,7 +803,7 @@ WHERE id = $1;`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -881,7 +881,7 @@ WHERE id = $1;`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -956,7 +956,7 @@ WHERE id = $1;`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -1039,7 +1039,7 @@ WHERE id = $1;`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -1124,7 +1124,7 @@ WHERE p.status = 'published';`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -1229,7 +1229,7 @@ LEFT JOIN posts p ON u.id = p.user_id;`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -1348,7 +1348,7 @@ WHERE p.status = 'published';`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -1454,7 +1454,7 @@ LEFT JOIN posts p ON pc.post_id = p.id;`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -1578,7 +1578,7 @@ WHERE user_id = $1;`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -1660,7 +1660,7 @@ WHERE status = 'published';`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -1734,7 +1734,7 @@ ORDER BY published_at;`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -1829,7 +1829,7 @@ WHERE status = 'published';`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -1919,7 +1919,7 @@ ORDER BY p.user_id, p.view_count DESC;`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -2049,7 +2049,7 @@ FROM active_users;`
 		t.Fatalf("Expected 1 query, got %d", len(queries))
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -2135,7 +2135,7 @@ INNER JOIN (
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -2231,7 +2231,7 @@ WHERE pl.id = $1;`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -2362,7 +2362,7 @@ LEFT JOIN comment_stats cs ON cs.post_id = pd.id;`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -2490,7 +2490,7 @@ ORDER BY up.id, c.created_at;`
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -2606,7 +2606,7 @@ WHERE user_id = $1;`
 		t.Fatalf("Expected 1 query, got %d", len(queries))
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -2677,7 +2677,7 @@ WHERE user_id = $1;`
 		t.Fatalf("Expected 1 query, got %d", len(queries))
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
@@ -2748,7 +2748,7 @@ WHERE id = $1;`
 		t.Fatalf("Expected 1 query, got %d", len(queries))
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err == nil {
 		t.Fatal("Expected error for annotation on non-existent column, got nil")
@@ -2797,7 +2797,7 @@ SELECT view_count, like_count FROM posts WHERE id = $1;`
 		t.Fatalf("Expected 1 query, got %d", len(queries))
 	}
 
-	analyzer := NewQueryAnalyzer(testDB)
+	analyzer := NewQueryAnalyzer(testDB, "public")
 	err = analyzer.AnalyzeQuery(ctx, &queries[0])
 	if err != nil {
 		t.Fatalf("Failed to analyze query: %v", err)
