@@ -527,7 +527,10 @@ func (qa *QueryAnalyzer) analyzeQueryColumns(ctx context.Context, query *Query) 
 	var columns []Column
 
 	for _, field := range fieldDescriptions {
-		// Map PostgreSQL OID to type name
+		// Detect if this is an array type
+		isArray := qa.isArrayOID(field.DataTypeOID)
+
+		// Map PostgreSQL OID to base type name
 		pgType := qa.mapOIDToTypeName(field.DataTypeOID)
 
 		// Determine if the column is nullable using intelligent detection
@@ -536,14 +539,14 @@ func (qa *QueryAnalyzer) analyzeQueryColumns(ctx context.Context, query *Query) 
 			return fmt.Errorf("failed to determine nullability for %s: %w", field.Name, err)
 		}
 
-		// Map to Go type
-		goType, err := qa.mapToIntelligentGoType(pgType, isNullable)
+		// Map to Go type using TypeMapper which handles arrays and nullability
+		goType, err := qa.typeMapper.MapType(pgType, isNullable, isArray)
 		if err != nil {
-			return fmt.Errorf("failed to map column type for %s (pgType=%s, nullable=%v): %w", field.Name, pgType, isNullable, err)
+			return fmt.Errorf("failed to map column type for %s (pgType=%s, nullable=%v, array=%v): %w", field.Name, pgType, isNullable, isArray, err)
 		}
 
 		if goType == "" {
-			return fmt.Errorf("empty GoType generated for column %s (pgType=%s, nullable=%v)", field.Name, pgType, isNullable)
+			return fmt.Errorf("empty GoType generated for column %s (pgType=%s, nullable=%v, array=%v)", field.Name, pgType, isNullable, isArray)
 		}
 
 		column := Column{
@@ -551,7 +554,7 @@ func (qa *QueryAnalyzer) analyzeQueryColumns(ctx context.Context, query *Query) 
 			Type:       pgType,
 			GoType:     goType,
 			IsNullable: isNullable,
-			IsArray:    false, // TODO: Detect array types from OID
+			IsArray:    isArray,
 		}
 		columns = append(columns, column)
 	}
@@ -765,44 +768,56 @@ func (qa *QueryAnalyzer) mapToIntelligentGoType(pgType string, isNullable bool) 
 }
 
 // mapOIDToTypeName maps PostgreSQL OID to type name
+// Handles both base types and array types, returning the base type name
 func (qa *QueryAnalyzer) mapOIDToTypeName(oid uint32) string {
-	// Common PostgreSQL type OIDs
-	// This is a simplified mapping - in a production system, you'd want a more comprehensive mapping
 	switch oid {
-	case 16:
+	case 16, 1000: // boolean, boolean[]
 		return "boolean"
-	case 20:
-		return "bigint"
-	case 21:
-		return "smallint"
-	case 23:
-		return "integer"
-	case 25:
-		return "text"
-	case 700:
-		return "real"
-	case 701:
-		return "double precision"
-	case 1043:
-		return "varchar"
-	case 1082:
-		return "date"
-	case 1114:
-		return "timestamp"
-	case 1184:
-		return "timestamptz"
-	case 1700:
-		return "numeric"
-	case 2950:
-		return "uuid"
-	case 114:
-		return "json"
-	case 3802:
-		return "jsonb"
-	case 17:
+	case 17, 1001: // bytea, bytea[]
 		return "bytea"
+	case 21, 1005: // smallint, smallint[]
+		return "smallint"
+	case 23, 1007: // integer, integer[]
+		return "integer"
+	case 20, 1016: // bigint, bigint[]
+		return "bigint"
+	case 25, 1009: // text, text[]
+		return "text"
+	case 1042, 1014: // char, char[]
+		return "char"
+	case 1043, 1015: // varchar, varchar[]
+		return "varchar"
+	case 700, 1021: // real, real[]
+		return "real"
+	case 701, 1022: // double precision, double precision[]
+		return "double precision"
+	case 1082, 1182: // date, date[]
+		return "date"
+	case 1114, 1183: // timestamp, timestamp[]
+		return "timestamp"
+	case 1184, 1185: // timestamptz, timestamptz[]
+		return "timestamptz"
+	case 1700, 1231: // numeric, numeric[]
+		return "numeric"
+	case 2950, 2951: // uuid, uuid[]
+		return "uuid"
+	case 114: // json (no array type commonly used)
+		return "json"
+	case 3802, 3807: // jsonb, jsonb[]
+		return "jsonb"
 	default:
-		return "unknown" // Return unknown for unrecognized OIDs
+		return "unknown"
+	}
+}
+
+// isArrayOID checks if a PostgreSQL OID represents an array type
+func (qa *QueryAnalyzer) isArrayOID(oid uint32) bool {
+	switch oid {
+	case 1000, 1001, 1005, 1007, 1009, 1014, 1015, 1016, 1021, 1022,
+		1182, 1183, 1185, 1231, 2951, 3807:
+		return true
+	default:
+		return false
 	}
 }
 
