@@ -329,15 +329,24 @@ func TestQueryAnalyzer_MapOIDToTypeName(t *testing.T) {
 		expected string
 	}{
 		{"text type", 25, "text"},
+		{"text array", 1009, "text"},
 		{"varchar type", 1043, "varchar"},
+		{"varchar array", 1015, "varchar"},
 		{"integer type", 23, "integer"},
+		{"integer array", 1007, "integer"},
 		{"bigint type", 20, "bigint"},
+		{"bigint array", 1016, "bigint"},
 		{"boolean type", 16, "boolean"},
+		{"boolean array", 1000, "boolean"},
 		{"uuid type", 2950, "uuid"},
+		{"uuid array", 2951, "uuid"},
 		{"timestamp type", 1114, "timestamp"},
+		{"timestamp array", 1183, "timestamp"},
 		{"timestamptz type", 1184, "timestamptz"},
+		{"timestamptz array", 1185, "timestamptz"},
 		{"json type", 114, "json"},
 		{"jsonb type", 3802, "jsonb"},
+		{"jsonb array", 3807, "jsonb"},
 		{"unknown type", 99999, "unknown"},
 	}
 
@@ -348,6 +357,40 @@ func TestQueryAnalyzer_MapOIDToTypeName(t *testing.T) {
 			result := analyzer.mapOIDToTypeName(tt.oid)
 			if result != tt.expected {
 				t.Errorf("mapOIDToTypeName(%d) = %q, want %q", tt.oid, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestQueryAnalyzer_IsArrayOID(t *testing.T) {
+	tests := []struct {
+		name     string
+		oid      uint32
+		expected bool
+	}{
+		{"text array", 1009, true},
+		{"integer array", 1007, true},
+		{"uuid array", 2951, true},
+		{"bigint array", 1016, true},
+		{"boolean array", 1000, true},
+		{"jsonb array", 3807, true},
+		{"float4 array", 1021, true},
+		{"float8 array", 1022, true},
+		{"timestamptz array", 1185, true},
+		{"varchar array", 1015, true},
+		{"text (not array)", 25, false},
+		{"integer (not array)", 23, false},
+		{"uuid (not array)", 2950, false},
+		{"unknown type", 99999, false},
+	}
+
+	analyzer := NewQueryAnalyzer(nil)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := analyzer.isArrayOID(tt.oid)
+			if result != tt.expected {
+				t.Errorf("isArrayOID(%d) = %v, want %v", tt.oid, result, tt.expected)
 			}
 		})
 	}

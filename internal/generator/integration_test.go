@@ -213,6 +213,97 @@ func TestSystem_RealWorldScenarios(t *testing.T) {
 	}
 }
 
+// TestSystem_ArrayColumnSupport tests array column type detection in query results
+func TestSystem_ArrayColumnSupport(t *testing.T) {
+	db := getTestDB(t)
+	ctx := context.Background()
+
+	analyzer := NewQueryAnalyzer(db)
+
+	tests := []struct {
+		name           string
+		query          *Query
+		expectedArrays map[string]bool
+		expectedTypes  map[string]string
+	}{
+		{
+			name: "data_types_test_array_columns",
+			query: &Query{
+				Name: "GetDataTypesArrays",
+				Type: QueryTypeMany,
+				SQL:  "SELECT id, text_array_field, integer_array_field, uuid_array_field FROM data_types_test",
+			},
+			expectedArrays: map[string]bool{
+				"id":                  false,
+				"text_array_field":    true,
+				"integer_array_field": true,
+				"uuid_array_field":    true,
+			},
+			expectedTypes: map[string]string{
+				"id":                  "uuid.UUID",
+				"text_array_field":    "[]*string",
+				"integer_array_field": "[]*int",
+				"uuid_array_field":    "[]*uuid.UUID",
+			},
+		},
+		{
+			name: "posts_tags_array",
+			query: &Query{
+				Name: "GetPostTags",
+				Type: QueryTypeMany,
+				SQL:  "SELECT id, title, tags FROM posts",
+			},
+			expectedArrays: map[string]bool{
+				"id":    false,
+				"title": false,
+				"tags":  true,
+			},
+			expectedTypes: map[string]string{
+				"id":    "uuid.UUID",
+				"title": "string",
+				"tags":  "[]*string",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := analyzer.AnalyzeQuery(ctx, tt.query)
+			if err != nil {
+				t.Fatalf("Failed to analyze query: %v", err)
+			}
+
+			if len(tt.query.Columns) == 0 {
+				t.Fatal("No columns detected in query")
+			}
+
+			for _, col := range tt.query.Columns {
+				expectedIsArray, found := tt.expectedArrays[col.Name]
+				if !found {
+					t.Errorf("Unexpected column: %s", col.Name)
+					continue
+				}
+
+				if col.IsArray != expectedIsArray {
+					t.Errorf("Column %s: IsArray = %v, want %v", col.Name, col.IsArray, expectedIsArray)
+				}
+
+				expectedType, found := tt.expectedTypes[col.Name]
+				if !found {
+					t.Errorf("No expected type for column: %s", col.Name)
+					continue
+				}
+
+				if col.GoType != expectedType {
+					t.Errorf("Column %s: GoType = %q, want %q", col.Name, col.GoType, expectedType)
+				}
+			}
+		})
+	}
+
+	t.Log("✅ Array column support test passed: arrays detected correctly in query results")
+}
+
 // TestSystem_ErrorHandling tests system error handling
 func TestSystem_ErrorHandling(t *testing.T) {
 	setupIntegrationTest(t)
