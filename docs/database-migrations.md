@@ -462,13 +462,7 @@ make generate
 
 ### Migration Table
 
-golang-migrate creates a `schema_migrations` table to track applied migrations. This table should be excluded from skimatik generation:
-
-```yaml
-# skimatik.yaml
-exclude:
-  - "schema_migrations"
-```
+golang-migrate creates a `schema_migrations` table to track applied migrations. This table is automatically skipped by skimatik since it doesn't have a UUID primary key.
 
 ## Example: Complete Feature Addition
 
