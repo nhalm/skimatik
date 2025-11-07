@@ -801,7 +801,7 @@ func (qa *QueryAnalyzer) mapOIDToTypeName(oid uint32) string {
 		return "numeric"
 	case 2950, 2951: // uuid, uuid[]
 		return "uuid"
-	case 114: // json (no array type commonly used)
+	case 114, 199: // json, json[]
 		return "json"
 	case 3802, 3807: // jsonb, jsonb[]
 		return "jsonb"
@@ -813,7 +813,7 @@ func (qa *QueryAnalyzer) mapOIDToTypeName(oid uint32) string {
 // isArrayOID checks if a PostgreSQL OID represents an array type
 func (qa *QueryAnalyzer) isArrayOID(oid uint32) bool {
 	switch oid {
-	case 1000, 1001, 1005, 1007, 1009, 1014, 1015, 1016, 1021, 1022,
+	case 199, 1000, 1001, 1005, 1007, 1009, 1014, 1015, 1016, 1021, 1022,
 		1182, 1183, 1185, 1231, 2951, 3807:
 		return true
 	default:

@@ -345,6 +345,7 @@ func TestQueryAnalyzer_MapOIDToTypeName(t *testing.T) {
 		{"timestamptz type", 1184, "timestamptz"},
 		{"timestamptz array", 1185, "timestamptz"},
 		{"json type", 114, "json"},
+		{"json array", 199, "json"},
 		{"jsonb type", 3802, "jsonb"},
 		{"jsonb array", 3807, "jsonb"},
 		{"unknown type", 99999, "unknown"},
@@ -378,6 +379,7 @@ func TestQueryAnalyzer_IsArrayOID(t *testing.T) {
 		{"float8 array", 1022, true},
 		{"timestamptz array", 1185, true},
 		{"varchar array", 1015, true},
+		{"json array", 199, true},
 		{"text (not array)", 25, false},
 		{"integer (not array)", 23, false},
 		{"uuid (not array)", 2950, false},
@@ -393,6 +395,112 @@ func TestQueryAnalyzer_IsArrayOID(t *testing.T) {
 				t.Errorf("isArrayOID(%d) = %v, want %v", tt.oid, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestQueryAnalyzer_OIDMapping_Synchronization(t *testing.T) {
+	analyzer := NewQueryAnalyzer(nil)
+
+	// All known array OIDs that should be in both functions
+	arrayOIDs := []uint32{
+		199,  // json[]
+		1000, // boolean[]
+		1001, // bytea[]
+		1005, // smallint[]
+		1007, // integer[]
+		1009, // text[]
+		1014, // char[]
+		1015, // varchar[]
+		1016, // bigint[]
+		1021, // real[]
+		1022, // double precision[]
+		1182, // date[]
+		1183, // timestamp[]
+		1185, // timestamptz[]
+		1231, // numeric[]
+		2951, // uuid[]
+		3807, // jsonb[]
+	}
+
+	// All known base type OIDs that should NOT be arrays
+	baseOIDs := []uint32{
+		16,   // boolean
+		17,   // bytea
+		20,   // bigint
+		21,   // smallint
+		23,   // integer
+		25,   // text
+		114,  // json
+		700,  // real
+		701,  // double precision
+		1042, // char
+		1043, // varchar
+		1082, // date
+		1114, // timestamp
+		1184, // timestamptz
+		1700, // numeric
+		2950, // uuid
+		3802, // jsonb
+	}
+
+	// Test 1: All array OIDs should return true from isArrayOID
+	for _, oid := range arrayOIDs {
+		if !analyzer.isArrayOID(oid) {
+			t.Errorf("Array OID %d should return true from isArrayOID(), but returned false", oid)
+		}
+	}
+
+	// Test 2: All base type OIDs should return false from isArrayOID
+	for _, oid := range baseOIDs {
+		if analyzer.isArrayOID(oid) {
+			t.Errorf("Base type OID %d should return false from isArrayOID(), but returned true", oid)
+		}
+	}
+
+	// Test 3: All array OIDs should map to a known type (not "unknown")
+	for _, oid := range arrayOIDs {
+		typeName := analyzer.mapOIDToTypeName(oid)
+		if typeName == "unknown" {
+			t.Errorf("Array OID %d maps to 'unknown', but should map to a base type", oid)
+		}
+	}
+
+	// Test 4: All base type OIDs should map to a known type (not "unknown")
+	for _, oid := range baseOIDs {
+		typeName := analyzer.mapOIDToTypeName(oid)
+		if typeName == "unknown" {
+			t.Errorf("Base type OID %d maps to 'unknown', but should map to a base type", oid)
+		}
+	}
+
+	// Test 5: Array and base OIDs should map to the same base type
+	pairings := map[uint32]uint32{
+		16:   1000, // boolean -> boolean[]
+		17:   1001, // bytea -> bytea[]
+		21:   1005, // smallint -> smallint[]
+		23:   1007, // integer -> integer[]
+		25:   1009, // text -> text[]
+		1042: 1014, // char -> char[]
+		1043: 1015, // varchar -> varchar[]
+		20:   1016, // bigint -> bigint[]
+		700:  1021, // real -> real[]
+		701:  1022, // double precision -> double precision[]
+		1082: 1182, // date -> date[]
+		1114: 1183, // timestamp -> timestamp[]
+		1184: 1185, // timestamptz -> timestamptz[]
+		1700: 1231, // numeric -> numeric[]
+		2950: 2951, // uuid -> uuid[]
+		114:  199,  // json -> json[]
+		3802: 3807, // jsonb -> jsonb[]
+	}
+
+	for baseOID, arrayOID := range pairings {
+		baseType := analyzer.mapOIDToTypeName(baseOID)
+		arrayType := analyzer.mapOIDToTypeName(arrayOID)
+		if baseType != arrayType {
+			t.Errorf("Base OID %d (%s) and array OID %d (%s) should map to the same type",
+				baseOID, baseType, arrayOID, arrayType)
+		}
 	}
 }
 
