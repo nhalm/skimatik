@@ -66,7 +66,7 @@ DESCRIPTION:
 REQUIREMENTS:
     - PostgreSQL 12+ database
     - Tables must have UUID primary keys for pagination
-    - Go 1.21+ for generated code
+    - Go 1.24+ for generated code
 
 OPTIONS:
 `)
@@ -184,7 +184,7 @@ MORE INFO:
 		cfg.Verbose = true
 	}
 
-	gen := generator.New(cfg)
+	gen := generator.New(cfg, getVersion())
 	ctx := context.Background()
 
 	if err := gen.Generate(ctx); err != nil {

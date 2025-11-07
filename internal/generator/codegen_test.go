@@ -12,7 +12,7 @@ import (
 
 func TestNewCodeGenerator(t *testing.T) {
 	config := getTestConfig()
-	cg := NewCodeGenerator(config)
+	cg := NewCodeGenerator(config, "test")
 
 	if cg.config != config {
 		t.Error("Config not set correctly")
@@ -20,7 +20,7 @@ func TestNewCodeGenerator(t *testing.T) {
 }
 
 func TestCodeGenerator_prepareCRUDTemplateData(t *testing.T) {
-	cg := NewCodeGenerator(getTestConfig())
+	cg := NewCodeGenerator(getTestConfig(), "test")
 	table := getTestTable()
 
 	data, err := cg.prepareCRUDTemplateData(table)
@@ -68,7 +68,7 @@ func TestCodeGenerator_prepareCRUDTemplateData(t *testing.T) {
 }
 
 func TestCodeGenerator_combineImports(t *testing.T) {
-	cg := NewCodeGenerator(getTestConfig())
+	cg := NewCodeGenerator(getTestConfig(), "test")
 
 	list1 := []string{"context", "fmt"}
 	list2 := []string{"fmt", "time", "context"}
@@ -100,7 +100,7 @@ func TestCodeGenerator_combineImports(t *testing.T) {
 func TestCodeGenerator_GenerateTableRepository_Integration(t *testing.T) {
 	config := getTestConfigWithTempDir(t)
 
-	cg := NewCodeGenerator(config)
+	cg := NewCodeGenerator(config, "test")
 	table := getTestTable()
 
 	// Generate the repository
