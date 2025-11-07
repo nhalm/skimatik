@@ -18,15 +18,17 @@ import (
 // It generates intelligent types that match TypeMapper conventions (int for all integers, pointers for nullability).
 type QueryAnalyzer struct {
 	db         *pgxkit.DB
+	schema     string
 	typeMapper *TypeMapper
 	sqlParser  *SQLParser
 }
 
-// NewQueryAnalyzer creates a new query analyzer with the given database connection.
+// NewQueryAnalyzer creates a new query analyzer with the given database connection and schema.
 // The database is used to introspect query structure and validate syntax.
-func NewQueryAnalyzer(db *pgxkit.DB) *QueryAnalyzer {
+func NewQueryAnalyzer(db *pgxkit.DB, schema string) *QueryAnalyzer {
 	return &QueryAnalyzer{
 		db:         db,
+		schema:     schema,
 		typeMapper: NewTypeMapper(nil),
 		sqlParser:  NewSQLParser(),
 	}
@@ -325,12 +327,12 @@ func (qa *QueryAnalyzer) inferParameterNullability(ctx context.Context, query *Q
 
 		// Query information_schema to check if column is nullable
 		schemaQuery := `SELECT is_nullable FROM information_schema.columns
-		                WHERE table_schema = 'public'
-		                AND table_name = $1
-		                AND column_name = $2`
+		                WHERE table_schema = $1
+		                AND table_name = $2
+		                AND column_name = $3`
 
 		var isNullable string
-		err := qa.db.QueryRow(ctx, schemaQuery, param.TableName, param.ColumnName).Scan(&isNullable)
+		err := qa.db.QueryRow(ctx, schemaQuery, qa.schema, param.TableName, param.ColumnName).Scan(&isNullable)
 		if err != nil {
 			// If we can't find the column, skip nullability (might be an alias or expression)
 			continue
@@ -505,18 +507,14 @@ func (qa *QueryAnalyzer) analyzeQueryColumns(ctx context.Context, query *Query) 
 	sql := strings.TrimSpace(query.SQL)
 	sql = strings.TrimSuffix(sql, ";")
 
-	// Add LIMIT 0 to avoid executing the full query
-	// We append directly to preserve parameter placeholders for binding
-	limitedSQL := fmt.Sprintf("%s LIMIT 0", sql)
-
 	// Prepare dummy parameter values for execution
 	var paramValues []interface{}
 	for range query.Parameters {
 		paramValues = append(paramValues, nil) // Use nil for all parameters
 	}
 
-	// Execute the query with actual parameters to get column information
-	rows, err := qa.db.Query(ctx, limitedSQL, paramValues...)
+	// Execute the query to get column information
+	rows, err := qa.db.Query(ctx, sql, paramValues...)
 	if err != nil {
 		return fmt.Errorf("failed to analyze query columns: %w", err)
 	}

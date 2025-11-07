@@ -14,7 +14,7 @@ func TestInlinePagination_TemplateGeneration(t *testing.T) {
 		},
 	}
 
-	cg := NewCodeGenerator(config)
+	cg := NewCodeGenerator(config, "test")
 	table := getTestTable()
 
 	// Test shared pagination types generation
@@ -86,7 +86,7 @@ func TestInlinePagination_CursorLogic(t *testing.T) {
 		Verbose:     false,
 	}
 
-	cg := NewCodeGenerator(config)
+	cg := NewCodeGenerator(config, "test")
 
 	// Generate shared pagination types
 	err := cg.GenerateSharedPaginationTypes()
@@ -142,7 +142,7 @@ func TestInlinePagination_CursorLogic(t *testing.T) {
 }
 
 func TestInlinePagination_GetIDMethod(t *testing.T) {
-	cg := NewCodeGenerator(getTestConfig())
+	cg := NewCodeGenerator(getTestConfig(), "test")
 	table := getTestTable()
 
 	// Generate struct code
