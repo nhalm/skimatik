@@ -303,27 +303,6 @@ Output includes:
 
 ---
 
-## Environment Variables
-
-skimatik supports standard PostgreSQL environment variables for database connection:
-
-```bash
-# Full connection string
-export DATABASE_URL="postgres://user:pass@localhost:5432/mydb"
-
-# Or individual components
-export POSTGRES_HOST="localhost"
-export POSTGRES_PORT="5432"
-export POSTGRES_USER="myuser"
-export POSTGRES_PASSWORD="mypass"
-export POSTGRES_DB="mydb"
-export POSTGRES_SSLMODE="disable"
-```
-
-These are used if `database.dsn` is not specified in the config file.
-
----
-
 ## CLI Flags
 
 ```bash
