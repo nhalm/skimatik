@@ -16,21 +16,25 @@ skimatik generates comprehensive error handling patterns that provide structured
 ### Core Error Types
 
 #### `NotFoundError`
-Used when a requested resource doesn't exist.
+Used when a requested resource doesn't exist. The error handling automatically converts `pgx.ErrNoRows` to `ErrNotFound`.
 
 ```go
+import (
+    "context"
+    "fmt"
+
+    "github.com/google/uuid"
+)
+
 // Generated usage in Get operations
 func (r *UsersRepository) Get(ctx context.Context, id uuid.UUID) (*Users, error) {
     query := `SELECT id, name, email, created_at FROM users WHERE id = $1`
-    
+
     row := ExecuteQueryRow(ctx, r.db, "get", "Users", query, id)
     var user Users
     err := row.Scan(&user.Id, &user.Name, &user.Email, &user.CreatedAt)
-    if err != nil {
-        if err == pgx.ErrNoRows {
-            return nil, NewNotFoundError("Users", id.String())
-        }
-        return nil, HandleQueryRowError("get", "Users", err)
+    if err := HandleQueryRowError("get", "Users", err); err != nil {
+        return nil, err
     }
     return &user, nil
 }
@@ -46,22 +50,18 @@ if err != nil {
 ```
 
 #### `AlreadyExistsError`
-Used when attempting to create a resource that already exists.
+Used when attempting to create a resource that already exists. The error handling automatically detects PostgreSQL unique constraint violations (error code 23505) and converts them to `ErrAlreadyExists`.
 
 ```go
 // Generated usage in Create operations
 func (r *UsersRepository) Create(ctx context.Context, params CreateUsersParams) (*Users, error) {
     query := `INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id, name, email, created_at`
-    
+
     row := ExecuteQueryRow(ctx, r.db, "create", "Users", query, params.Name, params.Email)
     var user Users
     err := row.Scan(&user.Id, &user.Name, &user.Email, &user.CreatedAt)
-    if err != nil {
-        // PostgreSQL unique constraint violation
-        if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" {
-            return nil, NewAlreadyExistsError("Users", "email", params.Email)
-        }
-        return nil, HandleQueryRowError("create", "Users", err)
+    if err := HandleQueryRowError("create", "Users", err); err != nil {
+        return nil, err
     }
     return &user, nil
 }
@@ -77,64 +77,71 @@ if err != nil {
 ```
 
 #### `ValidationError`
-Used when input data fails validation rules.
+Used when database constraints are violated. The error handling automatically detects PostgreSQL check constraint violations (error code 23514) and NOT NULL violations (error code 23502) and converts them to `ErrValidationFailed` or `ErrRequiredField`.
 
 ```go
-// Generated usage with parameter validation
+// Database-level validation (PostgreSQL CHECK constraints, NOT NULL)
 func (r *UsersRepository) Create(ctx context.Context, params CreateUsersParams) (*Users, error) {
-    // Validate required fields
-    if params.Name == "" {
-        return nil, NewValidationError("Users", "create", "name", "name cannot be empty", nil)
+    query := `INSERT INTO users (name, email, age) VALUES ($1, $2, $3) RETURNING id, name, email, age, created_at`
+
+    row := ExecuteQueryRow(ctx, r.db, "create", "Users", query, params.Name, params.Email, params.Age)
+    var user Users
+    err := row.Scan(&user.Id, &user.Name, &user.Email, &user.Age, &user.CreatedAt)
+    // HandleQueryRowError automatically detects constraint violations
+    if err := HandleQueryRowError("create", "Users", err); err != nil {
+        return nil, err
     }
-    if params.Email == "" {
-        return nil, NewValidationError("Users", "create", "email", "email cannot be empty", nil)
-    }
-    
-    // Email format validation
-    if !isValidEmail(params.Email) {
-        return nil, NewValidationError("Users", "create", "email", "invalid email format", 
-            map[string]interface{}{"provided": params.Email})
-    }
-    
-    // Proceed with database operation...
+    return &user, nil
 }
 
 // Usage in application code
 user, err := userRepo.Create(ctx, params)
 if err != nil {
-    if IsValidation(err) {
-        validationErr := err.(*ValidationError)
-        return nil, fmt.Errorf("validation failed for %s: %s", validationErr.Field, validationErr.Message)
+    if IsValidationError(err) {
+        return nil, fmt.Errorf("validation failed: %w", err)
     }
     return nil, fmt.Errorf("failed to create user: %w", err)
+}
+
+// Application-level validation (custom business logic)
+func (s *UserService) CreateUser(ctx context.Context, params CreateUsersParams) (*Users, error) {
+    // Custom validation before database operation
+    if params.Email == "" {
+        return nil, fmt.Errorf("email is required")
+    }
+    if !isValidEmail(params.Email) {
+        return nil, fmt.Errorf("invalid email format: %s", params.Email)
+    }
+
+    return s.usersRepo.Create(ctx, params)
 }
 ```
 
 #### `DatabaseError`
-Used for general database operation failures.
+Used for general database operation failures. All database errors are automatically wrapped in a `DatabaseError` struct that provides structured error information including operation, entity, and error type.
 
 ```go
 // Generated usage for connection and query errors
 func (r *UsersRepository) List(ctx context.Context) ([]Users, error) {
     query := `SELECT id, name, email, created_at FROM users ORDER BY created_at DESC`
-    
+
     rows, err := ExecuteQuery(ctx, r.db, "list", "Users", query)
     if err != nil {
-        // ExecuteQuery returns DatabaseError for connection issues
-        return nil, err  
+        // ExecuteQuery uses HandleDatabaseError for connection/query issues
+        return nil, err
     }
     defer rows.Close()
-    
+
     var results []Users
     for rows.Next() {
         var user Users
         err := rows.Scan(&user.Id, &user.Name, &user.Email, &user.CreatedAt)
         if err != nil {
-            return nil, NewDatabaseError("Users", "scan", err)
+            return nil, HandleDatabaseError("scan", "Users", err)
         }
         results = append(results, user)
     }
-    
+
     return results, HandleRowsResult("Users", rows)
 }
 ```
@@ -148,11 +155,10 @@ Every generated package includes these error detection utilities:
 ```go
 // Check specific error types
 func IsNotFound(err error) bool
-func IsAlreadyExists(err error) bool  
-func IsValidation(err error) bool
-func IsDatabase(err error) bool
+func IsAlreadyExists(err error) bool
+func IsValidationError(err error) bool
+func IsConnectionError(err error) bool
 func IsTimeout(err error) bool
-func IsConnection(err error) bool
 
 // Usage example
 if err != nil {
@@ -163,14 +169,17 @@ if err != nil {
     case IsAlreadyExists(err):
         // Handle duplicate resource
         return nil, fmt.Errorf("resource already exists")
-    case IsValidation(err):
+    case IsValidationError(err):
         // Handle validation failure
-        validationErr := err.(*ValidationError)
-        return nil, fmt.Errorf("validation error: %s", validationErr.Message)
+        var dbErr *DatabaseError
+        if errors.As(err, &dbErr) {
+            return nil, fmt.Errorf("validation error: %s", dbErr.Detail)
+        }
+        return nil, fmt.Errorf("validation error: %w", err)
     case IsTimeout(err):
         // Handle timeout
         return nil, fmt.Errorf("operation timed out")
-    case IsConnection(err):
+    case IsConnectionError(err):
         // Handle connection issues
         return nil, fmt.Errorf("database connection failed")
     default:
@@ -185,6 +194,13 @@ if err != nil {
 ### Pattern 1: Basic Error Handling
 
 ```go
+import (
+    "context"
+    "fmt"
+
+    "github.com/google/uuid"
+)
+
 func (s *UserService) GetUser(ctx context.Context, id uuid.UUID) (*User, error) {
     user, err := s.userRepo.Get(ctx, id)
     if err != nil {
@@ -207,7 +223,7 @@ func (s *UserService) CreateUserWithProfile(ctx context.Context, userData Create
             if IsAlreadyExists(err) {
                 return nil, fmt.Errorf("user with email %s already exists", userData.Email)
             }
-            if IsValidation(err) {
+            if IsValidationError(err) {
                 return nil, fmt.Errorf("user data validation failed: %w", err)
             }
             return nil, fmt.Errorf("failed to create user: %w", err)
@@ -219,7 +235,7 @@ func (s *UserService) CreateUserWithProfile(ctx context.Context, userData Create
         })
         if err != nil {
             // Enhance error with business context
-            if IsValidation(err) {
+            if IsValidationError(err) {
                 return nil, fmt.Errorf("profile validation failed for user %s: %w", user.Id, err)
             }
             return nil, fmt.Errorf("failed to create profile for user %s: %w", user.Id, err)
@@ -239,11 +255,11 @@ func mapDatabaseErrorToHTTPStatus(err error) (int, string) {
         return 404, "Resource not found"
     case IsAlreadyExists(err):
         return 409, "Resource already exists"
-    case IsValidation(err):
+    case IsValidationError(err):
         return 400, "Invalid input data"
     case IsTimeout(err):
         return 408, "Request timeout"
-    case IsConnection(err):
+    case IsConnectionError(err):
         return 503, "Service temporarily unavailable"
     default:
         return 500, "Internal server error"
@@ -279,18 +295,26 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 ### Structured Logging
 
 ```go
+import (
+    "context"
+    "fmt"
+    "time"
+
+    "github.com/google/uuid"
+)
+
 func (s *UserService) logError(operation string, err error, context map[string]interface{}) {
     logData := map[string]interface{}{
         "operation": operation,
         "error":     err.Error(),
         "timestamp": time.Now(),
     }
-    
+
     // Add context
     for k, v := range context {
         logData[k] = v
     }
-    
+
     // Add error type information
     switch {
     case IsNotFound(err):
@@ -299,7 +323,7 @@ func (s *UserService) logError(operation string, err error, context map[string]i
     case IsAlreadyExists(err):
         logData["error_type"] = "already_exists"
         logData["severity"] = "warning"
-    case IsValidation(err):
+    case IsValidationError(err):
         logData["error_type"] = "validation"
         logData["severity"] = "warning"
         if validationErr, ok := err.(*ValidationError); ok {
@@ -309,14 +333,14 @@ func (s *UserService) logError(operation string, err error, context map[string]i
     case IsTimeout(err):
         logData["error_type"] = "timeout"
         logData["severity"] = "error"
-    case IsConnection(err):
+    case IsConnectionError(err):
         logData["error_type"] = "connection"
         logData["severity"] = "critical"
     default:
         logData["error_type"] = "database"
         logData["severity"] = "error"
     }
-    
+
     // Use structured logger (e.g., logrus, zap)
     logger.WithFields(logData).Log(logData["severity"], "Database operation failed")
 }
@@ -329,7 +353,7 @@ func (s *UserService) GetUser(ctx context.Context, id uuid.UUID) (*User, error) 
             "user_id": id,
             "method":  "GetUser",
         })
-        
+
         if IsNotFound(err) {
             return nil, fmt.Errorf("user not found")
         }
@@ -356,11 +380,11 @@ func (m *ErrorMetrics) RecordError(operation string, err error) {
     switch {
     case IsNotFound(err):
         m.notFoundCount.With(labels).Inc()
-    case IsValidation(err):
+    case IsValidationError(err):
         m.validationCount.With(labels).Inc()
     case IsTimeout(err):
         m.timeoutCount.With(labels).Inc()
-    case IsConnection(err):
+    case IsConnectionError(err):
         m.connectionCount.With(labels).Inc()
     default:
         m.databaseCount.With(labels).Inc()
@@ -378,7 +402,7 @@ func (r *UsersRepository) CreateWithRetry(ctx context.Context, params CreateUser
         user, err := r.Create(ctx, params)
         if err != nil {
             // Don't retry validation or already exists errors
-            if IsValidation(err) || IsAlreadyExists(err) {
+            if IsValidationError(err) || IsAlreadyExists(err) {
                 return nil, err  // No retry for these
             }
             // Retry for connection, timeout, and other database errors
@@ -451,7 +475,7 @@ if IsNotFound(err) {
 }
 
 // Error level for unexpected failures
-if IsConnection(err) {
+if IsConnectionError(err) {
     log.Error("Database connection failed", "error", err)
 }
 ```
@@ -459,7 +483,7 @@ if IsConnection(err) {
 ### 4. Don't Retry Non-Retriable Errors
 ```go
 // Good - selective retry
-if IsValidation(err) || IsAlreadyExists(err) {
+if IsValidationError(err) || IsAlreadyExists(err) {
     return nil, err  // Don't retry
 }
 
@@ -498,7 +522,7 @@ func translateDatabaseError(err error) APIError {
                 },
             }
         }
-    case IsValidation(err):
+    case IsValidationError(err):
         if validationErr, ok := err.(*ValidationError); ok {
             return APIError{
                 Code:    "VALIDATION_ERROR",
