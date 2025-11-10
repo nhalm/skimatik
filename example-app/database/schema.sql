@@ -15,7 +15,7 @@ CREATE TABLE users (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Posts table  
+-- Posts table
 CREATE TABLE posts (
     id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     title       TEXT NOT NULL CHECK (length(title) >= 1),
@@ -23,6 +23,7 @@ CREATE TABLE posts (
     author_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     is_published BOOLEAN NOT NULL DEFAULT false,
     published_at TIMESTAMPTZ,
+    view_count  INTEGER NOT NULL DEFAULT 0,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -57,6 +58,7 @@ CREATE TABLE post_tags (
 -- Indexes for performance
 CREATE INDEX idx_posts_author_id ON posts(author_id);
 CREATE INDEX idx_posts_published_at ON posts(published_at) WHERE is_published = true;
+CREATE INDEX idx_posts_view_count ON posts(view_count DESC) WHERE is_published = true;
 CREATE INDEX idx_comments_post_id ON comments(post_id);
 CREATE INDEX idx_comments_author_id ON comments(author_id);
 CREATE INDEX idx_users_email ON users(email);
