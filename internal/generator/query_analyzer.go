@@ -710,61 +710,6 @@ func (qa *QueryAnalyzer) isTableNullableFromJoin(tableName, sql string) bool {
 	return false
 }
 
-// isCountAggregate checks if a column is a COUNT aggregate
-func (qa *QueryAnalyzer) isCountAggregate(columnName, sql string) bool {
-	// Parse the SQL to check if this column is a COUNT aggregate
-	queryInfo, err := qa.sqlParser.Parse(sql)
-	if err != nil {
-		return false
-	}
-
-	// Check if this column name matches a COUNT target
-	for _, target := range queryInfo.SelectTargets {
-		if strings.EqualFold(target.Alias, columnName) && target.IsCount {
-			return true
-		}
-	}
-
-	return false
-}
-
-// mapToIntelligentGoType maps PostgreSQL types to idiomatic Go types with intelligent nullability.
-// It matches TypeMapper behavior: all integers -> int, nullable -> pointers.
-func (qa *QueryAnalyzer) mapToIntelligentGoType(pgType string, isNullable bool) (string, error) {
-
-	var baseType string
-	switch strings.ToLower(pgType) {
-	case "uuid":
-		baseType = "uuid.UUID"
-	case "text", "varchar", "character varying", "char", "character":
-		baseType = "string"
-	case "smallint", "int2", "integer", "int", "int4", "bigint", "int8":
-		baseType = "int"
-	case "real", "float4":
-		baseType = "float32"
-	case "double precision", "float8", "numeric", "decimal":
-		baseType = "float64"
-	case "boolean", "bool":
-		baseType = "bool"
-	case "date", "time", "time without time zone", "timetz", "time with time zone",
-		"timestamp", "timestamp without time zone", "timestamptz", "timestamp with time zone":
-		baseType = "time.Time"
-	case "bytea":
-		baseType = "[]byte"
-	case "json", "jsonb":
-		baseType = "json.RawMessage"
-	default:
-		return "", fmt.Errorf("unsupported PostgreSQL type: %s", pgType)
-	}
-
-	// Apply nullable modifier
-	if isNullable {
-		return makePointerType(baseType), nil
-	}
-
-	return baseType, nil
-}
-
 // mapOIDToTypeName maps PostgreSQL OID to type name
 // Handles both base types and array types, returning the base type name
 func (qa *QueryAnalyzer) mapOIDToTypeName(oid uint32) string {
