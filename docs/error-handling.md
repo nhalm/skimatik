@@ -546,6 +546,6 @@ This comprehensive error handling approach ensures that your applications can gr
 
 ## Related Documentation
 
-- **[Shared Utilities Guide](Shared-Utilities-Guide)** - Database operations, retry logic, and error handling utilities
-- **[Embedding Patterns](Embedding-Patterns)** - Repository composition and extension patterns
-- **[Examples & Tutorials](Examples-and-Tutorials)** - Hands-on examples with real applications 
+- **[Shared Utilities Guide](shared-utilities)** - Database operations, retry logic, and error handling utilities
+- **[Embedding Patterns](embedding-patterns)** - Repository composition and extension patterns
+- **[Examples & Tutorials](examples)** - Hands-on examples with real applications 

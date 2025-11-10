@@ -331,6 +331,6 @@ This approach eliminates duplication while maintaining the flexibility and perfo
 
 ## Related Documentation
 
-- **[Embedding Patterns](Embedding-Patterns)** - Repository composition and extension patterns
-- **[Error Handling Guide](Error-Handling-Guide)** - Comprehensive error management strategies
-- **[Examples & Tutorials](Examples-and-Tutorials)** - Hands-on examples with real applications 
+- **[Embedding Patterns](embedding-patterns)** - Repository composition and extension patterns
+- **[Error Handling Guide](error-handling)** - Comprehensive error management strategies
+- **[Examples & Tutorials](examples)** - Hands-on examples with real applications 
