@@ -8,6 +8,37 @@
 
 A database-first code generator for PostgreSQL that creates type-safe Go repositories with built-in cursor-based pagination. Generate clean, efficient CRUD operations and custom query functions directly from your database schema.
 
+## Why skimatik?
+
+**Data is your domain**. Not business logic, not application code—your database schema is the true representation of your domain model. When you start with an ORM, you're defining your domain in application code, hiding critical information from the database where it belongs. This creates problems:
+
+- **Domain knowledge lives in the wrong place**: ORMs encourage logic in the application layer that should be constraints, indexes, and views in the database
+- **Tools can't help you**: Gen AI, data analysis tools, and database introspection can't understand your domain when it's scattered across application code
+- **Inefficient patterns emerge**: ORMs make it easy to run 100 queries when a single CTE could do the job, wasting CPU and memory assembling data that PostgreSQL could deliver complete
+- **Database illiteracy spreads**: When ORM-generated queries appear in logs as indecipherable messes, developers avoid learning how databases actually work—missing the chance to build faster, more scalable applications
+
+**skimatik takes a different approach**: Your PostgreSQL schema is the source of truth.
+
+**How it works**:
+
+1. **Database-aware generation**: Uses PostgreSQL's own query analyzer and planner to generate code. If the database says a column is NOT NULL, you get native Go types (`string`, `uuid.UUID`). Nullable? You get pointers (`*string`, `*uuid.UUID`). No wrapper types to unwrap.
+
+2. **Leverage PostgreSQL's power**: Want to join 5 tables with a CTE? Write the SQL. Get a type-safe function generated from it. The database does what it's incredible at—assembling complex data. Your application gets clean result types with zero reflection.
+
+3. **Self-documenting data layer**: Your database schema plus generated repositories create a clear contract. Other developers, AI tools, and data consumers can understand your domain by looking at the database—not spelunking through application code.
+
+4. **Production patterns included**: Cursor-based pagination using UUID v7 time-ordering, retry logic for transient failures, comprehensive error handling. These aren't afterthoughts—they're built into every generated repository.
+
+5. **Designed for extension**: Embed generated repositories into your own types. Add business logic, implement domain interfaces, compose repositories. The generated CRUD and utilities are your foundation, not your limitation.
+
+**Compared to ORMs**: ORMs hide the database, generate inefficient queries, and make debugging painful. They discourage developers from learning how databases work, leading to applications that need more resources and scale poorly.
+
+**Compared to sqlc**: sqlc gives you full SQL control and type safety through static SQL parsing, which is excellent. skimatik takes it further by using PostgreSQL's own query analyzer and information schema—we generate code based on what the database actually understands about your schema. You also get automatic CRUD repositories with built-in pagination, plus shared utilities for retry logic and error handling. With sqlc, you write every query manually, including basic operations.
+
+**When to use skimatik**: You believe your data model is your domain model. You want to leverage PostgreSQL's capabilities fully—complex queries, CTEs, proper indexing. You value compile-time safety and zero reflection. You want your database schema to be self-documenting and accessible to tools.
+
+**When to choose something else**: You're prototyping and don't care about performance. You prefer defining your domain in application code. You need to support multiple databases (though in practice, nobody switches databases).
+
 ## Features
 
 - **Database-First**: Works with existing PostgreSQL databases, no schema migrations required
