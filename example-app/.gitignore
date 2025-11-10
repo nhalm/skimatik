@@ -1,6 +1,3 @@
-# Generated code (skimatik generates this)
-repository/generated/
-
 # Build artifacts
 bin/
 *.exe
