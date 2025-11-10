@@ -72,8 +72,6 @@ dev-setup:
 	$(DOCKER_COMPOSE) up -d postgres
 	@echo "Waiting for database to be ready..."
 	@bash -c 'for i in {1..30}; do if pg_isready -h localhost -p 5432 -U skimatik -d skimatik_test >/dev/null 2>&1; then break; fi; sleep 1; done'
-	@echo "Running test data migrations..."
-	@./test/run_migrations.sh
 	@echo "✅ Development environment ready!"
 	@echo "Database URL: $(TEST_DB_URL)"
 
