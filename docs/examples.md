@@ -89,7 +89,7 @@ curl http://localhost:8080/health
 ```go
 // Generated repository with shared utilities
 type UsersRepository struct {
-    db *pgxpool.Pool
+    db *pgxkit.DB
 }
 
 func (r *UsersRepository) Create(ctx context.Context, params CreateUsersParams) (*Users, error) {
@@ -294,7 +294,7 @@ func (s *UserService) GetActiveUsers(ctx context.Context) ([]repositories.Users,
         users = append(users, user)
     }
     
-    return users, repositories.HandleRowsResult("Users", rows.Err())
+    return users, repositories.HandleRowsResult("Users", rows)
 }
 ```
 
@@ -360,4 +360,4 @@ The shared utility patterns ensure consistency across your entire codebase while
 - **[Shared Utilities Guide](shared-utilities)** - Database operations, retry logic, and error handling utilities
 - **[Embedding Patterns](embedding-patterns)** - Repository composition and extension patterns
 - **[Error Handling Guide](error-handling)** - Comprehensive error management strategies
-- **[Quick Start Guide](Quick-Start-Guide)** - Installation and basic usage 
+- **[Quick Start Guide](quick-start)** - Installation and basic usage 
