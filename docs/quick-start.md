@@ -291,7 +291,7 @@ func (s *UserService) GetActiveUsers(ctx context.Context) ([]repositories.Users,
         users = append(users, user)
     }
     
-    return users, repositories.HandleRowsResult("Users", rows.Err())
+    return users, repositories.HandleRowsResult("Users", rows)
 }
 ```
 

@@ -422,4 +422,4 @@ func TestUserHandler_CreateUser(t *testing.T) {
 - **Database changes** only affect generated layer
 
 This architecture leverages skimatik's generated repositories as a solid foundation while maintaining clean separation of concerns across your entire application stack. 
-- **[Examples & Tutorials](Examples-and-Tutorials)** - Hands-on examples with real applications 
+- **[Examples & Tutorials](examples)** - Hands-on examples with real applications 
