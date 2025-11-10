@@ -201,10 +201,12 @@ func main() {
 }
 ```
 
-### 2. Pagination
+### 2. Pagination (Table-Based Only)
+
+Table-based repositories include automatic cursor-based pagination:
 
 ```go
-// List first page (10 items)
+// List first page (10 items) - ONLY available for table-based repositories
 result, err := userRepo.ListPaginated(ctx, repositories.PaginationParams{
     Limit: 10,
 })
@@ -226,6 +228,8 @@ if result.HasMore {
     }
 }
 ```
+
+**Note**: Query-based functions (from SQL files) do NOT automatically include pagination. You must add `LIMIT` and `OFFSET` (or custom cursor logic) to your SQL queries.
 
 ### 3. Error Handling
 

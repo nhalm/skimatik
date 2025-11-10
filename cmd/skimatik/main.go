@@ -111,20 +111,31 @@ CONFIGURATION FILE:
             functions: ["create", "get", "list", "paginate"]
 
 GENERATED FILES:
-    Each table generates a *_generated.go file with:
+    Table-based generation (*_generated.go):
     - Struct representing the table
     - Repository with CRUD operations
-    - Pagination support with cursor-based queries
+    - Built-in pagination support with cursor-based queries
     - Type-safe parameter structs
+
+    Query-based generation (*_queries_generated.go):
+    - Struct representing query results
+    - Functions matching your SQL annotations (:one, :many, :exec)
+    - Type-safe parameter structs
+    - No automatic pagination (write your own SQL with LIMIT/OFFSET)
 
     Shared files:
     - pagination.go: Common pagination types and utilities
+    - database_operations.go: Shared database operation utilities
+    - retry_operations.go: Retry logic for transient failures
+    - errors.go: Error handling utilities
 
 PAGINATION:
-    All generated repositories include efficient cursor-based pagination:
+    Table-based repositories include efficient cursor-based pagination:
     - ListPaginated(ctx, PaginationParams) (*PaginationResult[T], error)
     - Uses UUID v7 time-ordering for consistent results
     - O(log n) performance regardless of dataset size
+
+    Query-based functions use your SQL as-is (add LIMIT/OFFSET as needed)
 
 MORE INFO:
     Documentation: https://github.com/nhalm/skimatik
