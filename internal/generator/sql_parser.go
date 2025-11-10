@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/wasilibs/go-pgquery"
+	pg_query_go "github.com/pganalyze/pg_query_go/v6"
 )
 
 // SQLParser provides SQL analysis using PostgreSQL's parser
@@ -97,7 +98,7 @@ func (sp *SQLParser) Parse(sql string) (*QueryInfo, error) {
 }
 
 // extractInfo extracts metadata from parse result
-func (sp *SQLParser) extractInfo(result *pg_query.ParseResult) (*QueryInfo, error) {
+func (sp *SQLParser) extractInfo(result *pg_query_go.ParseResult) (*QueryInfo, error) {
 	if len(result.Stmts) == 0 {
 		return nil, fmt.Errorf("no statements found in SQL")
 	}
@@ -123,7 +124,7 @@ func (sp *SQLParser) extractInfo(result *pg_query.ParseResult) (*QueryInfo, erro
 }
 
 // determineQueryType determines QueryType from parse tree node
-func (sp *SQLParser) determineQueryType(stmt *pg_query.Node) QueryType {
+func (sp *SQLParser) determineQueryType(stmt *pg_query_go.Node) QueryType {
 	if stmt.GetSelectStmt() != nil {
 		return QueryTypeMany
 	}
@@ -140,7 +141,7 @@ func (sp *SQLParser) determineQueryType(stmt *pg_query.Node) QueryType {
 }
 
 // extractJoins extracts JOIN information from SELECT statement
-func (sp *SQLParser) extractJoins(selectStmt *pg_query.SelectStmt) []JoinInfo {
+func (sp *SQLParser) extractJoins(selectStmt *pg_query_go.SelectStmt) []JoinInfo {
 	var joins []JoinInfo
 
 	if selectStmt.FromClause == nil {
@@ -155,7 +156,7 @@ func (sp *SQLParser) extractJoins(selectStmt *pg_query.SelectStmt) []JoinInfo {
 }
 
 // extractJoinsFromNode recursively extracts JOIN info from a node
-func (sp *SQLParser) extractJoinsFromNode(node *pg_query.Node, joins *[]JoinInfo) {
+func (sp *SQLParser) extractJoinsFromNode(node *pg_query_go.Node, joins *[]JoinInfo) {
 	joinExpr := node.GetJoinExpr()
 	if joinExpr == nil {
 		return
@@ -192,7 +193,7 @@ func (sp *SQLParser) extractJoinsFromNode(node *pg_query.Node, joins *[]JoinInfo
 }
 
 // extractTableIdentifier extracts table name or alias from a range node
-func (sp *SQLParser) extractTableIdentifier(node *pg_query.Node) string {
+func (sp *SQLParser) extractTableIdentifier(node *pg_query_go.Node) string {
 	if rangeVar := node.GetRangeVar(); rangeVar != nil {
 		// Prefer alias if available, otherwise use table name
 		if rangeVar.Alias != nil && rangeVar.Alias.Aliasname != "" {
@@ -212,7 +213,7 @@ func (sp *SQLParser) extractTableIdentifier(node *pg_query.Node) string {
 }
 
 // extractSelectTargets extracts columns from SELECT clause
-func (sp *SQLParser) extractSelectTargets(selectStmt *pg_query.SelectStmt) []SelectTarget {
+func (sp *SQLParser) extractSelectTargets(selectStmt *pg_query_go.SelectStmt) []SelectTarget {
 	var targets []SelectTarget
 
 	for _, node := range selectStmt.TargetList {
@@ -226,7 +227,7 @@ func (sp *SQLParser) extractSelectTargets(selectStmt *pg_query.SelectStmt) []Sel
 }
 
 // analyzeTargetNode analyzes a single target node
-func (sp *SQLParser) analyzeTargetNode(node *pg_query.Node) *SelectTarget {
+func (sp *SQLParser) analyzeTargetNode(node *pg_query_go.Node) *SelectTarget {
 	resTarget := node.GetResTarget()
 	if resTarget == nil {
 		return nil
@@ -260,7 +261,7 @@ func (sp *SQLParser) analyzeTargetNode(node *pg_query.Node) *SelectTarget {
 }
 
 // analyzeFuncCall detects aggregate and special functions
-func (sp *SQLParser) analyzeFuncCall(funcCall *pg_query.FuncCall, target *SelectTarget) {
+func (sp *SQLParser) analyzeFuncCall(funcCall *pg_query_go.FuncCall, target *SelectTarget) {
 	if len(funcCall.Funcname) == 0 {
 		return
 	}
@@ -301,14 +302,14 @@ func (sp *SQLParser) analyzeFuncCall(funcCall *pg_query.FuncCall, target *Select
 }
 
 // analyzeCoalesceExpr detects COALESCE expressions
-func (sp *SQLParser) analyzeCoalesceExpr(coalesceExpr *pg_query.CoalesceExpr, target *SelectTarget) {
+func (sp *SQLParser) analyzeCoalesceExpr(coalesceExpr *pg_query_go.CoalesceExpr, target *SelectTarget) {
 	target.IsCoalesce = true
 	// Check if any argument is a non-null literal
 	target.HasNonNullLiteral = sp.hasNonNullLiteralArg(coalesceExpr.Args)
 }
 
 // analyzeCaseExpr detects CASE expressions and checks for ELSE clause
-func (sp *SQLParser) analyzeCaseExpr(caseExpr *pg_query.CaseExpr, target *SelectTarget) {
+func (sp *SQLParser) analyzeCaseExpr(caseExpr *pg_query_go.CaseExpr, target *SelectTarget) {
 	// Check if there's an ELSE clause (defresult)
 	if caseExpr.Defresult != nil {
 		target.IsCaseWithElse = true
@@ -318,7 +319,7 @@ func (sp *SQLParser) analyzeCaseExpr(caseExpr *pg_query.CaseExpr, target *Select
 }
 
 // hasNonNullLiteralArg checks if function args contain a non-null literal
-func (sp *SQLParser) hasNonNullLiteralArg(args []*pg_query.Node) bool {
+func (sp *SQLParser) hasNonNullLiteralArg(args []*pg_query_go.Node) bool {
 	for _, arg := range args {
 		if sp.isNonNullLiteral(arg) {
 			return true
@@ -328,7 +329,7 @@ func (sp *SQLParser) hasNonNullLiteralArg(args []*pg_query.Node) bool {
 }
 
 // isNonNullLiteral checks if a node is a non-null literal value
-func (sp *SQLParser) isNonNullLiteral(node *pg_query.Node) bool {
+func (sp *SQLParser) isNonNullLiteral(node *pg_query_go.Node) bool {
 	if node == nil {
 		return false
 	}
@@ -347,7 +348,7 @@ func (sp *SQLParser) isNonNullLiteral(node *pg_query.Node) bool {
 }
 
 // extractColumnNameFromNode attempts to extract column name from expression
-func (sp *SQLParser) extractColumnNameFromNode(node *pg_query.Node) string {
+func (sp *SQLParser) extractColumnNameFromNode(node *pg_query_go.Node) string {
 	if colRef := node.GetColumnRef(); colRef != nil {
 		if len(colRef.Fields) == 0 {
 			return ""
@@ -364,7 +365,7 @@ func (sp *SQLParser) extractColumnNameFromNode(node *pg_query.Node) string {
 }
 
 // extractParameters extracts all parameters with context
-func (sp *SQLParser) extractParameters(stmt *pg_query.Node) []ParameterInfo {
+func (sp *SQLParser) extractParameters(stmt *pg_query_go.Node) []ParameterInfo {
 	params := make(map[int]*ParameterInfo)
 
 	if selectStmt := stmt.GetSelectStmt(); selectStmt != nil {
@@ -393,7 +394,7 @@ func (sp *SQLParser) extractParameters(stmt *pg_query.Node) []ParameterInfo {
 }
 
 // walkSelectForParams walks SELECT statement for parameters
-func (sp *SQLParser) walkSelectForParams(selectStmt *pg_query.SelectStmt, params map[int]*ParameterInfo) {
+func (sp *SQLParser) walkSelectForParams(selectStmt *pg_query_go.SelectStmt, params map[int]*ParameterInfo) {
 	for _, target := range selectStmt.TargetList {
 		if resTarget := target.GetResTarget(); resTarget != nil && resTarget.Val != nil {
 			sp.walkExprForParams(resTarget.Val, params, false, false)
@@ -431,7 +432,7 @@ func (sp *SQLParser) walkSelectForParams(selectStmt *pg_query.SelectStmt, params
 }
 
 // walkUpdateForParams walks UPDATE statement for parameters
-func (sp *SQLParser) walkUpdateForParams(updateStmt *pg_query.UpdateStmt, params map[int]*ParameterInfo) {
+func (sp *SQLParser) walkUpdateForParams(updateStmt *pg_query_go.UpdateStmt, params map[int]*ParameterInfo) {
 	tableName := ""
 	if updateStmt.Relation != nil {
 		tableName = updateStmt.Relation.Relname
@@ -460,7 +461,7 @@ func (sp *SQLParser) walkUpdateForParams(updateStmt *pg_query.UpdateStmt, params
 }
 
 // walkInsertForParams walks INSERT values for parameters
-func (sp *SQLParser) walkInsertForParams(insertStmt *pg_query.InsertStmt, params map[int]*ParameterInfo) {
+func (sp *SQLParser) walkInsertForParams(insertStmt *pg_query_go.InsertStmt, params map[int]*ParameterInfo) {
 	if insertStmt.SelectStmt == nil {
 		return
 	}
@@ -502,14 +503,14 @@ func (sp *SQLParser) walkInsertForParams(insertStmt *pg_query.InsertStmt, params
 }
 
 // walkDeleteForParams walks DELETE statement for parameters
-func (sp *SQLParser) walkDeleteForParams(deleteStmt *pg_query.DeleteStmt, params map[int]*ParameterInfo) {
+func (sp *SQLParser) walkDeleteForParams(deleteStmt *pg_query_go.DeleteStmt, params map[int]*ParameterInfo) {
 	if deleteStmt.WhereClause != nil {
 		sp.walkExprForParams(deleteStmt.WhereClause, params, true, false)
 	}
 }
 
 // walkExprForParams walks an expression tree for parameters
-func (sp *SQLParser) walkExprForParams(node *pg_query.Node, params map[int]*ParameterInfo, isInWhere, isInSet bool) {
+func (sp *SQLParser) walkExprForParams(node *pg_query_go.Node, params map[int]*ParameterInfo, isInWhere, isInSet bool) {
 	if node == nil {
 		return
 	}
@@ -637,7 +638,7 @@ func (sp *SQLParser) walkExprForParams(node *pg_query.Node, params map[int]*Para
 }
 
 // walkExprForParamsWithColumn walks expression with known column context
-func (sp *SQLParser) walkExprForParamsWithColumn(node *pg_query.Node, params map[int]*ParameterInfo, tableName, columnName string, isInWhere, isInSet bool) {
+func (sp *SQLParser) walkExprForParamsWithColumn(node *pg_query_go.Node, params map[int]*ParameterInfo, tableName, columnName string, isInWhere, isInSet bool) {
 	if node == nil {
 		return
 	}
@@ -660,7 +661,7 @@ func (sp *SQLParser) walkExprForParamsWithColumn(node *pg_query.Node, params map
 }
 
 // extractColumnNameFromRef extracts column name from ColumnRef
-func (sp *SQLParser) extractColumnNameFromRef(colRef *pg_query.ColumnRef) string {
+func (sp *SQLParser) extractColumnNameFromRef(colRef *pg_query_go.ColumnRef) string {
 	if len(colRef.Fields) == 0 {
 		return ""
 	}
@@ -678,7 +679,7 @@ func (sp *SQLParser) extractColumnNameFromRef(colRef *pg_query.ColumnRef) string
 }
 
 // extractTableNameFromRef extracts table name from qualified ColumnRef
-func (sp *SQLParser) extractTableNameFromRef(colRef *pg_query.ColumnRef) string {
+func (sp *SQLParser) extractTableNameFromRef(colRef *pg_query_go.ColumnRef) string {
 	if len(colRef.Fields) < 2 {
 		return ""
 	}
@@ -696,7 +697,7 @@ func (sp *SQLParser) extractTableNameFromRef(colRef *pg_query.ColumnRef) string 
 }
 
 // getOperatorName extracts operator name from A_Expr
-func (sp *SQLParser) getOperatorName(aExpr *pg_query.A_Expr) string {
+func (sp *SQLParser) getOperatorName(aExpr *pg_query_go.A_Expr) string {
 	if len(aExpr.Name) == 0 {
 		return ""
 	}
@@ -739,7 +740,7 @@ func (sp *SQLParser) sortParameters(params map[int]*ParameterInfo) []ParameterIn
 }
 
 // extractTables extracts all table references from query
-func (sp *SQLParser) extractTables(stmt *pg_query.Node) []TableRef {
+func (sp *SQLParser) extractTables(stmt *pg_query_go.Node) []TableRef {
 	var tables []TableRef
 
 	if selectStmt := stmt.GetSelectStmt(); selectStmt != nil {
@@ -762,7 +763,7 @@ func (sp *SQLParser) extractTables(stmt *pg_query.Node) []TableRef {
 }
 
 // extractTablesFromSelect extracts tables from SELECT statement
-func (sp *SQLParser) extractTablesFromSelect(selectStmt *pg_query.SelectStmt) []TableRef {
+func (sp *SQLParser) extractTablesFromSelect(selectStmt *pg_query_go.SelectStmt) []TableRef {
 	var tables []TableRef
 
 	for _, fromNode := range selectStmt.FromClause {
@@ -773,7 +774,7 @@ func (sp *SQLParser) extractTablesFromSelect(selectStmt *pg_query.SelectStmt) []
 }
 
 // extractCTEs extracts Common Table Expressions (WITH clause) from SELECT statement
-func (sp *SQLParser) extractCTEs(selectStmt *pg_query.SelectStmt) []CTEInfo {
+func (sp *SQLParser) extractCTEs(selectStmt *pg_query_go.SelectStmt) []CTEInfo {
 	var ctes []CTEInfo
 
 	if selectStmt.WithClause == nil {
@@ -801,7 +802,7 @@ func (sp *SQLParser) extractCTEs(selectStmt *pg_query.SelectStmt) []CTEInfo {
 }
 
 // walkFromClause walks FROM clause nodes
-func (sp *SQLParser) walkFromClause(node *pg_query.Node) []TableRef {
+func (sp *SQLParser) walkFromClause(node *pg_query_go.Node) []TableRef {
 	var tables []TableRef
 
 	if rangeVar := node.GetRangeVar(); rangeVar != nil {
@@ -824,7 +825,7 @@ func (sp *SQLParser) walkFromClause(node *pg_query.Node) []TableRef {
 }
 
 // makeTableRef creates TableRef from RangeVar
-func (sp *SQLParser) makeTableRef(rangeVar *pg_query.RangeVar) TableRef {
+func (sp *SQLParser) makeTableRef(rangeVar *pg_query_go.RangeVar) TableRef {
 	ref := TableRef{
 		Name: rangeVar.Relname,
 	}
@@ -841,7 +842,7 @@ func (sp *SQLParser) makeTableRef(rangeVar *pg_query.RangeVar) TableRef {
 }
 
 // makeSubqueryTableRef creates TableRef from RangeSubselect
-func (sp *SQLParser) makeSubqueryTableRef(rangeSubselect *pg_query.RangeSubselect) TableRef {
+func (sp *SQLParser) makeSubqueryTableRef(rangeSubselect *pg_query_go.RangeSubselect) TableRef {
 	ref := TableRef{
 		IsSubquery: true,
 	}
@@ -861,7 +862,7 @@ func (sp *SQLParser) makeSubqueryTableRef(rangeSubselect *pg_query.RangeSubselec
 }
 
 // extractInfoFromSelectStmt extracts QueryInfo from a SelectStmt node
-func (sp *SQLParser) extractInfoFromSelectStmt(selectStmt *pg_query.SelectStmt) *QueryInfo {
+func (sp *SQLParser) extractInfoFromSelectStmt(selectStmt *pg_query_go.SelectStmt) *QueryInfo {
 	info := &QueryInfo{
 		Type:          QueryTypeMany,
 		SelectTargets: sp.extractSelectTargets(selectStmt),
