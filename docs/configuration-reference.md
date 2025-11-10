@@ -480,6 +480,6 @@ Error: table "users" not found in schema "public"
 
 ## Related Documentation
 
-- [Quick Start Guide](quick-start.md) - Get started with skimatik
-- [Type Mapping](type-mapping.md) - PostgreSQL to Go type conversions
-- [Database Migrations](database-migrations.md) - Managing schema changes
+- [Quick Start Guide](quick-start) - Get started with skimatik
+- [Type Mapping](type-mapping) - PostgreSQL to Go type conversions
+- [Database Migrations](database-migrations) - Managing schema changes

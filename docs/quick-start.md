@@ -90,7 +90,7 @@ migrate -database "postgres://username:password@localhost:5432/database" \
         -path database/migrations up
 ```
 
-See the complete [Database Migrations](database-migrations.md) guide for detailed workflows and best practices.
+See the complete [Database Migrations](database-migrations) guide for detailed workflows and best practices.
 
 ## Quick Setup
 
@@ -297,7 +297,7 @@ func (s *UserService) GetActiveUsers(ctx context.Context) ([]repositories.Users,
 
 ## Configuration Options
 
-For complete configuration reference, see [Configuration Reference](configuration-reference.md).
+For complete configuration reference, see [Configuration Reference](configuration-reference).
 
 ### Database Configuration
 
@@ -390,10 +390,10 @@ Solution: Ensure your database user has read permissions on the schema.
 
 ## Next Steps
 
-- **[Examples](examples.md)** - Hands-on examples with real applications
-- **[Shared Utilities Guide](shared-utilities.md)** - Learn about built-in utilities for common patterns
-- **[Embedding Patterns](embedding-patterns.md)** - Advanced repository composition patterns
-- **[Configuration Reference](configuration-reference.md)** - Complete configuration documentation
+- **[Examples](examples)** - Hands-on examples with real applications
+- **[Shared Utilities Guide](shared-utilities)** - Learn about built-in utilities for common patterns
+- **[Embedding Patterns](embedding-patterns)** - Advanced repository composition patterns
+- **[Configuration Reference](configuration-reference)** - Complete configuration documentation
 
 ## Best Practices
 
