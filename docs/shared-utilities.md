@@ -73,6 +73,7 @@ These utilities are **public functions** available for cross-package use:
 type UserService struct {
     *repositories.UsersRepository  // Embed generated repository
     profileRepo *repositories.ProfilesRepository
+    db *pgxkit.DB                  // Explicit db field for custom operations
 }
 
 // Custom business logic using shared utilities
@@ -82,16 +83,16 @@ func (s *UserService) CreateUserWithProfile(ctx context.Context, userData reposi
         WITH new_user AS (
             INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id, name, email, created_at
         ), new_profile AS (
-            INSERT INTO user_profiles (user_id, bio) 
+            INSERT INTO user_profiles (user_id, bio)
             SELECT id, $3 FROM new_user
             RETURNING user_id
         )
         SELECT id, name, email, created_at FROM new_user
     `
-    
-    row := repositories.ExecuteQueryRow(ctx, s.db, "create_user_with_profile", "Users", query, 
+
+    row := repositories.ExecuteQueryRow(ctx, s.db, "create_user_with_profile", "Users", query,
         userData.Name, userData.Email, profileData)
-    
+
     var user repositories.Users
     err := row.Scan(&user.Id, &user.Name, &user.Email, &user.CreatedAt)
     return &user, repositories.HandleQueryRowError("create_user_with_profile", "Users", err)
@@ -193,12 +194,14 @@ type UserInterface interface {
 type UserRepository struct {
     *repositories.UsersRepository  // All generated methods available
     profileRepo *repositories.ProfilesRepository
+    db *pgxkit.DB                  // Explicit db field for custom operations
 }
 
 func NewUserRepository(db *pgxkit.DB) UserInterface {
     return &UserRepository{
         UsersRepository: repositories.NewUsersRepository(db),
         profileRepo:     repositories.NewProfilesRepository(db),
+        db:             db,
     }
 }
 
@@ -208,29 +211,29 @@ func (r *UserRepository) CreateUser(ctx context.Context, params repositories.Cre
 }
 
 // Custom business logic using shared utilities
-func (s *UserService) CreateUserWithProfile(ctx context.Context, userData repositories.CreateUsersParams, profileData string) (*repositories.Users, error) {
+func (r *UserRepository) CreateUserWithProfile(ctx context.Context, userData repositories.CreateUsersParams, profileData string) (*repositories.Users, error) {
     return repositories.RetryOperation(ctx, repositories.DefaultRetryConfig, "create_user_with_profile", func(ctx context.Context) (*repositories.Users, error) {
         // Use shared database utilities for complex operations
         query := `
             WITH new_user AS (
                 INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id, name, email, created_at
             ), new_profile AS (
-                INSERT INTO user_profiles (user_id, bio) 
+                INSERT INTO user_profiles (user_id, bio)
                 SELECT id, $3 FROM new_user
                 RETURNING user_id
             )
             SELECT id, name, email, created_at FROM new_user
         `
-        
-        row := repositories.ExecuteQueryRow(ctx, s.db, "create_user_with_profile", "Users", query, 
+
+        row := repositories.ExecuteQueryRow(ctx, r.db, "create_user_with_profile", "Users", query,
             userData.Name, userData.Email, profileData)
-        
+
         var user repositories.Users
         err := row.Scan(&user.Id, &user.Name, &user.Email, &user.CreatedAt)
         if err != nil {
             return nil, repositories.HandleQueryRowError("create_user_with_profile", "Users", err)
         }
-        
+
         return &user, nil
     })
 }

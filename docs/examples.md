@@ -244,6 +244,13 @@ curl -X POST http://localhost:8080/users -d '{"name":"Test","email":"test@exampl
 ### Step 1: Define Your Domain Interface
 
 ```go
+import (
+    "context"
+
+    "github.com/google/uuid"
+    "your-project/repositories"
+)
+
 // Define what your application needs
 type UserManager interface {
     CreateUser(ctx context.Context, params repositories.CreateUsersParams) (*repositories.Users, error)
@@ -471,6 +478,16 @@ GET    /api/health             # Application health status
 The example demonstrates the **recommended pattern** for extending generated repositories:
 
 ```go
+import (
+    "context"
+    "fmt"
+
+    "github.com/google/uuid"
+    "github.com/nhalm/pgxkit"
+    "your-project/domain"
+    "your-project/generated"
+)
+
 // Custom repository that embeds generated code
 type UserRepository struct {
     *generated.UsersRepository  // Generated CRUD operations
@@ -491,7 +508,7 @@ func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]domai
     if err != nil {
         return nil, fmt.Errorf("failed to get active users: %w", err)
     }
-    
+
     // Convert generated types to domain types
     users := make([]domain.UserSummary, len(results))
     for i, result := range results {

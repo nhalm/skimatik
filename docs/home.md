@@ -55,6 +55,14 @@ skimatik --config="skimatik.yaml"
 2. **Generated code example:**
 ```go
 // users_generated.go
+import (
+    "context"
+    "time"
+
+    "github.com/google/uuid"
+    "github.com/nhalm/pgxkit"
+)
+
 type Users struct {
     Id        uuid.UUID  `json:"id" db:"id"`
     Name      string     `json:"name" db:"name"`

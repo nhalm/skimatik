@@ -261,11 +261,13 @@ type UserManager interface {
 // Implement by embedding generated repository
 type UserService struct {
     *repositories.UsersRepository // Embed for CRUD operations
+    db *pgxkit.DB                 // Explicit db field for custom operations
 }
 
 func NewUserService(db *pgxkit.DB) UserManager {
     return &UserService{
         UsersRepository: repositories.NewUsersRepository(db),
+        db:             db,
     }
 }
 
