@@ -38,10 +38,10 @@ func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]domai
 	users := make([]domain.UserSummary, len(results))
 	for i, result := range results {
 		users[i] = domain.UserSummary{
-			ID:       uuid.UUID(result.Id.Bytes),
-			Name:     result.Name.String,
-			Email:    result.Email.String,
-			IsActive: result.IsActive.Bool,
+			ID:       result.Id,
+			Name:     result.Name,
+			Email:    result.Email,
+			IsActive: result.IsActive,
 		}
 	}
 
@@ -59,12 +59,12 @@ func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*dom
 	// In a real implementation, you might need to add this field to the query
 
 	user := &domain.UserDetail{
-		ID:          uuid.UUID(result.Id.Bytes),
-		Name:        result.Name.String,
-		Email:       result.Email.String,
-		IsActive:    result.IsActive.Bool,
+		ID:          result.Id,
+		Name:        result.Name,
+		Email:       result.Email,
+		IsActive:    result.IsActive,
 		PostCount:   0, // This would need to be calculated or included in the query
-		CreatedAt:   result.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		CreatedAt:   result.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		LastLoginAt: lastLoginAt,
 	}
 
@@ -80,10 +80,10 @@ func (r *UserRepository) SearchUsers(ctx context.Context, query string) ([]domai
 	users := make([]domain.UserSummary, len(results))
 	for i, result := range results {
 		users[i] = domain.UserSummary{
-			ID:       uuid.UUID(result.Id.Bytes),
-			Name:     result.Name.String,
-			Email:    result.Email.String,
-			IsActive: result.IsActive.Bool,
+			ID:       result.Id,
+			Name:     result.Name,
+			Email:    result.Email,
+			IsActive: result.IsActive,
 		}
 	}
 
@@ -98,8 +98,8 @@ func (r *UserRepository) GetUserStats(ctx context.Context, userID uuid.UUID) (*d
 
 	stats := &domain.UserStats{
 		UserID:       userID,
-		PostCount:    int(result.PostCount.Int64),
-		CommentCount: int(result.CommentCount.Int64),
+		PostCount:    result.PostCount,
+		CommentCount: result.CommentCount,
 		LastActivity: nil, // This would need to be added to the query if needed
 	}
 
@@ -122,11 +122,6 @@ func (r *UserRepository) GetUser(ctx context.Context, userID uuid.UUID) (*domain
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	var bio *string
-	if user.Bio.Valid {
-		bio = &user.Bio.String
-	}
-
 	userDetail := &domain.UserDetail{
 		ID:          user.Id,
 		Name:        user.Name,
@@ -136,9 +131,6 @@ func (r *UserRepository) GetUser(ctx context.Context, userID uuid.UUID) (*domain
 		CreatedAt:   user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		LastLoginAt: nil, // Not available in the basic user struct
 	}
-
-	// If bio exists in user but not in domain.UserDetail, we'd need to handle it
-	_ = bio // Silence unused variable warning
 
 	return userDetail, nil
 }

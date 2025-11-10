@@ -34,19 +34,19 @@ func (r *PostRepository) GetPublishedPosts(ctx context.Context, limit int) ([]do
 	posts := make([]domain.PostSummary, len(results))
 	for i, result := range results {
 		var publishedAt *string
-		if result.PublishedAt.Valid {
-			publishedAtStr := result.PublishedAt.Time.Format("2006-01-02T15:04:05Z07:00")
+		if result.PublishedAt != nil {
+			publishedAtStr := result.PublishedAt.Format("2006-01-02T15:04:05Z07:00")
 			publishedAt = &publishedAtStr
 		}
 
 		posts[i] = domain.PostSummary{
-			ID:          uuid.UUID(result.Id.Bytes),
-			Title:       result.Title.String,
-			Content:     result.Content.String,
-			AuthorID:    uuid.UUID(result.AuthorId.Bytes),
+			ID:          result.Id,
+			Title:       result.Title,
+			Content:     result.Content,
+			AuthorID:    result.AuthorId,
 			IsPublished: true, // GetPublishedPosts only returns published posts
 			PublishedAt: publishedAt,
-			CreatedAt:   result.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			CreatedAt:   result.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		}
 	}
 
@@ -60,21 +60,21 @@ func (r *PostRepository) GetPostWithAuthor(ctx context.Context, postID uuid.UUID
 	}
 
 	var publishedAt *string
-	if result.PublishedAt.Valid {
-		publishedAtStr := result.PublishedAt.Time.Format("2006-01-02T15:04:05Z07:00")
+	if result.PublishedAt != nil {
+		publishedAtStr := result.PublishedAt.Format("2006-01-02T15:04:05Z07:00")
 		publishedAt = &publishedAtStr
 	}
 
 	post := &domain.PostDetail{
-		ID:          uuid.UUID(result.Id.Bytes),
-		Title:       result.Title.String,
-		Content:     result.Content.String,
-		AuthorID:    uuid.UUID(result.AuthorId.Bytes),
-		AuthorName:  result.AuthorName.String,
-		AuthorEmail: result.AuthorEmail.String,
-		IsPublished: result.IsPublished.Bool,
+		ID:          result.Id,
+		Title:       result.Title,
+		Content:     result.Content,
+		AuthorID:    result.AuthorId,
+		AuthorName:  result.AuthorName,
+		AuthorEmail: result.AuthorEmail,
+		IsPublished: result.IsPublished,
 		PublishedAt: publishedAt,
-		CreatedAt:   result.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		CreatedAt:   result.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 
 	return post, nil
@@ -89,19 +89,19 @@ func (r *PostRepository) GetUserPosts(ctx context.Context, userID uuid.UUID) ([]
 	posts := make([]domain.PostSummary, len(results))
 	for i, result := range results {
 		var publishedAt *string
-		if result.PublishedAt.Valid {
-			publishedAtStr := result.PublishedAt.Time.Format("2006-01-02T15:04:05Z07:00")
+		if result.PublishedAt != nil {
+			publishedAtStr := result.PublishedAt.Format("2006-01-02T15:04:05Z07:00")
 			publishedAt = &publishedAtStr
 		}
 
 		posts[i] = domain.PostSummary{
-			ID:          uuid.UUID(result.Id.Bytes),
-			Title:       result.Title.String,
-			Content:     result.Content.String,
-			AuthorID:    uuid.UUID(result.AuthorId.Bytes),
-			IsPublished: result.IsPublished.Bool,
+			ID:          result.Id,
+			Title:       result.Title,
+			Content:     result.Content,
+			AuthorID:    result.AuthorId,
+			IsPublished: result.IsPublished,
 			PublishedAt: publishedAt,
-			CreatedAt:   result.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			CreatedAt:   result.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		}
 	}
 
@@ -118,12 +118,12 @@ func (r *PostRepository) GetPostsWithStats(ctx context.Context, limit int) ([]do
 	posts := make([]domain.PostWithStats, len(results))
 	for i, result := range results {
 		posts[i] = domain.PostWithStats{
-			ID:           uuid.UUID(result.Id.Bytes),
-			Title:        result.Title.String,
-			AuthorID:     uuid.UUID(result.AuthorId.Bytes),
-			AuthorName:   result.AuthorName.String,
-			CommentCount: int(result.CommentCount.Int64),
-			CreatedAt:    result.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			ID:           result.Id,
+			Title:        result.Title,
+			AuthorID:     result.AuthorId,
+			AuthorName:   result.AuthorName,
+			CommentCount: result.CommentCount,
+			CreatedAt:    result.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		}
 	}
 
