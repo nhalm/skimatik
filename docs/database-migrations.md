@@ -529,6 +529,6 @@ make generate
 
 ## Next Steps
 
-- Review the [Quick Start](quick-start.md) guide for initial setup
-- See [Configuration Reference](configuration-reference.md) for skimatik options
+- Review the [Quick Start](quick-start) guide for initial setup
+- See [Configuration Reference](configuration-reference) for skimatik options
 - Check the [example application](../example-app) for a complete implementation
