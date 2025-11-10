@@ -80,38 +80,11 @@ EXAMPLES:
     # Generate with custom config file
     skimatik --config="./my-config.yaml"
 
-    # Generate repositories for specific tables with CLI flags (basic usage)
-    skimatik --dsn="postgres://user:pass@localhost/mydb" --tables --include="users,posts,comments"
-
-    # Use environment variable for connection (DATABASE_URL)
-    export DATABASE_URL="postgres://user:pass@localhost/mydb"
-    skimatik --tables
-
-    # Use POSTGRES_* environment variables for connection
-    export POSTGRES_HOST="localhost"
-    export POSTGRES_PORT="5432"
-    export POSTGRES_USER="myuser"
-    export POSTGRES_PASSWORD="mypass"
-    export POSTGRES_DB="mydb"
-    skimatik --tables
-
-    # Generate from SQL files with custom queries
-    skimatik --dsn="postgres://..." --queries="./sql" --output="./repositories"
-
-    # Use configuration file
-    skimatik --config="skimatik.yaml"
+    # Use configuration file with custom path
+    skimatik --config="custom-config.yaml"
 
     # Verbose output for debugging
-    skimatik --dsn="postgres://..." --tables --verbose
-
-ENVIRONMENT VARIABLES:
-    DATABASE_URL       PostgreSQL connection string (alternative to --dsn)
-    POSTGRES_HOST      Database host (default: localhost)
-    POSTGRES_PORT      Database port (default: 5432)
-    POSTGRES_USER      Database user (default: postgres)
-    POSTGRES_PASSWORD  Database password (default: empty)
-    POSTGRES_DB        Database name (default: postgres)
-    POSTGRES_SSLMODE   SSL mode (default: disable)
+    skimatik --verbose
 
 CONFIGURATION FILE:
     Create skimatik.yaml:
