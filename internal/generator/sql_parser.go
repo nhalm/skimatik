@@ -39,19 +39,19 @@ type ParameterInfo struct {
 
 // SelectTarget represents a column in SELECT clause
 type SelectTarget struct {
-	Alias              string // Column alias or name
-	IsCount            bool   // COUNT aggregate
-	IsSum              bool   // SUM aggregate
-	IsAvg              bool   // AVG aggregate
-	IsMax              bool   // MAX aggregate
-	IsMin              bool   // MIN aggregate
-	IsCoalesce         bool   // COALESCE function
-	HasNonNullLiteral  bool   // COALESCE/CASE has non-null literal (guarantees non-null)
-	IsCaseWithElse     bool   // CASE expression with ELSE clause
-	IsRowNumber        bool   // ROW_NUMBER() window function
-	IsRank             bool   // RANK() window function
-	IsDenseRank        bool   // DENSE_RANK() window function
-	Expression         string // Full expression as string
+	Alias             string // Column alias or name
+	IsCount           bool   // COUNT aggregate
+	IsSum             bool   // SUM aggregate
+	IsAvg             bool   // AVG aggregate
+	IsMax             bool   // MAX aggregate
+	IsMin             bool   // MIN aggregate
+	IsCoalesce        bool   // COALESCE function
+	HasNonNullLiteral bool   // COALESCE/CASE has non-null literal (guarantees non-null)
+	IsCaseWithElse    bool   // CASE expression with ELSE clause
+	IsRowNumber       bool   // ROW_NUMBER() window function
+	IsRank            bool   // RANK() window function
+	IsDenseRank       bool   // DENSE_RANK() window function
+	Expression        string // Full expression as string
 }
 
 // TableRef represents a table reference in query
@@ -340,7 +340,7 @@ func (sp *SQLParser) isNonNullLiteral(node *pg_query.Node) bool {
 			return false
 		}
 		return aConst.GetSval() != nil || aConst.GetIval() != nil ||
-		       aConst.GetFval() != nil || aConst.GetBoolval() != nil
+			aConst.GetFval() != nil || aConst.GetBoolval() != nil
 	}
 
 	return false
