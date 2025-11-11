@@ -41,12 +41,9 @@ database_operations.go
 retry_operations.go
 errors.go
 
-# Exception: Allow generated files in example-app
-!example-app/**/*_generated.go
-!example-app/**/pagination.go
-!example-app/**/database_operations.go
-!example-app/**/retry_operations.go
-!example-app/**/errors.go
+# Exception: Allow generated files in example-app (removed - now ignored for cleaner PRs)
+# example-app/repository/generated/ is ignored to reduce noise in PRs
+# CI validates generation via make example-app-test
 
 # Coverage files
 coverage.out
