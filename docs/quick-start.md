@@ -201,14 +201,15 @@ func main() {
 }
 ```
 
-### 2. Pagination (Table-Based Only)
+### 2. Bidirectional Cursor Pagination
 
-Table-based repositories include automatic cursor-based pagination:
+Table-based repositories include automatic bidirectional cursor-based pagination with runtime sort selection:
 
 ```go
-// List first page (10 items) - ONLY available for table-based repositories
+// List first page (10 items, ordered by created_at)
 result, err := userRepo.ListPaginated(ctx, repositories.PaginationParams{
-    Limit: 10,
+    Limit:   10,
+    OrderBy: "created_at",  // Sort by any supported column
 })
 if err != nil {
     log.Fatal(err)
@@ -216,12 +217,26 @@ if err != nil {
 
 fmt.Printf("Users: %+v\n", result.Items)
 fmt.Printf("Has more: %v\n", result.HasMore)
+fmt.Printf("Has previous: %v\n", result.HasPrevious)
 
-// Get next page using cursor
+// Navigate forward (next page)
 if result.HasMore {
     nextResult, err := userRepo.ListPaginated(ctx, repositories.PaginationParams{
-        Limit:  10,
-        Cursor: result.NextCursor,
+        Limit:      10,
+        OrderBy:    "created_at",
+        NextCursor: result.NextCursor,  // Forward pagination
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+}
+
+// Navigate backward (previous page)
+if result.HasPrevious {
+    prevResult, err := userRepo.ListPaginated(ctx, repositories.PaginationParams{
+        Limit:        10,
+        OrderBy:      "created_at",
+        BeforeCursor: result.BeforeCursor,  // Backward pagination
     })
     if err != nil {
         log.Fatal(err)
@@ -229,7 +244,25 @@ if result.HasMore {
 }
 ```
 
-**Note**: Query-based functions (from SQL files) do NOT automatically include pagination. You must add `LIMIT` and `OFFSET` (or custom cursor logic) to your SQL queries.
+**Pagination Features:**
+- **Bidirectional**: Navigate forward with `NextCursor` or backward with `BeforeCursor`
+- **Runtime Sorting**: Specify `OrderBy` to sort by any table column (defaults to `id`)
+- **Cursor Format**: Cursors are base64-encoded JSON containing `{column, value}` pairs
+- **Breaking Change**: Cursor format changed from base64(UUID) to base64(JSON) - old cursors are backward compatible
+
+**Custom Query Pagination:**
+
+Query-based functions (from SQL files) can also support pagination by adding the `-- cursor_columns:` annotation:
+
+```sql
+-- name: GetPublishedPosts :many
+-- cursor_columns: published_at, id
+SELECT id, title, published_at FROM posts
+WHERE is_published = true
+ORDER BY published_at DESC, id DESC;
+```
+
+This generates a paginated query function that accepts `PaginationParams` and returns `PaginationResult`.
 
 ### 3. Error Handling
 

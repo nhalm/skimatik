@@ -6,7 +6,7 @@
 [![Release](https://img.shields.io/github/v/release/nhalm/skimatik)](https://github.com/nhalm/skimatik/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A database-first code generator for PostgreSQL that creates type-safe Go repositories with built-in cursor-based pagination. Generate clean, efficient CRUD operations and custom query functions directly from your database schema.
+A database-first code generator for PostgreSQL that creates type-safe Go repositories with built-in bidirectional cursor-based pagination. Generate clean, efficient CRUD operations and custom query functions directly from your database schema.
 
 ## Why skimatik?
 
@@ -43,12 +43,12 @@ A database-first code generator for PostgreSQL that creates type-safe Go reposit
 
 - **Database-First**: Works with existing PostgreSQL databases, no schema migrations required
 - **Type-Safe**: Generates fully typed Go code using pgx with comprehensive PostgreSQL type support
-- **Built-in Pagination**: Table-based repositories include efficient cursor-based pagination using UUID v7
+- **Bidirectional Pagination**: Table-based repositories include efficient cursor-based pagination using UUID v7 with forward/backward navigation and runtime sort selection
 - **Zero Dependencies**: Generated code only requires pgx - no external pagination or ORM dependencies
 - **Shared Utilities**: Eliminates code duplication with reusable database operation and retry patterns
 - **Repository Embedding**: Generated repositories designed for clean composition and extension
-- **Table-Based Generation**: Complete CRUD repositories with automatic pagination for all database tables
-- **Query-Based Generation**: Custom functions from SQL files with sqlc-style annotations (pagination via your SQL)
+- **Table-Based Generation**: Complete CRUD repositories with automatic bidirectional pagination for all database tables
+- **Query-Based Generation**: Custom functions from SQL files with sqlc-style annotations (optional pagination via `-- cursor_columns:` annotation)
 - **UUID v7 Optimized**: Time-ordered pagination with consistent performance for table-based operations
 - **Production Ready**: Clean, formatted code following Go best practices
 

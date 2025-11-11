@@ -35,13 +35,15 @@ func TestInlinePagination_TemplateGeneration(t *testing.T) {
 	expectedComponents := []string{
 		"type PaginationParams struct",
 		"type PaginationResult[T any] struct",
-		"func encodeCursor(id uuid.UUID) string",
-		"func decodeCursor(cursor string) (uuid.UUID, error)",
+		"func encodeJSONCursor(column string, value interface{}) (string, error)",
+		"func decodeJSONCursor(cursor string) (column string, value interface{}, err error)",
 		"func validatePaginationParams(params PaginationParams) error",
 		"Items []T `json:\"items\"`",
 		"HasMore bool `json:\"has_more\"`",
+		"HasPrevious bool `json:\"has_previous\"`",
 		"NextCursor string `json:\"next_cursor,omitempty\"`",
-		"base64.URLEncoding.EncodeToString(id[:])",
+		"BeforeCursor string `json:\"before_cursor,omitempty\"`",
+		"base64.URLEncoding.EncodeToString(jsonBytes)",
 		"base64.URLEncoding.DecodeString(cursor)",
 	}
 
@@ -60,10 +62,9 @@ func TestInlinePagination_TemplateGeneration(t *testing.T) {
 	expectedListComponents := []string{
 		"func (r *UsersRepository) ListPaginated(ctx context.Context, params PaginationParams) (*PaginationResult[Users], error)",
 		"validatePaginationParams(params)",
-		"decodeCursor(params.Cursor)",
-		"encodeCursor(lastItem.GetID())",
-		"WHERE ($1::uuid IS NULL OR id > $1)",
-		"ORDER BY id ASC",
+		"decodeJSONCursor",
+		"encodeJSONCursor",
+		"ORDER BY",
 		"LIMIT $2",
 		"hasMore := len(items) > limit",
 		"items = items[:limit]",
@@ -102,19 +103,22 @@ func TestInlinePagination_CursorLogic(t *testing.T) {
 	}
 	paginationTypes := string(paginationContent)
 
-	// Test cursor encoding logic
-	if !strings.Contains(paginationTypes, "base64.URLEncoding.EncodeToString(id[:])") {
-		t.Error("Missing cursor encoding logic")
+	// Test JSON cursor encoding logic
+	if !strings.Contains(paginationTypes, "json.Marshal(data)") {
+		t.Error("Missing JSON cursor encoding logic")
+	}
+	if !strings.Contains(paginationTypes, "base64.URLEncoding.EncodeToString(jsonBytes)") {
+		t.Error("Missing base64 cursor encoding logic")
 	}
 
 	// Test cursor decoding logic
 	expectedDecodingComponents := []string{
 		"base64.URLEncoding.DecodeString(cursor)",
-		"if len(cursorBytes) != 16",
-		"copy(id[:], cursorBytes)",
-		"return uuid.Nil, fmt.Errorf(\"empty cursor\")",
-		"return uuid.Nil, fmt.Errorf(\"invalid cursor format: %w\", err)",
-		"return uuid.Nil, fmt.Errorf(\"invalid cursor length: expected 16 bytes, got %d\", len(cursorBytes))",
+		"json.Unmarshal(cursorBytes, &data)",
+		"if data.Column == \"\"",
+		"return \"\", nil, fmt.Errorf(\"empty cursor\")",
+		"return \"\", nil, fmt.Errorf(\"invalid cursor format: %w\", err)",
+		"return \"\", nil, fmt.Errorf(\"cursor missing column name\")",
 	}
 
 	for _, component := range expectedDecodingComponents {
@@ -127,17 +131,32 @@ func TestInlinePagination_CursorLogic(t *testing.T) {
 	expectedValidationComponents := []string{
 		"if params.Limit < 0",
 		"if params.Limit > 100",
-		"if params.Cursor != \"\"",
-		"decodeCursor(params.Cursor)",
+		"if params.NextCursor != \"\" && params.BeforeCursor != \"\"",
+		"if params.NextCursor != \"\"",
+		"if params.BeforeCursor != \"\"",
 		"return fmt.Errorf(\"limit cannot be negative\")",
 		"return fmt.Errorf(\"limit cannot exceed 100\")",
-		"return fmt.Errorf(\"invalid cursor: %w\", err)",
+		"return fmt.Errorf(\"cannot use both next_cursor and before_cursor\")",
 	}
 
 	for _, component := range expectedValidationComponents {
 		if !strings.Contains(paginationTypes, component) {
 			t.Errorf("Missing parameter validation component: %s", component)
 		}
+	}
+
+	// Test bidirectional logic presence
+	if !strings.Contains(paginationTypes, "NextCursor string") {
+		t.Error("Missing NextCursor field")
+	}
+	if !strings.Contains(paginationTypes, "BeforeCursor string") {
+		t.Error("Missing BeforeCursor field")
+	}
+	if !strings.Contains(paginationTypes, "OrderBy string") {
+		t.Error("Missing OrderBy field")
+	}
+	if !strings.Contains(paginationTypes, "HasPrevious bool") {
+		t.Error("Missing HasPrevious field")
 	}
 }
 

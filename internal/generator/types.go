@@ -41,6 +41,7 @@ type Query struct {
 	SourceFile           string                `json:"source_file"`
 	ParameterAnnotations []ParameterAnnotation `json:"parameter_annotations"` // Optional type annotations
 	ResultAnnotations    []ResultAnnotation    `json:"result_annotations"`    // Optional result column type annotations
+	CursorColumns        []string              `json:"cursor_columns"`        // Optional columns allowed for cursor pagination
 }
 
 // QueryType represents the type of query operation
