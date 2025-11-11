@@ -5,15 +5,26 @@ package {{.PackageName}}
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
+	"time"
 )
 
 // PaginationParams holds parameters for cursor-based pagination
 type PaginationParams struct {
-	// Cursor is the base64-encoded UUID to start pagination from
+	// NextCursor is the base64-encoded JSON cursor to start pagination from (forward)
 	// If empty, starts from the beginning
-	Cursor string `json:"cursor,omitempty"`
+	NextCursor string `json:"next_cursor,omitempty"`
+
+	// BeforeCursor is the base64-encoded JSON cursor to paginate before (backward)
+	// Cannot be used together with NextCursor
+	BeforeCursor string `json:"before_cursor,omitempty"`
+
+	// OrderBy specifies the column to sort by (e.g., "created_at", "id", "title")
+	// Must be validated against allowed columns for the specific query
+	// Defaults to "id" if not specified
+	OrderBy string `json:"order_by,omitempty"`
 
 	// Limit is the maximum number of items to return
 	// Must be between 1 and 100, defaults to 20
@@ -25,12 +36,19 @@ type PaginationResult[T any] struct {
 	// Items is the list of items returned
 	Items []T `json:"items"`
 
-	// HasMore indicates if there are more items available
+	// HasMore indicates if there are more items available after this page
 	HasMore bool `json:"has_more"`
+
+	// HasPrevious indicates if there are items available before this page
+	HasPrevious bool `json:"has_previous"`
 
 	// NextCursor is the cursor for the next page
 	// Only set if HasMore is true
 	NextCursor string `json:"next_cursor,omitempty"`
+
+	// BeforeCursor is the cursor for the previous page
+	// Only set if HasPrevious is true
+	BeforeCursor string `json:"before_cursor,omitempty"`
 
 	// Total is the total count of items (optional, expensive to calculate)
 	Total *int `json:"total,omitempty"`
@@ -41,12 +59,57 @@ type HasIDInterface interface {
 	GetID() uuid.UUID
 }
 
-// encodeCursor encodes a UUID as a base64 cursor (private function)
-func encodeCursor(id uuid.UUID) string {
-	return base64.URLEncoding.EncodeToString(id[:])
+// cursorData represents the internal structure of a pagination cursor
+type cursorData struct {
+	Column string      `json:"column"`
+	Value  interface{} `json:"value"`
 }
 
-// decodeCursor decodes a base64 cursor back to a UUID (private function)
+// encodeJSONCursor encodes a column name and value as a base64-encoded JSON cursor
+func encodeJSONCursor(column string, value interface{}) (string, error) {
+	data := cursorData{
+		Column: column,
+		Value:  value,
+	}
+
+	jsonBytes, err := json.Marshal(data)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal cursor: %w", err)
+	}
+
+	return base64.URLEncoding.EncodeToString(jsonBytes), nil
+}
+
+// decodeJSONCursor decodes a base64-encoded JSON cursor back to column and value
+func decodeJSONCursor(cursor string) (column string, value interface{}, err error) {
+	if cursor == "" {
+		return "", nil, fmt.Errorf("empty cursor")
+	}
+
+	cursorBytes, err := base64.URLEncoding.DecodeString(cursor)
+	if err != nil {
+		return "", nil, fmt.Errorf("invalid cursor format: %w", err)
+	}
+
+	var data cursorData
+	if err := json.Unmarshal(cursorBytes, &data); err != nil {
+		return "", nil, fmt.Errorf("invalid cursor JSON: %w", err)
+	}
+
+	if data.Column == "" {
+		return "", nil, fmt.Errorf("cursor missing column name")
+	}
+
+	return data.Column, data.Value, nil
+}
+
+// encodeCursor encodes a UUID as a base64 cursor (legacy support)
+func encodeCursor(id uuid.UUID) string {
+	cursor, _ := encodeJSONCursor("id", id.String())
+	return cursor
+}
+
+// decodeCursor decodes a base64 cursor - supports both legacy UUID and new JSON format
 func decodeCursor(cursor string) (uuid.UUID, error) {
 	if cursor == "" {
 		return uuid.Nil, fmt.Errorf("empty cursor")
@@ -57,16 +120,33 @@ func decodeCursor(cursor string) (uuid.UUID, error) {
 		return uuid.Nil, fmt.Errorf("invalid cursor format: %w", err)
 	}
 
-	if len(cursorBytes) != 16 {
-		return uuid.Nil, fmt.Errorf("invalid cursor length: expected 16 bytes, got %d", len(cursorBytes))
+	// Try legacy UUID format first (16 bytes)
+	if len(cursorBytes) == 16 {
+		var id uuid.UUID
+		copy(id[:], cursorBytes)
+		return id, nil
 	}
 
-	var id uuid.UUID
-	copy(id[:], cursorBytes)
-	return id, nil
+	// Try JSON format
+	var data cursorData
+	if err := json.Unmarshal(cursorBytes, &data); err != nil {
+		return uuid.Nil, fmt.Errorf("invalid cursor format: %w", err)
+	}
+
+	// Extract UUID from value
+	switch v := data.Value.(type) {
+	case string:
+		id, err := uuid.Parse(v)
+		if err != nil {
+			return uuid.Nil, fmt.Errorf("invalid UUID in cursor: %w", err)
+		}
+		return id, nil
+	default:
+		return uuid.Nil, fmt.Errorf("cursor value is not a UUID string")
+	}
 }
 
-// validatePaginationParams validates pagination parameters (private function)
+// validatePaginationParams validates pagination parameters
 func validatePaginationParams(params PaginationParams) error {
 	if params.Limit < 0 {
 		return fmt.Errorf("limit cannot be negative")
@@ -75,12 +155,58 @@ func validatePaginationParams(params PaginationParams) error {
 		return fmt.Errorf("limit cannot exceed 100")
 	}
 
-	if params.Cursor != "" {
-		_, err := decodeCursor(params.Cursor)
-		if err != nil {
-			return fmt.Errorf("invalid cursor: %w", err)
+	if params.NextCursor != "" && params.BeforeCursor != "" {
+		return fmt.Errorf("cannot use both next_cursor and before_cursor")
+	}
+
+	if params.NextCursor != "" {
+		if _, _, err := decodeJSONCursor(params.NextCursor); err != nil {
+			return fmt.Errorf("invalid next_cursor: %w", err)
+		}
+	}
+
+	if params.BeforeCursor != "" {
+		if _, _, err := decodeJSONCursor(params.BeforeCursor); err != nil {
+			return fmt.Errorf("invalid before_cursor: %w", err)
 		}
 	}
 
 	return nil
-} 
+}
+
+// validateOrderByColumn validates that the orderBy column is in the allowed list
+func validateOrderByColumn(orderBy string, allowedColumns []string) error {
+	if orderBy == "" {
+		return nil
+	}
+
+	for _, col := range allowedColumns {
+		if col == orderBy {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("invalid order_by column %q, allowed: %v", orderBy, allowedColumns)
+}
+
+// formatCursorValue formats a value for use in cursor encoding based on its type
+func formatCursorValue(value interface{}) interface{} {
+	switch v := value.(type) {
+	case time.Time:
+		return v.Format(time.RFC3339Nano)
+	case *time.Time:
+		if v != nil {
+			return v.Format(time.RFC3339Nano)
+		}
+		return nil
+	case uuid.UUID:
+		return v.String()
+	case *uuid.UUID:
+		if v != nil {
+			return v.String()
+		}
+		return nil
+	default:
+		return value
+	}
+}
