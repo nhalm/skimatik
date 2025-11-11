@@ -1,0 +1,31 @@
+// ID generator utilities for creating UUIDs
+// These functions provide convenient helpers for generating time-sortable and random UUIDs
+// Available for both generated repositories and custom implementer extensions
+
+import (
+	"github.com/google/uuid"
+)
+
+// UUIDv7 generates a new UUID version 7 (time-sortable)
+// UUID v7 is time-ordered and monotonic, making it ideal for:
+// - Primary keys that need temporal ordering
+// - Sequential IDs that benefit database index performance
+// - Distributed systems where creation time matters
+// UUID v7 format: 48-bit timestamp + 12-bit random + 62-bit random
+func UUIDv7() uuid.UUID {
+	id, err := uuid.NewV7()
+	if err != nil {
+		panic("failed to generate UUID v7: " + err.Error())
+	}
+	return id
+}
+
+// UUIDv4 generates a new UUID version 4 (random)
+// UUID v4 is purely random and should be used for:
+// - Non-primary key identifiers
+// - Correlation IDs, request IDs, trace IDs
+// - Session tokens and temporary identifiers
+// - Cases where temporal ordering is not required
+func UUIDv4() uuid.UUID {
+	return uuid.New()
+}

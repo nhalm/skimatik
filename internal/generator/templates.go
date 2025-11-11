@@ -42,6 +42,7 @@ const (
 	TemplateSharedErrors       = "templates/shared/errors.tmpl"
 	TemplateDatabaseOperations = "templates/shared/database_operations.tmpl"
 	TemplateRetryOperations    = "templates/shared/retry_operations.tmpl"
+	TemplateIDGenerators       = "templates/shared/id_generators.tmpl"
 
 	// Test templates
 	TemplateRepositoryTest = "templates/tests/repository_test.tmpl"

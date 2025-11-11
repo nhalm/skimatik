@@ -89,14 +89,23 @@ curl http://localhost:8080/health
 ```go
 // Generated repository with shared utilities
 type UsersRepository struct {
-    db *pgxkit.DB
+    db             *pgxkit.DB
+    GenerateIdFunc func() uuid.UUID
+}
+
+func NewUsersRepository(db *pgxkit.DB) *UsersRepository {
+    return &UsersRepository{
+        db:             db,
+        GenerateIdFunc: DefaultUUIDv7Generator,
+    }
 }
 
 func (r *UsersRepository) Create(ctx context.Context, params CreateUsersParams) (*Users, error) {
-    query := `INSERT INTO users (name, email) VALUES ($1, $2) RETURNING ...`
-    
+    id := r.GenerateIdFunc()
+    query := `INSERT INTO users (id, name, email) VALUES ($1, $2, $3) RETURNING ...`
+
     // Using shared database utilities
-    row := ExecuteQueryRow(ctx, r.db, "create", "Users", query, params.Name, params.Email)
+    row := ExecuteQueryRow(ctx, r.db, "create", "Users", query, id, params.Name, params.Email)
     var user Users
     err := row.Scan(&user.Id, &user.Name, &user.Email, &user.CreatedAt)
     return &user, HandleQueryRowError("create", "Users", err)
@@ -188,6 +197,7 @@ func (s *APIServer) handleListUsers(w http.ResponseWriter, r *http.Request) {
 
 ### 1. **Direct Repository Usage**
 ```go
+// UUID v7 generator set automatically
 userRepo := repositories.NewUsersRepository(conn)
 user, err := userRepo.Create(ctx, params)
 ```
@@ -268,7 +278,7 @@ type UserService struct {
 
 func NewUserService(db *pgxkit.DB) UserManager {
     return &UserService{
-        UsersRepository: repositories.NewUsersRepository(db),
+        UsersRepository: repositories.NewUsersRepository(db, nil),
     }
 }
 

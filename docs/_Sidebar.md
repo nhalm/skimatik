@@ -8,6 +8,7 @@
 - **[Examples](examples)** - Real usage examples
 - **[Type Mapping](type-mapping)** - PostgreSQL to Go type reference
 - **[Database Migrations](database-migrations)** - Schema management with golang-migrate
+- **[ID Generation](id-generation)** - Application-side ID generation patterns
 - **[Configuration](configuration-reference)** - Complete config options
 
 ### Architecture
