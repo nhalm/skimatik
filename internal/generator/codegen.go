@@ -392,6 +392,7 @@ func (cg *CodeGenerator) prepareCRUDTemplateData(table Table) (map[string]interf
 		"ReceiverName":       receiverName,
 		"TableName":          table.Name,
 		"IDColumn":           idColumn.Name,
+		"IDColumnType":       idColumn.Type,
 		"IDParamIndex":       idParamIndex,
 		"SelectColumns":      strings.Join(selectColumns, ", "),
 		"ScanArgs":           strings.Join(scanArgs, ", "),

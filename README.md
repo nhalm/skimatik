@@ -6,7 +6,7 @@
 [![Release](https://img.shields.io/github/v/release/nhalm/skimatik)](https://github.com/nhalm/skimatik/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A database-first code generator for PostgreSQL that creates type-safe Go repositories with built-in cursor-based pagination. Generate clean, efficient CRUD operations and custom query functions directly from your database schema.
+A database-first code generator for PostgreSQL that creates type-safe Go repositories with built-in bidirectional cursor-based pagination. Generate clean, efficient CRUD operations and custom query functions directly from your database schema.
 
 ## Why skimatik?
 
@@ -27,7 +27,7 @@ A database-first code generator for PostgreSQL that creates type-safe Go reposit
 
 3. **Self-documenting data layer**: Your database schema plus generated repositories create a clear contract. Other developers, AI tools, and data consumers can understand your domain by looking at the database—not spelunking through application code.
 
-4. **Production patterns included**: Cursor-based pagination using UUID v7 time-ordering, retry logic for transient failures, comprehensive error handling. These aren't afterthoughts—they're built into every generated repository.
+4. **Production patterns included**: Bidirectional cursor-based pagination using UUID v7 time-ordering with runtime sort selection, retry logic for transient failures, comprehensive error handling. These aren't afterthoughts—they're built into every generated repository.
 
 5. **Designed for extension**: Embed generated repositories into your own types. Add business logic, implement domain interfaces, compose repositories. The generated CRUD and utilities are your foundation, not your limitation.
 
@@ -43,7 +43,7 @@ A database-first code generator for PostgreSQL that creates type-safe Go reposit
 
 - **Database-First**: Works with existing PostgreSQL databases, no schema migrations required
 - **Type-Safe**: Generates fully typed Go code using pgx with comprehensive PostgreSQL type support
-- **Built-in Pagination**: Every list operation includes efficient cursor-based pagination using UUID v7
+- **Bidirectional Pagination**: Every list operation includes efficient cursor-based pagination using UUID v7 with forward/backward navigation and runtime sort selection
 - **Zero Dependencies**: Generated code only requires pgx - no external pagination or ORM dependencies
 - **Shared Utilities**: Eliminates code duplication with reusable database operation and retry patterns
 - **Repository Embedding**: Generated repositories designed for clean composition and extension

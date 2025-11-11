@@ -85,6 +85,7 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 	var sqlLines []string
 	var paramAnnotations []ParameterAnnotation
 	var resultAnnotations []ResultAnnotation
+	var cursorColumns []string
 
 	scanner := bufio.NewScanner(file)
 	lineNum := 0
@@ -104,6 +105,7 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 				}
 				currentQuery.ParameterAnnotations = paramAnnotations
 				currentQuery.ResultAnnotations = resultAnnotations
+				currentQuery.CursorColumns = cursorColumns
 				if err := qp.validateParameterAnnotations(currentQuery); err != nil {
 					return nil, fmt.Errorf("error in query %s: %w", currentQuery.Name, err)
 				}
@@ -130,6 +132,7 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 		// Check for parameter annotation
 		if paramAnnotation := qp.parseParameterAnnotation(trimmedLine); paramAnnotation != nil {
 			if currentQuery != nil {
+			cursorColumns = []string{}
 				paramAnnotations = append(paramAnnotations, *paramAnnotation)
 			}
 			continue
@@ -139,6 +142,14 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 		if resultAnnotation := qp.parseResultAnnotation(trimmedLine); resultAnnotation != nil {
 			if currentQuery != nil {
 				resultAnnotations = append(resultAnnotations, *resultAnnotation)
+			}
+			continue
+		}
+
+		// Check for cursor_columns annotation
+		if cursorCols := qp.parseCursorColumnsAnnotation(trimmedLine); cursorCols != nil {
+			if currentQuery != nil {
+				cursorColumns = cursorCols
 			}
 			continue
 		}
@@ -162,6 +173,7 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 		}
 		currentQuery.ParameterAnnotations = paramAnnotations
 		currentQuery.ResultAnnotations = resultAnnotations
+		currentQuery.CursorColumns = cursorColumns
 		if err := qp.validateParameterAnnotations(currentQuery); err != nil {
 			return nil, fmt.Errorf("error in query %s: %w", currentQuery.Name, err)
 		}
@@ -421,4 +433,32 @@ func isValidGoType(goType string) bool {
 	}
 
 	return len(parts) <= 2
+}
+
+// parseCursorColumnsAnnotation parses a cursor_columns annotation
+// Expected format: -- cursor_columns: col1, col2, col3
+func (qp *QueryParser) parseCursorColumnsAnnotation(line string) []string {
+	// Regex to match: -- cursor_columns: col1, col2, col3
+	cursorRegex := regexp.MustCompile(`^--\s*cursor_columns:\s*(.+)\s*$`)
+
+	matches := cursorRegex.FindStringSubmatch(line)
+	if len(matches) != 2 {
+		return nil
+	}
+
+	// Parse comma-separated column names
+	columnsStr := strings.TrimSpace(matches[1])
+	if columnsStr == "" {
+		return nil
+	}
+
+	var columns []string
+	for _, col := range strings.Split(columnsStr, ",") {
+		col = strings.TrimSpace(col)
+		if col != "" && isValidGoIdentifier(col) {
+			columns = append(columns, col)
+		}
+	}
+
+	return columns
 }
