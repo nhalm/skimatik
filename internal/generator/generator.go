@@ -72,6 +72,10 @@ func (g *Generator) Generate(ctx context.Context) error {
 			return fmt.Errorf("shared retry operations generation failed: %w", err)
 		}
 
+		if err := g.generateSharedIDGenerators(); err != nil {
+			return fmt.Errorf("shared ID generators generation failed: %w", err)
+		}
+
 		if err := g.generateTables(ctx); err != nil {
 			return fmt.Errorf("table generation failed: %w", err)
 		}
@@ -181,6 +185,11 @@ func (g *Generator) generateSharedDatabaseOperations() error {
 // generateSharedRetryOperations generates the shared retry operation utilities file
 func (g *Generator) generateSharedRetryOperations() error {
 	return g.codegen.GenerateSharedRetryOperations()
+}
+
+// generateSharedIDGenerators generates the shared ID generator utilities file
+func (g *Generator) generateSharedIDGenerators() error {
+	return g.codegen.GenerateSharedIDGenerators()
 }
 
 // generateQueries generates code from SQL query files

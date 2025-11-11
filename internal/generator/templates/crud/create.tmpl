@@ -5,18 +5,19 @@ type Create{{.StructName}}Params struct {
 
 // Create creates a new {{.StructName}}
 func (r *{{.RepositoryName}}) Create(ctx context.Context, params Create{{.StructName}}Params) (*{{.StructName}}, error) {
+	id := r.GenerateIdFunc()
 	query := `
 		INSERT INTO {{.TableName}} ({{.InsertColumns}})
 		VALUES ({{.InsertPlaceholders}})
 		RETURNING {{.SelectColumns}}
 	`
-	
+
 	var {{.ReceiverName}} {{.StructName}}
 	row := ExecuteQueryRow(ctx, r.db, "create", "{{.StructName}}", query, {{.InsertArgs}})
 	err := row.Scan({{.ScanArgs}})
 	if err := HandleQueryRowError("create", "{{.StructName}}", err); err != nil {
 		return nil, err
 	}
-	
+
 	return &{{.ReceiverName}}, nil
-} 
+}

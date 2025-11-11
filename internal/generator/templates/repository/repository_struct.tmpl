@@ -1,11 +1,22 @@
 // {{.RepositoryName}} provides database operations for {{.TableName}}
 type {{.RepositoryName}} struct {
-	db *pgxkit.DB
+	db             *pgxkit.DB
+	{{if .IsUUIDType -}}
+	GenerateIdFunc func() {{.IDType}}
+	{{else -}}
+	// GenerateIdFunc must be set by user for non-UUID types
+	GenerateIdFunc func() {{.IDType}}
+	{{end -}}
 }
 
 // New{{.RepositoryName}} creates a new {{.RepositoryName}}
 func New{{.RepositoryName}}(db *pgxkit.DB) *{{.RepositoryName}} {
 	return &{{.RepositoryName}}{
-		db: db,
+		db:             db,
+		{{if .IsUUIDType -}}
+		GenerateIdFunc: UUIDv7,
+		{{else -}}
+		GenerateIdFunc: nil, // Must be set by user for non-UUID types
+		{{end -}}
 	}
-} 
+}

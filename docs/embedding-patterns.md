@@ -194,11 +194,22 @@ type UserService struct {
     orderRepo OrderRepository
 }
 
-func NewUserService(userRepo UserRepository, orderRepo OrderRepository) *UserService {
+func NewUserService(db *pgxkit.DB) *UserService {
     return &UserService{
-        userRepo:  userRepo,
-        orderRepo: orderRepo,
+        userRepo:  NewUserRepository(db),
+        orderRepo: NewOrderRepository(db),
     }
+}
+
+// Custom ID Generator Example for Testing
+func NewUserRepositoryWithTestID(db *pgxkit.DB, idGenerator func() uuid.UUID) *UserRepository {
+    repo := &UserRepository{
+        UsersRepository: repositories.NewUsersRepository(db),
+        db:              db,
+    }
+    // Override ID generator via property
+    repo.GenerateIdFunc = idGenerator
+    return repo
 }
 
 func (s *UserService) RegisterUser(ctx context.Context, name, email string) (*UserProfile, error) {
@@ -421,5 +432,64 @@ func TestUserHandler_CreateUser(t *testing.T) {
 - **API changes** don't affect business logic
 - **Database changes** only affect generated layer
 
-This architecture leverages skimatik's generated repositories as a solid foundation while maintaining clean separation of concerns across your entire application stack. 
-- **[Examples & Tutorials](examples)** - Hands-on examples with real applications 
+## Custom ID Generators
+
+Generated repositories have a public `GenerateIdFunc` property that can be overridden. This provides flexibility for testing and custom ID strategies.
+
+### Using Default UUID v7 Generator
+
+```go
+// UUID v7 generator is automatically set
+userRepo := repositories.NewUsersRepository(db)
+```
+
+### Custom ID Generator for Testing
+
+```go
+// Deterministic ID generator for tests
+func TestUserCreation(t *testing.T) {
+    testID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+
+    userRepo := repositories.NewUsersRepository(db)
+    // Override ID generator via property
+    userRepo.GenerateIdFunc = func() uuid.UUID { return testID }
+
+    user, err := userRepo.Create(ctx, CreateUsersParams{
+        Name:  "Test User",
+        Email: "test@example.com",
+    })
+
+    assert.Equal(t, testID, user.Id)
+}
+```
+
+### Custom Repository with Specialized ID Generator
+
+```go
+// Repository wrapper with custom ID strategy
+type UserRepository struct {
+    *repositories.UsersRepository
+}
+
+func NewUserRepository(db *pgxkit.DB) *UserRepository {
+    // Use default UUID v7
+    return &UserRepository{
+        UsersRepository: repositories.NewUsersRepository(db),
+    }
+}
+
+func NewUserRepositoryWithCustomID(db *pgxkit.DB, idGen func() uuid.UUID) *UserRepository {
+    repo := &UserRepository{
+        UsersRepository: repositories.NewUsersRepository(db),
+    }
+    // Override ID generator via property
+    repo.GenerateIdFunc = idGen
+    return repo
+}
+```
+
+See the [ID Generation Guide](id-generation) for more examples including ULID, KSUID, and Snowflake ID patterns.
+
+This architecture leverages skimatik's generated repositories as a solid foundation while maintaining clean separation of concerns across your entire application stack.
+- **[Examples & Tutorials](examples)** - Hands-on examples with real applications
+- **[ID Generation Guide](id-generation)** - Custom ID generators and testing patterns 
