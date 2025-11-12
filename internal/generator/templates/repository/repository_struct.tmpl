@@ -1,16 +1,15 @@
 // {{.RepositoryName}} provides database operations for {{.TableName}}
 type {{.RepositoryName}} struct {
 	db             *pgxkit.DB
-	{{if .IsUUIDType -}}
 	generateIdFunc func() {{.IDType}}
-	{{else -}}
-	// generateIdFunc must be set by user for non-UUID types
-	generateIdFunc func() {{.IDType}}
-	{{end -}}
 }
 
 // New{{.RepositoryName}} creates a new {{.RepositoryName}}
+{{if .IsUUIDType -}}
 // idGen: ID generator function. Pass nil to use default UUID v7 generator.
+{{else -}}
+// idGen: ID generator function (required for {{.IDType}} primary keys).
+{{end -}}
 func New{{.RepositoryName}}(db *pgxkit.DB, idGen func() {{.IDType}}) *{{.RepositoryName}} {
 	{{if .IsUUIDType -}}
 	if idGen == nil {
