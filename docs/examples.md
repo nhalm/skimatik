@@ -93,10 +93,13 @@ type UsersRepository struct {
     GenerateIdFunc func() uuid.UUID
 }
 
-func NewUsersRepository(db *pgxkit.DB) *UsersRepository {
+func NewUsersRepository(db *pgxkit.DB, idGen func() uuid.UUID) *UsersRepository {
+    if idGen == nil {
+        idGen = UUIDv7
+    }
     return &UsersRepository{
         db:             db,
-        GenerateIdFunc: DefaultUUIDv7Generator,
+        generateIdFunc: idGen,
     }
 }
 
@@ -197,8 +200,8 @@ func (s *APIServer) handleListUsers(w http.ResponseWriter, r *http.Request) {
 
 ### 1. **Direct Repository Usage**
 ```go
-// UUID v7 generator set automatically
-userRepo := repositories.NewUsersRepository(conn)
+// UUID v7 generator set automatically (pass nil)
+userRepo := repositories.NewUsersRepository(conn, nil)
 user, err := userRepo.Create(ctx, params)
 ```
 
@@ -210,7 +213,7 @@ type UserRepository struct {
 
 func NewUserRepository(db *pgxkit.DB) *UserRepository {
     return &UserRepository{
-        UsersRepository: repositories.NewUsersRepository(db),
+        UsersRepository: repositories.NewUsersRepository(db, nil),
     }
 }
 

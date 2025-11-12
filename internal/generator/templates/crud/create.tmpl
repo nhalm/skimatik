@@ -5,7 +5,7 @@ type Create{{.StructName}}Params struct {
 
 // Create creates a new {{.StructName}}
 func (r *{{.RepositoryName}}) Create(ctx context.Context, params Create{{.StructName}}Params) (*{{.StructName}}, error) {
-	id := r.GenerateIdFunc()
+	id := r.generateIdFunc()
 	query := `
 		INSERT INTO {{.TableName}} ({{.InsertColumns}})
 		VALUES ({{.InsertPlaceholders}})

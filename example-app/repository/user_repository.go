@@ -22,7 +22,7 @@ type UserRepository struct {
 // NewUserRepository creates a new user repository with the generated repositories
 func NewUserRepository(db *pgxkit.DB) *UserRepository {
 	return &UserRepository{
-		UsersRepository: generated.NewUsersRepository(db),
+		UsersRepository: generated.NewUsersRepository(db, nil), // nil = use default UUID v7 generator
 		UsersQueries:    generated.NewUsersQueries(db),
 	}
 }

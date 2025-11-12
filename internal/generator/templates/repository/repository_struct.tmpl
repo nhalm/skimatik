@@ -2,21 +2,23 @@
 type {{.RepositoryName}} struct {
 	db             *pgxkit.DB
 	{{if .IsUUIDType -}}
-	GenerateIdFunc func() {{.IDType}}
+	generateIdFunc func() {{.IDType}}
 	{{else -}}
-	// GenerateIdFunc must be set by user for non-UUID types
-	GenerateIdFunc func() {{.IDType}}
+	// generateIdFunc must be set by user for non-UUID types
+	generateIdFunc func() {{.IDType}}
 	{{end -}}
 }
 
 // New{{.RepositoryName}} creates a new {{.RepositoryName}}
-func New{{.RepositoryName}}(db *pgxkit.DB) *{{.RepositoryName}} {
+// idGen: ID generator function. Pass nil to use default UUID v7 generator.
+func New{{.RepositoryName}}(db *pgxkit.DB, idGen func() {{.IDType}}) *{{.RepositoryName}} {
+	{{if .IsUUIDType -}}
+	if idGen == nil {
+		idGen = UUIDv7
+	}
+	{{end -}}
 	return &{{.RepositoryName}}{
 		db:             db,
-		{{if .IsUUIDType -}}
-		GenerateIdFunc: UUIDv7,
-		{{else -}}
-		GenerateIdFunc: nil, // Must be set by user for non-UUID types
-		{{end -}}
+		generateIdFunc: idGen,
 	}
 }

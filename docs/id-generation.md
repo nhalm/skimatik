@@ -45,8 +45,8 @@ func main() {
     db := pgxkit.NewDB()
     defer db.Close()
 
-    // UUID v7 generator is automatically set
-    userRepo := repositories.NewUsersRepository(db)
+    // UUID v7 generator is automatically set (pass nil)
+    userRepo := repositories.NewUsersRepository(db, nil)
 
     // IDs are automatically generated using UUID v7
     user, err := userRepo.Create(ctx, repositories.CreateUsersParams{
@@ -75,31 +75,27 @@ This means records inserted later have lexicographically larger IDs, which benef
 
 ### UUID v4 (Random)
 
-If you need random UUIDs instead of time-ordered, override the `GenerateIdFunc` property:
+If you need random UUIDs instead of time-ordered, pass a custom generator to the constructor:
 
 ```go
 import "github.com/google/uuid"
 
-userRepo := repositories.NewUsersRepository(db)
-
-// Override with UUID v4 generator
-userRepo.GenerateIdFunc = func() uuid.UUID {
+// Pass UUID v4 generator to constructor
+userRepo := repositories.NewUsersRepository(db, func() uuid.UUID {
     return uuid.New() // UUID v4
-}
+})
 ```
 
 ### Deterministic IDs for Testing
 
-Create predictable IDs for unit tests by setting the `GenerateIdFunc` property:
+Create predictable IDs for unit tests by passing a custom generator to the constructor:
 
 ```go
 func TestUserCreation(t *testing.T) {
     testID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
-    userRepo := repositories.NewUsersRepository(db)
-
-    // Override with deterministic generator
-    userRepo.GenerateIdFunc = func() uuid.UUID { return testID }
+    // Pass deterministic generator to constructor
+    userRepo := repositories.NewUsersRepository(db, func() uuid.UUID { return testID })
 
     user, err := userRepo.Create(ctx, repositories.CreateUsersParams{
         Name:  "Test User",
@@ -119,13 +115,11 @@ Generate sequential IDs for tests with multiple records:
 func TestMultipleUsers(t *testing.T) {
     counter := 0
 
-    userRepo := repositories.NewUsersRepository(db)
-
-    // Override with sequential generator
-    userRepo.GenerateIdFunc = func() uuid.UUID {
+    // Pass sequential generator to constructor
+    userRepo := repositories.NewUsersRepository(db, func() uuid.UUID {
         counter++
         return uuid.MustParse(fmt.Sprintf("00000000-0000-0000-0000-%012d", counter))
-    }
+    })
 
     user1, _ := userRepo.Create(ctx, CreateUsersParams{Name: "User 1", Email: "user1@example.com"})
     user2, _ := userRepo.Create(ctx, CreateUsersParams{Name: "User 2", Email: "user2@example.com"})
@@ -146,14 +140,12 @@ ULIDs are similar to UUID v7 but with better readability:
 ```go
 import "github.com/oklog/ulid/v2"
 
-userRepo := repositories.NewUsersRepository(db)
-
-// Override with ULID generator
-userRepo.GenerateIdFunc = func() uuid.UUID {
+// Pass ULID generator to constructor
+userRepo := repositories.NewUsersRepository(db, func() uuid.UUID {
     entropy := ulid.DefaultEntropy()
     id := ulid.MustNew(ulid.Timestamp(time.Now()), entropy)
     return uuid.UUID(id)
-}
+})
 ```
 
 ### KSUID (K-Sortable Unique Identifier)
@@ -163,15 +155,13 @@ KSUIDs are time-ordered and URL-safe:
 ```go
 import "github.com/segmentio/ksuid"
 
-userRepo := repositories.NewUsersRepository(db)
-
-// Override with KSUID generator
-userRepo.GenerateIdFunc = func() uuid.UUID {
+// Pass KSUID generator to constructor
+userRepo := repositories.NewUsersRepository(db, func() uuid.UUID {
     id := ksuid.New()
     var uuidBytes [16]byte
     copy(uuidBytes[:], id.Bytes())
     return uuid.UUID(uuidBytes)
-}
+})
 ```
 
 ### Snowflake IDs (Twitter's Distributed ID)
@@ -184,15 +174,13 @@ import "github.com/bwmarrin/snowflake"
 // Initialize snowflake node (typically in main)
 node, _ := snowflake.NewNode(1)
 
-userRepo := repositories.NewUsersRepository(db)
-
-// Override with Snowflake generator
-userRepo.GenerateIdFunc = func() uuid.UUID {
+// Pass Snowflake generator to constructor
+userRepo := repositories.NewUsersRepository(db, func() uuid.UUID {
     id := node.Generate().Int64()
     var uuidBytes [16]byte
     binary.BigEndian.PutUint64(uuidBytes[8:], uint64(id))
     return uuid.UUID(uuidBytes)
-}
+})
 ```
 
 ## Migration from Database-Generated IDs
@@ -225,8 +213,8 @@ Update all repository instantiation to use the new signature:
 // Before (if you had custom code)
 userRepo := &UserRepository{db: db}
 
-// After
-userRepo := repositories.NewUsersRepository(db)
+// After (pass nil for default UUID v7 generator)
+userRepo := repositories.NewUsersRepository(db, nil)
 ```
 
 ### Step 3: Regenerate Code
@@ -246,7 +234,8 @@ The generated repositories now handle ID generation automatically. No changes to
 Unless you have specific requirements, use the default UUID v7 generator:
 
 ```go
-userRepo := repositories.NewUsersRepository(db)
+// Pass nil to use default UUID v7 generator
+userRepo := repositories.NewUsersRepository(db, nil)
 ```
 
 ### 2. Use Deterministic Generators for Tests
@@ -258,10 +247,8 @@ func setupTestRepo(t *testing.T) *repositories.UsersRepository {
     db := setupTestDB(t)
     testID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
-    repo := repositories.NewUsersRepository(db)
-    repo.GenerateIdFunc = func() uuid.UUID { return testID }
-
-    return repo
+    // Pass deterministic generator to constructor
+    return repositories.NewUsersRepository(db, func() uuid.UUID { return testID })
 }
 ```
 
@@ -276,10 +263,10 @@ type Service struct {
 }
 
 func NewService(db *pgxkit.DB) *Service {
-    // Both repos use default UUID v7
+    // Both repos use default UUID v7 (pass nil)
     return &Service{
-        userRepo:  repositories.NewUsersRepository(db),
-        orderRepo: repositories.NewOrdersRepository(db),
+        userRepo:  repositories.NewUsersRepository(db, nil),
+        orderRepo: repositories.NewOrdersRepository(db, nil),
     }
 }
 ```
@@ -290,10 +277,9 @@ If using non-default generators, document why:
 
 ```go
 // Using UUID v4 instead of v7 to prevent ID prediction in public APIs
-userRepo := repositories.NewUsersRepository(db)
-userRepo.GenerateIdFunc = func() uuid.UUID {
+userRepo := repositories.NewUsersRepository(db, func() uuid.UUID {
     return uuid.New() // UUID v4
-}
+})
 ```
 
 ## Repository Structure
@@ -303,21 +289,24 @@ All generated repositories follow this pattern:
 ```go
 type <Table>Repository struct {
     db             *pgxkit.DB
-    GenerateIdFunc func() uuid.UUID // Public property for ID generation
+    generateIdFunc func() uuid.UUID // Private field for ID generation
 }
 
-func New<Table>Repository(db *pgxkit.DB) *<Table>Repository {
+func New<Table>Repository(db *pgxkit.DB, idGen func() uuid.UUID) *<Table>Repository {
+    if idGen == nil {
+        idGen = UUIDv7  // UUID v7 by default
+    }
     return &<Table>Repository{
         db:             db,
-        GenerateIdFunc: DefaultUUIDv7Generator, // UUID v7 by default
+        generateIdFunc: idGen,
     }
 }
 ```
 
 Where:
-- `db`: Database connection (required in constructor)
-- `GenerateIdFunc`: Public property that can be overridden after construction
-- Default: UUID v7 generator is automatically set
+- `db`: Database connection (required parameter)
+- `idGen`: Optional ID generator function parameter (pass nil for default UUID v7)
+- `generateIdFunc`: Private field for ID generation (set from constructor parameter)
 
 ## Testing Patterns
 
@@ -328,8 +317,8 @@ func TestUserService_CreateUser(t *testing.T) {
     expectedID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
     db := setupTestDB(t)
-    userRepo := repositories.NewUsersRepository(db)
-    userRepo.GenerateIdFunc = func() uuid.UUID { return expectedID }
+    // Pass deterministic generator to constructor
+    userRepo := repositories.NewUsersRepository(db, func() uuid.UUID { return expectedID })
 
     userService := NewUserService(userRepo)
 
@@ -346,8 +335,8 @@ func TestUserService_CreateUser(t *testing.T) {
 func TestIntegration_UserFlow(t *testing.T) {
     db := setupIntegrationDB(t)
 
-    // Use default UUID v7 generator
-    userRepo := repositories.NewUsersRepository(db)
+    // Use default UUID v7 generator (pass nil)
+    userRepo := repositories.NewUsersRepository(db, nil)
 
     user, err := userRepo.Create(ctx, CreateUsersParams{
         Name:  "Integration Test",
@@ -365,16 +354,16 @@ func TestIntegration_UserFlow(t *testing.T) {
 
 **Problem**: `nil` UUID in created records
 
-**Solution**: The default UUID v7 generator is automatically set. If you're seeing nil UUIDs, verify the repository was constructed properly:
+**Solution**: The default UUID v7 generator is automatically set when you pass `nil` to the constructor. If you're seeing nil UUIDs, verify the repository was constructed properly:
 
 ```go
-// Correct - default generator is set automatically
-userRepo := repositories.NewUsersRepository(db)
+// Correct - default generator is set automatically when passing nil
+userRepo := repositories.NewUsersRepository(db, nil)
 
-// Custom generator override
-userRepo.GenerateIdFunc = func() uuid.UUID {
+// Custom generator passed to constructor
+userRepo := repositories.NewUsersRepository(db, func() uuid.UUID {
     return uuid.New()
-}
+})
 ```
 
 ### ID Collision in Tests
@@ -386,14 +375,12 @@ userRepo.GenerateIdFunc = func() uuid.UUID {
 ```go
 func TestA(t *testing.T) {
     id := uuid.MustParse("00000000-0000-0000-0000-000000000001")
-    userRepo := repositories.NewUsersRepository(db)
-    userRepo.GenerateIdFunc = func() uuid.UUID { return id }
+    userRepo := repositories.NewUsersRepository(db, func() uuid.UUID { return id })
 }
 
 func TestB(t *testing.T) {
     id := uuid.MustParse("00000000-0000-0000-0000-000000000002")
-    userRepo := repositories.NewUsersRepository(db)
-    userRepo.GenerateIdFunc = func() uuid.UUID { return id }
+    userRepo := repositories.NewUsersRepository(db, func() uuid.UUID { return id })
 }
 ```
 

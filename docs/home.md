@@ -104,11 +104,18 @@ type Users struct {
 func (u Users) GetID() uuid.UUID { return u.Id }
 
 type UsersRepository struct {
-    db *pgxkit.DB
+    db             *pgxkit.DB
+    generateIdFunc func() uuid.UUID
 }
 
-func NewUsersRepository(db *pgxkit.DB) *UsersRepository {
-    return &UsersRepository{db: db}
+func NewUsersRepository(db *pgxkit.DB, idGen func() uuid.UUID) *UsersRepository {
+    if idGen == nil {
+        idGen = UUIDv7
+    }
+    return &UsersRepository{
+        db:             db,
+        generateIdFunc: idGen,
+    }
 }
 
 func (r *UsersRepository) Create(ctx context.Context, params CreateUsersParams) (*Users, error) {

@@ -199,8 +199,8 @@ type UserRepository struct {
 
 func NewUserRepository(db *pgxkit.DB) UserInterface {
     return &UserRepository{
-        UsersRepository: repositories.NewUsersRepository(db),
-        profileRepo:     repositories.NewProfilesRepository(db),
+        UsersRepository: repositories.NewUsersRepository(db, nil),
+        profileRepo:     repositories.NewProfilesRepository(db, nil),
         db:             db,
     }
 }

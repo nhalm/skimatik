@@ -161,8 +161,8 @@ func main() {
     }
     defer db.Shutdown(context.Background())
     
-    // Create repository (UUID v7 generator set automatically)
-    userRepo := repositories.NewUsersRepository(db)
+    // Create repository (pass nil for default UUID v7 generator)
+    userRepo := repositories.NewUsersRepository(db, nil)
 
     // Create user
     user, err := userRepo.Create(ctx, repositories.CreateUsersParams{
@@ -303,7 +303,7 @@ type UserService struct {
 
 func NewUserService(db *pgxkit.DB) UserManager {
     return &UserService{
-        UsersRepository: repositories.NewUsersRepository(db),
+        UsersRepository: repositories.NewUsersRepository(db, nil),
         db:             db,
     }
 }
