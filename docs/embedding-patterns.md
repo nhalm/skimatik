@@ -102,7 +102,7 @@ type UserRepository struct {
 
 func NewUserRepository(db *pgxkit.DB) *UserRepository {
     return &UserRepository{
-        UsersRepository: generated.NewUsersRepository(db),
+        UsersRepository: generated.NewUsersRepository(db, nil),
         db:              db,
     }
 }
@@ -203,13 +203,10 @@ func NewUserService(db *pgxkit.DB) *UserService {
 
 // Custom ID Generator Example for Testing
 func NewUserRepositoryWithTestID(db *pgxkit.DB, idGenerator func() uuid.UUID) *UserRepository {
-    repo := &UserRepository{
-        UsersRepository: repositories.NewUsersRepository(db),
+    return &UserRepository{
+        UsersRepository: repositories.NewUsersRepository(db, idGenerator),
         db:              db,
     }
-    // Override ID generator via property
-    repo.GenerateIdFunc = idGenerator
-    return repo
 }
 
 func (s *UserService) RegisterUser(ctx context.Context, name, email string) (*UserProfile, error) {
@@ -434,13 +431,13 @@ func TestUserHandler_CreateUser(t *testing.T) {
 
 ## Custom ID Generators
 
-Generated repositories have a public `GenerateIdFunc` property that can be overridden. This provides flexibility for testing and custom ID strategies.
+Generated repositories accept an optional ID generator function as a constructor parameter. This provides flexibility for testing and custom ID strategies.
 
 ### Using Default UUID v7 Generator
 
 ```go
-// UUID v7 generator is automatically set
-userRepo := repositories.NewUsersRepository(db)
+// UUID v7 generator is automatically set (pass nil)
+userRepo := repositories.NewUsersRepository(db, nil)
 ```
 
 ### Custom ID Generator for Testing
@@ -450,9 +447,8 @@ userRepo := repositories.NewUsersRepository(db)
 func TestUserCreation(t *testing.T) {
     testID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
-    userRepo := repositories.NewUsersRepository(db)
-    // Override ID generator via property
-    userRepo.GenerateIdFunc = func() uuid.UUID { return testID }
+    // Pass deterministic generator to constructor
+    userRepo := repositories.NewUsersRepository(db, func() uuid.UUID { return testID })
 
     user, err := userRepo.Create(ctx, CreateUsersParams{
         Name:  "Test User",
@@ -472,19 +468,17 @@ type UserRepository struct {
 }
 
 func NewUserRepository(db *pgxkit.DB) *UserRepository {
-    // Use default UUID v7
+    // Use default UUID v7 (pass nil)
     return &UserRepository{
-        UsersRepository: repositories.NewUsersRepository(db),
+        UsersRepository: repositories.NewUsersRepository(db, nil),
     }
 }
 
 func NewUserRepositoryWithCustomID(db *pgxkit.DB, idGen func() uuid.UUID) *UserRepository {
-    repo := &UserRepository{
-        UsersRepository: repositories.NewUsersRepository(db),
+    // Pass custom ID generator to constructor
+    return &UserRepository{
+        UsersRepository: repositories.NewUsersRepository(db, idGen),
     }
-    // Override ID generator via property
-    repo.GenerateIdFunc = idGen
-    return repo
 }
 ```
 
