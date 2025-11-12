@@ -149,7 +149,6 @@ func (cg *CodeGenerator) combineImports(lists ...[]string) []string {
 func (cg *CodeGenerator) getQueryImports(queries []Query) []string {
 	imports := make(map[string]bool)
 
-	hasCursorColumns := false
 	for _, query := range queries {
 		// Get imports for result columns
 		queryImports := cg.typeMapper.GetRequiredImports(query.Columns)
@@ -162,16 +161,6 @@ func (cg *CodeGenerator) getQueryImports(queries []Query) []string {
 		for _, imp := range paramImports {
 			imports[imp] = true
 		}
-
-		// Check if query uses cursor_columns
-		if len(query.CursorColumns) > 0 {
-			hasCursorColumns = true
-		}
-	}
-
-	// Add reflect package if any query uses cursor_columns
-	if hasCursorColumns {
-		imports["reflect"] = true
 	}
 
 	// Convert map to slice
@@ -771,6 +760,7 @@ func (cg *CodeGenerator) generateQueryCode(sourceFile string, queries []Query) (
 		}
 	}
 
+
 	// Pagination types are in the shared pagination.go file
 
 	// Generate repository struct and constructor
@@ -795,6 +785,71 @@ func (cg *CodeGenerator) generateQueryCode(sourceFile string, queries []Query) (
 	}
 
 	return code.String(), nil
+}
+
+// generateInlinePaginationTypes generates pagination types and utilities inline for query files
+func (cg *CodeGenerator) generateInlinePaginationTypes() (string, error) {
+	tmpl := `// PaginationParams holds parameters for cursor-based pagination
+type PaginationParams struct {
+	// Cursor is the base64-encoded UUID to start pagination from
+	// If empty, starts from the beginning
+	Cursor string ` + "`json:\"cursor,omitempty\"`" + `
+
+	// Limit is the maximum number of items to return
+	// Must be between 1 and 100, defaults to 20
+	Limit int32 ` + "`json:\"limit,omitempty\"`" + `
+}
+
+// PaginationResult holds the result of a paginated query
+type PaginationResult[T any] struct {
+	// Items is the list of items returned
+	Items []T ` + "`json:\"items\"`" + `
+
+	// HasMore indicates if there are more items available
+	HasMore bool ` + "`json:\"has_more\"`" + `
+
+	// NextCursor is the cursor for the next page
+	// Only set if HasMore is true
+	NextCursor string ` + "`json:\"next_cursor,omitempty\"`" + `
+}
+
+// encodeCursor encodes a UUID as a base64 cursor
+func encodeCursor(id uuid.UUID) string {
+	return base64.URLEncoding.EncodeToString(id[:])
+}
+
+// decodeCursor decodes a base64 cursor to a UUID
+func decodeCursor(cursor string) (uuid.UUID, error) {
+	if cursor == "" {
+		return uuid.UUID{}, nil
+	}
+
+	data, err := base64.URLEncoding.DecodeString(cursor)
+	if err != nil {
+		return uuid.UUID{}, fmt.Errorf("invalid cursor format: %w", err)
+	}
+
+	if len(data) != 16 {
+		return uuid.UUID{}, fmt.Errorf("invalid cursor length: expected 16 bytes, got %d", len(data))
+	}
+
+	var id uuid.UUID
+	copy(id[:], data)
+	return id, nil
+}
+
+// validatePaginationParams validates pagination parameters
+func validatePaginationParams(params PaginationParams) error {
+	if params.Limit <= 0 {
+		return fmt.Errorf("limit must be positive, got %d", params.Limit)
+	}
+	if params.Limit > 100 {
+		return fmt.Errorf("limit too large: maximum 100, got %d", params.Limit)
+	}
+	return nil
+}`
+
+	return tmpl, nil
 }
 
 // Query generation helper methods moved from query_templates.go
@@ -981,10 +1036,8 @@ func (cg *CodeGenerator) prepareQueryTemplateData(query Query) (map[string]inter
 	}
 
 	paramArgStr := ""
-	paramArgsOnly := ""
 	if len(paramArgs) > 0 {
-		paramArgsOnly = strings.Join(paramArgs, ", ")
-		paramArgStr = ", " + paramArgsOnly
+		paramArgStr = ", " + strings.Join(paramArgs, ", ")
 	}
 
 	return map[string]interface{}{
@@ -995,7 +1048,6 @@ func (cg *CodeGenerator) prepareQueryTemplateData(query Query) (map[string]inter
 		"ResultType":            resultType,
 		"ParameterDeclarations": paramDeclStr,
 		"ParameterArgs":         paramArgStr,
-		"ParameterArgsOnly":     paramArgsOnly,
 		"ScanArgs":              strings.Join(scanArgs, ", "),
 		"CursorColumns":         query.CursorColumns,
 	}, nil

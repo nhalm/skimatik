@@ -365,6 +365,34 @@ func (qp *QueryParser) parseResultAnnotation(line string) *ResultAnnotation {
 	}
 }
 
+// parseCursorColumnsAnnotation parses cursor_columns annotation
+// Expected format: -- cursor_columns: col1, col2, col3
+func (qp *QueryParser) parseCursorColumnsAnnotation(line string) []string {
+	// Regex to match: -- cursor_columns: col1, col2, col3
+	cursorRegex := regexp.MustCompile(`^--\s*cursor_columns:\s*(.+)$`)
+
+	matches := cursorRegex.FindStringSubmatch(line)
+	if len(matches) != 2 {
+		return nil
+	}
+
+	columnsList := strings.TrimSpace(matches[1])
+	if columnsList == "" {
+		return nil
+	}
+
+	// Split by comma and trim whitespace
+	var columns []string
+	for _, col := range strings.Split(columnsList, ",") {
+		col = strings.TrimSpace(col)
+		if col != "" {
+			columns = append(columns, col)
+		}
+	}
+
+	return columns
+}
+
 // validateParameterAnnotations validates parameter annotations for a query
 func (qp *QueryParser) validateParameterAnnotations(query *Query) error {
 	if len(query.ParameterAnnotations) == 0 {
