@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	pg_query "github.com/wasilibs/go-pgquery"
 	pg_query_go "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/wasilibs/go-pgquery"
 )
 
 // SQLParser provides SQL analysis using PostgreSQL's parser

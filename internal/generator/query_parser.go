@@ -136,7 +136,7 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 		// Check for parameter annotation
 		if paramAnnotation := qp.parseParameterAnnotation(trimmedLine); paramAnnotation != nil {
 			if currentQuery != nil {
-			cursorColumns = []string{}
+				cursorColumns = []string{}
 				paramAnnotations = append(paramAnnotations, *paramAnnotation)
 			}
 			continue

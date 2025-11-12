@@ -760,7 +760,6 @@ func (cg *CodeGenerator) generateQueryCode(sourceFile string, queries []Query) (
 		}
 	}
 
-
 	// Pagination types are in the shared pagination.go file
 
 	// Generate repository struct and constructor
