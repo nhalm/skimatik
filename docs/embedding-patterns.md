@@ -72,7 +72,21 @@ func (r *UsersRepository) List(ctx context.Context) ([]Users, error) {
 
 ## Layer 2: Domain Repository Layer (repository/)
 
-Implement data access layer using generated repositories:
+Extend generated repositories with domain-specific logic by embedding generated types.
+
+**Choose your embedding pattern:**
+
+**Embed both Repository + Queries** when you need:
+- Generated CRUD operations (Create, Get, Update, Delete, ListPaginated)
+- Plus custom queries from .sql files
+- Example: `*generated.UsersRepository` + `*generated.UsersQueries`
+
+**Embed only Queries** when you need:
+- Only custom queries from .sql files
+- No standard CRUD operations
+- Example: `*generated.PostsQueries`
+
+If you only need basic CRUD without custom logic, use the generated repositories directly without wrapping.
 
 ```go
 // repository/user_repository.go
@@ -94,16 +108,16 @@ type User struct {
     IsActive bool
 }
 
-// Implementation embeds generated repository
+// Implementation embeds both generated repository (CRUD) and queries (custom SQL)
 type UserRepository struct {
     *generated.UsersRepository
-    db *pgxkit.DB
+    *generated.UsersQueries
 }
 
 func NewUserRepository(db *pgxkit.DB) *UserRepository {
     return &UserRepository{
         UsersRepository: generated.NewUsersRepository(db, nil),
-        db:              db,
+        UsersQueries:    generated.NewUsersQueries(db),
     }
 }
 
@@ -121,7 +135,7 @@ func (r *UserRepository) CreateUser(ctx context.Context, name, email string) (*U
 
     // Convert to domain model
     return &User{
-        ID:       user.ID,
+        ID:       user.Id,
         Name:     user.Name,
         Email:    user.Email,
         IsActive: true,
@@ -129,20 +143,62 @@ func (r *UserRepository) CreateUser(ctx context.Context, name, email string) (*U
 }
 
 func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*User, error) {
-    // Custom query using shared database utilities
-    query := `SELECT id, name, email, is_active FROM users WHERE email = $1`
-
-    row := ExecuteQueryRow(ctx, r.db, "get_by_email", "User", query, email)
-
-    var user User
-    err := row.Scan(&user.ID, &user.Name, &user.Email, &user.IsActive)
-    if err := HandleQueryRowError("get_by_email", "User", err); err != nil {
-        return nil, err
+    // Use generated query from .sql files
+    result, err := r.UsersQueries.GetUserByEmail(ctx, email)
+    if err != nil {
+        return nil, fmt.Errorf("failed to get user by email: %w", err)
     }
 
-    return &user, nil
+    // Convert to domain model
+    return &User{
+        ID:       result.Id,
+        Name:     result.Name,
+        Email:    result.Email,
+        IsActive: result.IsActive,
+    }, nil
 }
 ```
+
+### Alternative: Adding Separate DB Field for Raw SQL
+
+**Only use this pattern if you need raw SQL beyond generated queries:**
+
+```go
+// Only add db field if you need custom SQL beyond generated queries
+type UserRepository struct {
+    *generated.UsersRepository
+    *generated.UsersQueries
+    db *pgxkit.DB  // For rare cases of raw SQL
+}
+
+func NewUserRepository(db *pgxkit.DB) *UserRepository {
+    return &UserRepository{
+        UsersRepository: generated.NewUsersRepository(db, nil),
+        UsersQueries:    generated.NewUsersQueries(db),
+        db:              db,  // Store for custom raw queries
+    }
+}
+
+// Example: Complex dynamic query not suitable for .sql files
+func (r *UserRepository) SearchUsersWithDynamicFilters(ctx context.Context, filters map[string]interface{}) ([]*User, error) {
+    // Build dynamic SQL based on filters
+    query := "SELECT id, name, email, is_active FROM users WHERE 1=1"
+    args := []interface{}{}
+
+    // Add dynamic WHERE clauses based on filters...
+
+    rows, err := r.db.Query(ctx, query, args...)
+    if err != nil {
+        return nil, fmt.Errorf("failed to search users: %w", err)
+    }
+    defer rows.Close()
+
+    // Scan results...
+    return nil, nil
+}
+```
+
+**Recommendation:** Most custom queries should be in `.sql` files and generated. Only use raw SQL for truly dynamic queries that can't be pre-defined.
 
 ## Layer 3: Business Service Layer (service/)
 
@@ -194,18 +250,18 @@ type UserService struct {
     orderRepo OrderRepository
 }
 
-func NewUserService(db *pgxkit.DB) *UserService {
+func NewUserService(userRepo UserRepository, orderRepo OrderRepository) *UserService {
     return &UserService{
-        userRepo:  NewUserRepository(db),
-        orderRepo: NewOrderRepository(db),
+        userRepo:  userRepo,
+        orderRepo: orderRepo,
     }
 }
 
 // Custom ID Generator Example for Testing
 func NewUserRepositoryWithTestID(db *pgxkit.DB, idGenerator func() uuid.UUID) *UserRepository {
     return &UserRepository{
-        UsersRepository: repositories.NewUsersRepository(db, idGenerator),
-        db:              db,
+        UsersRepository: generated.NewUsersRepository(db, idGenerator),
+        UsersQueries:    generated.NewUsersQueries(db),
     }
 }
 
@@ -437,7 +493,7 @@ Generated repositories accept an optional ID generator function as a constructor
 
 ```go
 // UUID v7 generator is automatically set (pass nil)
-userRepo := repositories.NewUsersRepository(db, nil)
+userRepo := generated.NewUsersRepository(db, nil)
 ```
 
 ### Custom ID Generator for Testing
@@ -448,9 +504,9 @@ func TestUserCreation(t *testing.T) {
     testID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
     // Pass deterministic generator to constructor
-    userRepo := repositories.NewUsersRepository(db, func() uuid.UUID { return testID })
+    userRepo := generated.NewUsersRepository(db, func() uuid.UUID { return testID })
 
-    user, err := userRepo.Create(ctx, CreateUsersParams{
+    user, err := userRepo.Create(ctx, generated.CreateUsersParams{
         Name:  "Test User",
         Email: "test@example.com",
     })
@@ -464,20 +520,23 @@ func TestUserCreation(t *testing.T) {
 ```go
 // Repository wrapper with custom ID strategy
 type UserRepository struct {
-    *repositories.UsersRepository
+    *generated.UsersRepository
+    *generated.UsersQueries
 }
 
 func NewUserRepository(db *pgxkit.DB) *UserRepository {
     // Use default UUID v7 (pass nil)
     return &UserRepository{
-        UsersRepository: repositories.NewUsersRepository(db, nil),
+        UsersRepository: generated.NewUsersRepository(db, nil),
+        UsersQueries:    generated.NewUsersQueries(db),
     }
 }
 
 func NewUserRepositoryWithCustomID(db *pgxkit.DB, idGen func() uuid.UUID) *UserRepository {
     // Pass custom ID generator to constructor
     return &UserRepository{
-        UsersRepository: repositories.NewUsersRepository(db, idGen),
+        UsersRepository: generated.NewUsersRepository(db, idGen),
+        UsersQueries:    generated.NewUsersQueries(db),
     }
 }
 ```

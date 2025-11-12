@@ -90,7 +90,7 @@ curl http://localhost:8080/health
 // Generated repository with shared utilities
 type UsersRepository struct {
     db             *pgxkit.DB
-    GenerateIdFunc func() uuid.UUID
+    generateIdFunc func() uuid.UUID
 }
 
 func NewUsersRepository(db *pgxkit.DB, idGen func() uuid.UUID) *UsersRepository {
@@ -104,32 +104,37 @@ func NewUsersRepository(db *pgxkit.DB, idGen func() uuid.UUID) *UsersRepository 
 }
 
 func (r *UsersRepository) Create(ctx context.Context, params CreateUsersParams) (*Users, error) {
-    id := r.GenerateIdFunc()
+    id := r.generateIdFunc()
     query := `INSERT INTO users (id, name, email) VALUES ($1, $2, $3) RETURNING ...`
 
-    // Using shared database utilities
-    row := ExecuteQueryRow(ctx, r.db, "create", "Users", query, id, params.Name, params.Email)
     var user Users
+    row := ExecuteQueryRow(ctx, r.db, "create", "Users", query, id, params.Name, params.Email)
     err := row.Scan(&user.Id, &user.Name, &user.Email, &user.CreatedAt)
-    return &user, HandleQueryRowError("create", "Users", err)
+    if err := HandleQueryRowError("create", "Users", err); err != nil {
+        return nil, err
+    }
+
+    return &user, nil
 }
 ```
 
 ### Service Layer with Embedding
 ```go
-// Service embeds generated repository
-type UserService struct {
-    *UsersRepository  // All CRUD methods available
+// Custom repository embeds generated repository
+type UserRepository struct {
+    *UsersRepository      // Generated CRUD methods
+    *UsersQueries         // Generated custom queries
 }
 
-// Custom business logic using shared utilities
-func (s *UserService) GetActiveUsers(ctx context.Context) ([]Users, error) {
-    query := `SELECT ... FROM users WHERE is_active = true`
-    
-    // Using shared database utilities
-    rows, err := ExecuteQuery(ctx, s.db, "get_active_users", "Users", query)
-    // ... handle results with shared patterns
+func NewUserRepository(db *pgxkit.DB) *UserRepository {
+    return &UserRepository{
+        UsersRepository: NewUsersRepository(db, nil),
+        UsersQueries:    NewUsersQueries(db),
+    }
 }
+
+// Generated query methods already available via embedding
+// Custom business logic can be added as needed
 ```
 
 ### Retry Operations
@@ -275,39 +280,59 @@ type UserManager interface {
 ### Step 2: Implement Using Embedding
 
 ```go
-type UserService struct {
-    *repositories.UsersRepository  // Gets all generated CRUD methods
+// Repository layer embeds generated repositories and queries
+// Converts generated types to domain types
+type UserRepository struct {
+    *generated.UsersRepository  // Generated CRUD methods
+    *generated.UsersQueries     // Generated custom query methods
 }
 
-func NewUserService(db *pgxkit.DB) UserManager {
-    return &UserService{
-        UsersRepository: repositories.NewUsersRepository(db, nil),
+func NewUserRepository(db *pgxkit.DB) *UserRepository {
+    return &UserRepository{
+        UsersRepository: generated.NewUsersRepository(db, nil),
+        UsersQueries:    generated.NewUsersQueries(db),
     }
 }
 
-// CreateUser automatically satisfied by embedding
-
-// Add custom business methods
-func (s *UserService) GetActiveUsers(ctx context.Context) ([]repositories.Users, error) {
-    query := `SELECT id, name, email, created_at FROM users WHERE is_active = true`
-    
-    rows, err := repositories.ExecuteQuery(ctx, s.db, "get_active_users", "Users", query)
+// Example domain conversion method
+func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]domain.UserSummary, error) {
+    results, err := r.UsersQueries.GetActiveUsers(ctx, limit)
     if err != nil {
-        return nil, err
+        return nil, fmt.Errorf("failed to get active users: %w", err)
     }
-    defer rows.Close()
-    
-    var users []repositories.Users
-    for rows.Next() {
-        var user repositories.Users
-        err := rows.Scan(&user.Id, &user.Name, &user.Email, &user.CreatedAt)
-        if err != nil {
-            return nil, repositories.HandleDatabaseError("scan", "Users", err)
+
+    // Convert generated types to domain types
+    users := make([]domain.UserSummary, len(results))
+    for i, result := range results {
+        users[i] = domain.UserSummary{
+            ID:       result.Id,
+            Name:     result.Name,
+            Email:    result.Email,
+            IsActive: result.IsActive,
         }
-        users = append(users, user)
     }
-    
-    return users, repositories.HandleRowsResult("Users", rows)
+    return users, nil
+}
+
+// Service layer adds business logic
+type UserService struct {
+    userRepo *UserRepository
+}
+
+func NewUserService(userRepo *UserRepository) *UserService {
+    return &UserService{
+        userRepo: userRepo,
+    }
+}
+
+// Service methods can add validation, logging, or cross-cutting concerns
+func (s *UserService) GetActiveUsers(ctx context.Context, limit int) ([]domain.UserSummary, error) {
+    // Add business logic (validation, logging, etc.)
+    users, err := s.userRepo.GetActiveUsers(ctx, limit)
+    if err != nil {
+        return nil, fmt.Errorf("service: failed to get active users: %w", err)
+    }
+    return users, nil
 }
 ```
 
@@ -320,15 +345,17 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    
-    userService := NewUserService(db)
-    
-    // Use through interface
-    users, err := userService.GetActiveUsers(ctx)
+
+    // Wire up layers: Repository → Service → API Handler
+    userRepo := NewUserRepository(db)
+    userService := NewUserService(userRepo)
+
+    // Use through service
+    users, err := userService.GetActiveUsers(ctx, 10)
     if err != nil {
         log.Fatal(err)
     }
-    
+
     fmt.Printf("Found %d active users\n", len(users))
 }
 ```
@@ -338,21 +365,18 @@ func main() {
 ```go
 func TestUserService(t *testing.T) {
     testDB := pgxkit.RequireDB(t)
-    userService := NewUserService(testDB.DB)
-    
+
+    // Wire up layers for testing
+    userRepo := NewUserRepository(testDB.DB)
+    userService := NewUserService(userRepo)
+
     // Test with real database
-    user, err := userService.CreateUser(ctx, repositories.CreateUsersParams{
-        Name:  "Test User",
-        Email: "test@example.com",
-    })
-    
+    activeUsers, err := userService.GetActiveUsers(ctx, 10)
     require.NoError(t, err)
-    assert.Equal(t, "Test User", user.Name)
-    
-    // Test custom method
-    activeUsers, err := userService.GetActiveUsers(ctx)
-    require.NoError(t, err)
-    assert.Len(t, activeUsers, 1)
+    assert.NotNil(t, activeUsers)
+
+    // For unit testing, you can mock the repository interface
+    // and test business logic in isolation
 }
 ```
 

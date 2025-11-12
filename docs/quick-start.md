@@ -455,22 +455,6 @@ tables:
   comments:
 ```
 
-## Environment Variables
-
-skimatik supports standard PostgreSQL environment variables:
-
-```bash
-export DATABASE_URL="postgres://user:pass@localhost:5432/mydb"
-
-# Or use individual components
-export POSTGRES_HOST="localhost"
-export POSTGRES_PORT="5432"
-export POSTGRES_USER="myuser"
-export POSTGRES_PASSWORD="mypass"
-export POSTGRES_DB="mydb"
-export POSTGRES_SSLMODE="disable"
-```
-
 ## CLI Options
 
 ```bash

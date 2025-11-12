@@ -222,16 +222,26 @@ if err != nil {
 
 **Cause**: Attempting to reference non-existent related record.
 
-**Fix**: Generated code wraps these as `ErrInvalidReference`:
+**Fix**: Generated code wraps these as `ErrInvalidReference`. Check using `errors.Is()`:
 
 ```go
 post, err := repo.Create(ctx, params)
 if err != nil {
-    if IsInvalidReference(err) {
+    if errors.Is(err, generated.ErrInvalidReference) {
         // Handle invalid foreign key
         return fmt.Errorf("invalid author_id")
     }
     return err
+}
+```
+
+Access detailed error information using `DatabaseError`:
+
+```go
+var dbErr *generated.DatabaseError
+if errors.As(err, &dbErr) && dbErr.Type == generated.ErrInvalidReference {
+    // dbErr.Detail contains the foreign key constraint details
+    log.Printf("Foreign key violation: %s", dbErr.Detail)
 }
 ```
 
