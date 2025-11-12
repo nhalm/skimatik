@@ -149,6 +149,7 @@ func (cg *CodeGenerator) combineImports(lists ...[]string) []string {
 func (cg *CodeGenerator) getQueryImports(queries []Query) []string {
 	imports := make(map[string]bool)
 
+	hasCursorColumns := false
 	for _, query := range queries {
 		// Get imports for result columns
 		queryImports := cg.typeMapper.GetRequiredImports(query.Columns)
@@ -161,6 +162,16 @@ func (cg *CodeGenerator) getQueryImports(queries []Query) []string {
 		for _, imp := range paramImports {
 			imports[imp] = true
 		}
+
+		// Check if query uses cursor_columns
+		if len(query.CursorColumns) > 0 {
+			hasCursorColumns = true
+		}
+	}
+
+	// Add reflect package if any query uses cursor_columns
+	if hasCursorColumns {
+		imports["reflect"] = true
 	}
 
 	// Convert map to slice
@@ -970,8 +981,10 @@ func (cg *CodeGenerator) prepareQueryTemplateData(query Query) (map[string]inter
 	}
 
 	paramArgStr := ""
+	paramArgsOnly := ""
 	if len(paramArgs) > 0 {
-		paramArgStr = ", " + strings.Join(paramArgs, ", ")
+		paramArgsOnly = strings.Join(paramArgs, ", ")
+		paramArgStr = ", " + paramArgsOnly
 	}
 
 	return map[string]interface{}{
@@ -982,6 +995,7 @@ func (cg *CodeGenerator) prepareQueryTemplateData(query Query) (map[string]inter
 		"ResultType":            resultType,
 		"ParameterDeclarations": paramDeclStr,
 		"ParameterArgs":         paramArgStr,
+		"ParameterArgsOnly":     paramArgsOnly,
 		"ScanArgs":              strings.Join(scanArgs, ", "),
 		"CursorColumns":         query.CursorColumns,
 	}, nil
