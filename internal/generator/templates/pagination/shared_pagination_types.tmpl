@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"github.com/google/uuid"
 	"time"
 )
@@ -209,4 +210,20 @@ func formatCursorValue(value interface{}) interface{} {
 	default:
 		return value
 	}
+}
+
+// toCamelCase converts snake_case to CamelCase for struct field name lookup
+func toCamelCase(s string) string {
+	if s == "" {
+		return ""
+	}
+
+	parts := strings.Split(s, "_")
+	for i := range parts {
+		if len(parts[i]) > 0 {
+			parts[i] = strings.ToUpper(parts[i][:1]) + parts[i][1:]
+		}
+	}
+
+	return strings.Join(parts, "")
 }

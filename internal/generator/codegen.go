@@ -149,6 +149,7 @@ func (cg *CodeGenerator) combineImports(lists ...[]string) []string {
 func (cg *CodeGenerator) getQueryImports(queries []Query) []string {
 	imports := make(map[string]bool)
 
+	hasCursorColumns := false
 	for _, query := range queries {
 		// Get imports for result columns
 		queryImports := cg.typeMapper.GetRequiredImports(query.Columns)
@@ -161,6 +162,16 @@ func (cg *CodeGenerator) getQueryImports(queries []Query) []string {
 		for _, imp := range paramImports {
 			imports[imp] = true
 		}
+
+		// Check if query uses cursor_columns
+		if len(query.CursorColumns) > 0 {
+			hasCursorColumns = true
+		}
+	}
+
+	// Add reflect package if any query uses cursor_columns
+	if hasCursorColumns {
+		imports["reflect"] = true
 	}
 
 	// Convert map to slice
@@ -588,6 +599,13 @@ func (cg *CodeGenerator) GenerateQueries(queries []Query) error {
 		return nil
 	}
 
+	// Validate queries with cursor_columns
+	for i := range queries {
+		if err := cg.validateQueryForCursorPagination(&queries[i]); err != nil {
+			return fmt.Errorf("validation failed for query %s: %w", queries[i].Name, err)
+		}
+	}
+
 	// Group queries by source file
 	queryGroups := cg.groupQueriesByFile(queries)
 
@@ -599,6 +617,61 @@ func (cg *CodeGenerator) GenerateQueries(queries []Query) error {
 	}
 
 	return nil
+}
+
+// validateQueryForCursorPagination validates queries with cursor_columns annotation
+func (cg *CodeGenerator) validateQueryForCursorPagination(query *Query) error {
+	if len(query.CursorColumns) == 0 {
+		return nil
+	}
+
+	// Check for ORDER BY clause
+	if containsOrderBy(query.SQL) {
+		return fmt.Errorf("query '%s' has cursor_columns but contains ORDER BY clause - remove ORDER BY, sort order is determined by orderBy parameter in paginated function", query.Name)
+	}
+
+	return nil
+}
+
+// containsOrderBy checks if SQL contains an ORDER BY clause (case-insensitive)
+func containsOrderBy(sql string) bool {
+	// Normalize to lowercase for case-insensitive comparison
+	sqlLower := strings.ToLower(sql)
+
+	// Remove string literals to avoid false positives
+	sqlLower = removeStringLiterals(sqlLower)
+
+	// Look for ORDER BY clause
+	return strings.Contains(sqlLower, "order by")
+}
+
+// removeStringLiterals removes string literals from SQL to avoid false ORDER BY detection
+func removeStringLiterals(sql string) string {
+	result := []rune(sql)
+	inSingleQuote := false
+
+	for i := 0; i < len(result); i++ {
+		if result[i] == '\'' {
+			if inSingleQuote {
+				// Check for escaped quote ''
+				if i+1 < len(result) && result[i+1] == '\'' {
+					result[i] = ' '
+					result[i+1] = ' '
+					i++
+				} else {
+					inSingleQuote = false
+					result[i] = ' '
+				}
+			} else {
+				inSingleQuote = true
+				result[i] = ' '
+			}
+		} else if inSingleQuote {
+			result[i] = ' '
+		}
+	}
+
+	return string(result)
 }
 
 // groupQueriesByFile groups queries by their source file
@@ -647,10 +720,10 @@ func (cg *CodeGenerator) generateQueryCode(sourceFile string, queries []Query) (
 		"github.com/google/uuid",
 	}
 
-	// Check if any queries are paginated and add pagination imports
+	// Check if any queries are paginated or have cursor_columns
 	hasPaginatedQueries := false
 	for _, query := range queries {
-		if query.Type == QueryTypePaginated {
+		if query.Type == QueryTypePaginated || len(query.CursorColumns) > 0 {
 			hasPaginatedQueries = true
 			break
 		}
@@ -698,15 +771,7 @@ func (cg *CodeGenerator) generateQueryCode(sourceFile string, queries []Query) (
 		}
 	}
 
-	// Generate pagination types and utilities if needed
-	if hasPaginatedQueries {
-		paginationCode, err := cg.generateInlinePaginationTypes()
-		if err != nil {
-			return "", fmt.Errorf("failed to generate pagination types: %w", err)
-		}
-		code.WriteString(paginationCode)
-		code.WriteString("\n\n")
-	}
+	// Pagination types are in the shared pagination.go file
 
 	// Generate repository struct and constructor
 	repoCode, err := cg.generateQueryRepository(sourceFile, queries)
@@ -730,71 +795,6 @@ func (cg *CodeGenerator) generateQueryCode(sourceFile string, queries []Query) (
 	}
 
 	return code.String(), nil
-}
-
-// generateInlinePaginationTypes generates pagination types and utilities inline for query files
-func (cg *CodeGenerator) generateInlinePaginationTypes() (string, error) {
-	tmpl := `// PaginationParams holds parameters for cursor-based pagination
-type PaginationParams struct {
-	// Cursor is the base64-encoded UUID to start pagination from
-	// If empty, starts from the beginning
-	Cursor string ` + "`json:\"cursor,omitempty\"`" + `
-
-	// Limit is the maximum number of items to return
-	// Must be between 1 and 100, defaults to 20
-	Limit int32 ` + "`json:\"limit,omitempty\"`" + `
-}
-
-// PaginationResult holds the result of a paginated query
-type PaginationResult[T any] struct {
-	// Items is the list of items returned
-	Items []T ` + "`json:\"items\"`" + `
-
-	// HasMore indicates if there are more items available
-	HasMore bool ` + "`json:\"has_more\"`" + `
-
-	// NextCursor is the cursor for the next page
-	// Only set if HasMore is true
-	NextCursor string ` + "`json:\"next_cursor,omitempty\"`" + `
-}
-
-// encodeCursor encodes a UUID as a base64 cursor
-func encodeCursor(id uuid.UUID) string {
-	return base64.URLEncoding.EncodeToString(id[:])
-}
-
-// decodeCursor decodes a base64 cursor to a UUID
-func decodeCursor(cursor string) (uuid.UUID, error) {
-	if cursor == "" {
-		return uuid.UUID{}, nil
-	}
-
-	data, err := base64.URLEncoding.DecodeString(cursor)
-	if err != nil {
-		return uuid.UUID{}, fmt.Errorf("invalid cursor format: %w", err)
-	}
-
-	if len(data) != 16 {
-		return uuid.UUID{}, fmt.Errorf("invalid cursor length: expected 16 bytes, got %d", len(data))
-	}
-
-	var id uuid.UUID
-	copy(id[:], data)
-	return id, nil
-}
-
-// validatePaginationParams validates pagination parameters
-func validatePaginationParams(params PaginationParams) error {
-	if params.Limit <= 0 {
-		return fmt.Errorf("limit must be positive, got %d", params.Limit)
-	}
-	if params.Limit > 100 {
-		return fmt.Errorf("limit too large: maximum 100, got %d", params.Limit)
-	}
-	return nil
-}`
-
-	return tmpl, nil
 }
 
 // Query generation helper methods moved from query_templates.go
@@ -981,8 +981,10 @@ func (cg *CodeGenerator) prepareQueryTemplateData(query Query) (map[string]inter
 	}
 
 	paramArgStr := ""
+	paramArgsOnly := ""
 	if len(paramArgs) > 0 {
-		paramArgStr = ", " + strings.Join(paramArgs, ", ")
+		paramArgsOnly = strings.Join(paramArgs, ", ")
+		paramArgStr = ", " + paramArgsOnly
 	}
 
 	return map[string]interface{}{
@@ -993,6 +995,8 @@ func (cg *CodeGenerator) prepareQueryTemplateData(query Query) (map[string]inter
 		"ResultType":            resultType,
 		"ParameterDeclarations": paramDeclStr,
 		"ParameterArgs":         paramArgStr,
+		"ParameterArgsOnly":     paramArgsOnly,
 		"ScanArgs":              strings.Join(scanArgs, ", "),
+		"CursorColumns":         query.CursorColumns,
 	}, nil
 }

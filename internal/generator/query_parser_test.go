@@ -715,3 +715,244 @@ func contains(s, substr string) bool {
 	}
 	return false
 }
+
+func TestQueryParser_ParseCursorColumnsAnnotation(t *testing.T) {
+	parser := NewQueryParser("")
+
+	tests := []struct {
+		name     string
+		line     string
+		expected []string
+	}{
+		{
+			name:     "basic cursor_columns with two columns",
+			line:     "-- cursor_columns: id, created_at",
+			expected: []string{"id", "created_at"},
+		},
+		{
+			name:     "cursor_columns with extra spaces",
+			line:     "--   cursor_columns:   id,   created_at,   updated_at   ",
+			expected: []string{"id", "created_at", "updated_at"},
+		},
+		{
+			name:     "single column",
+			line:     "-- cursor_columns: id",
+			expected: []string{"id"},
+		},
+		{
+			name:     "three columns",
+			line:     "-- cursor_columns: published_at, id, title",
+			expected: []string{"published_at", "id", "title"},
+		},
+		{
+			name:     "columns with underscores",
+			line:     "-- cursor_columns: user_id, created_at, updated_at",
+			expected: []string{"user_id", "created_at", "updated_at"},
+		},
+		{
+			name:     "invalid - missing colon",
+			line:     "-- cursor_columns id, created_at",
+			expected: nil,
+		},
+		{
+			name:     "invalid - empty columns",
+			line:     "-- cursor_columns:",
+			expected: nil,
+		},
+		{
+			name:     "invalid - only spaces after colon",
+			line:     "-- cursor_columns:    ",
+			expected: nil,
+		},
+		{
+			name:     "regular comment",
+			line:     "-- This is a regular comment",
+			expected: nil,
+		},
+		{
+			name:     "empty line",
+			line:     "",
+			expected: nil,
+		},
+		{
+			name:     "annotation with trailing comma",
+			line:     "-- cursor_columns: id, created_at,",
+			expected: []string{"id", "created_at"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parser.parseCursorColumnsAnnotation(tt.line)
+
+			if tt.expected == nil {
+				if result != nil {
+					t.Errorf("Expected nil, got %+v", result)
+				}
+				return
+			}
+
+			if result == nil {
+				t.Errorf("Expected %+v, got nil", tt.expected)
+				return
+			}
+
+			if len(result) != len(tt.expected) {
+				t.Errorf("Expected %d columns, got %d", len(tt.expected), len(result))
+				return
+			}
+
+			for i := range result {
+				if result[i] != tt.expected[i] {
+					t.Errorf("Column %d: expected %s, got %s", i, tt.expected[i], result[i])
+				}
+			}
+		})
+	}
+}
+
+func TestQueryParser_ValidateCursorColumns(t *testing.T) {
+	parser := NewQueryParser("")
+
+	tests := []struct {
+		name     string
+		query    Query
+		hasError bool
+		errorMsg string
+	}{
+		{
+			name: "valid cursor_columns with :many query",
+			query: Query{
+				Name:          "GetPublishedPosts",
+				Type:          QueryTypeMany,
+				SQL:           "SELECT id, title, published_at FROM posts WHERE is_published = true",
+				CursorColumns: []string{"published_at", "id"},
+			},
+			hasError: false,
+		},
+		{
+			name: "valid cursor_columns single column",
+			query: Query{
+				Name:          "ListUsers",
+				Type:          QueryTypeMany,
+				SQL:           "SELECT id, name FROM users",
+				CursorColumns: []string{"id"},
+			},
+			hasError: false,
+		},
+		{
+			name: "valid cursor_columns multiple columns",
+			query: Query{
+				Name:          "SearchPosts",
+				Type:          QueryTypeMany,
+				SQL:           "SELECT id, title, created_at, updated_at FROM posts",
+				CursorColumns: []string{"created_at", "id", "title"},
+			},
+			hasError: false,
+		},
+		{
+			name: "empty cursor_columns is valid",
+			query: Query{
+				Name:          "ListUsers",
+				Type:          QueryTypeMany,
+				SQL:           "SELECT id, name FROM users",
+				CursorColumns: []string{},
+			},
+			hasError: false,
+		},
+		{
+			name: "nil cursor_columns is valid",
+			query: Query{
+				Name:          "ListUsers",
+				Type:          QueryTypeMany,
+				SQL:           "SELECT id, name FROM users",
+				CursorColumns: nil,
+			},
+			hasError: false,
+		},
+		{
+			name: "invalid - cursor_columns with :one query",
+			query: Query{
+				Name:          "GetPost",
+				Type:          QueryTypeOne,
+				SQL:           "SELECT id, title FROM posts WHERE id = $1",
+				CursorColumns: []string{"id", "created_at"},
+			},
+			hasError: true,
+			errorMsg: "cursor_columns annotation only valid for :many queries",
+		},
+		{
+			name: "invalid - cursor_columns with :exec query",
+			query: Query{
+				Name:          "CreatePost",
+				Type:          QueryTypeExec,
+				SQL:           "INSERT INTO posts (title) VALUES ($1)",
+				CursorColumns: []string{"id"},
+			},
+			hasError: true,
+			errorMsg: "cursor_columns annotation only valid for :many queries",
+		},
+		{
+			name: "invalid - cursor_columns with :paginated query",
+			query: Query{
+				Name:          "GetPostsPaginated",
+				Type:          QueryTypePaginated,
+				SQL:           "SELECT id, title FROM posts",
+				CursorColumns: []string{"id"},
+			},
+			hasError: true,
+			errorMsg: "cursor_columns annotation only valid for :many queries",
+		},
+		{
+			name: "invalid - cursor column with invalid characters",
+			query: Query{
+				Name:          "ListUsers",
+				Type:          QueryTypeMany,
+				SQL:           "SELECT id, name FROM users",
+				CursorColumns: []string{"id", "invalid-name"},
+			},
+			hasError: true,
+			errorMsg: "invalid column name",
+		},
+		{
+			name: "invalid - cursor column starting with number",
+			query: Query{
+				Name:          "ListUsers",
+				Type:          QueryTypeMany,
+				SQL:           "SELECT id, name FROM users",
+				CursorColumns: []string{"123invalid"},
+			},
+			hasError: true,
+			errorMsg: "invalid column name",
+		},
+		{
+			name: "invalid - cursor column with spaces",
+			query: Query{
+				Name:          "ListUsers",
+				Type:          QueryTypeMany,
+				SQL:           "SELECT id, name FROM users",
+				CursorColumns: []string{"invalid name"},
+			},
+			hasError: true,
+			errorMsg: "invalid column name",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := parser.validateCursorColumns(&tt.query)
+
+			if tt.hasError {
+				if err == nil {
+					t.Errorf("Expected error containing %q, got nil", tt.errorMsg)
+				} else if tt.errorMsg != "" && !contains(err.Error(), tt.errorMsg) {
+					t.Errorf("Expected error containing %q, got %q", tt.errorMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected no error, got %v", err)
+				}
+			}
+		})
+	}
+}

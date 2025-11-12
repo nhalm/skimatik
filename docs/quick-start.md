@@ -201,12 +201,14 @@ func main() {
 }
 ```
 
-### 2. Bidirectional Cursor Pagination
+### 2. Pagination
+
+#### Table-Based Pagination
 
 Table-based repositories include automatic bidirectional cursor-based pagination with runtime sort selection:
 
 ```go
-// List first page (10 items, ordered by created_at)
+// List first page (10 items)
 result, err := userRepo.ListPaginated(ctx, repositories.PaginationParams{
     Limit:   10,
     OrderBy: "created_at",  // Sort by any supported column
@@ -248,21 +250,106 @@ if result.HasPrevious {
 - **Bidirectional**: Navigate forward with `NextCursor` or backward with `BeforeCursor`
 - **Runtime Sorting**: Specify `OrderBy` to sort by any table column (defaults to `id`)
 - **Cursor Format**: Cursors are base64-encoded JSON containing `{column, value}` pairs
-- **Breaking Change**: Cursor format changed from base64(UUID) to base64(JSON) - old cursors are backward compatible
 
-**Custom Query Pagination:**
+#### Query-Based Pagination with cursor_columns (Recommended)
 
-Query-based functions (from SQL files) can also support pagination by adding the `-- cursor_columns:` annotation:
+For custom queries with pagination, use the `cursor_columns` annotation. This creates a paginated function with an allowlist of valid sort columns determined at code generation time:
 
+**SQL Query with Annotation:**
 ```sql
 -- name: GetPublishedPosts :many
 -- cursor_columns: published_at, id
-SELECT id, title, published_at FROM posts
+SELECT id, title, content, published_at
+FROM posts
 WHERE is_published = true
-ORDER BY published_at DESC, id DESC;
 ```
 
-This generates a paginated query function that accepts `PaginationParams` and returns `PaginationResult`.
+**Important Requirements:**
+- **No ORDER BY clause** in the SQL - sort order is controlled via the `orderBy` parameter
+- **All cursor columns must be in SELECT** - the columns listed in `cursor_columns` must be returned by the query
+- **Columns must support ordering** - typically indexed columns for performance
+
+**Generated Code:**
+
+This generates TWO functions:
+
+```go
+// Regular function - returns all results (no pagination)
+posts, err := postQueries.GetPublishedPosts(ctx)
+
+// Paginated function - with allowlist-validated orderBy parameter
+result, err := postQueries.GetPublishedPostsPaginated(
+    ctx,
+    "published_at",  // orderBy: must be "published_at" or "id"
+    repositories.PaginationParams{
+        Limit: 20,
+        // NextCursor: result.NextCursor,  // for next page
+        // BeforeCursor: result.BeforeCursor,  // for previous page
+    },
+)
+```
+
+**Runtime Validation:**
+
+The `orderBy` parameter is validated at runtime against the allowlist:
+```go
+// Valid - "published_at" is in cursor_columns
+result, err := postQueries.GetPublishedPostsPaginated(ctx, "published_at", params)
+
+// Valid - "id" is in cursor_columns
+result, err := postQueries.GetPublishedPostsPaginated(ctx, "id", params)
+
+// Invalid - panics with "orderBy 'created_at' not in allowed columns"
+result, err := postQueries.GetPublishedPostsPaginated(ctx, "created_at", params)
+```
+
+**Pagination Navigation:**
+
+```go
+// Get first page
+result, err := postQueries.GetPublishedPostsPaginated(ctx, "published_at", repositories.PaginationParams{
+    Limit: 10,
+})
+
+// Navigate to next page
+if result.HasMore {
+    nextPage, err := postQueries.GetPublishedPostsPaginated(ctx, "published_at", repositories.PaginationParams{
+        Limit:      10,
+        NextCursor: result.NextCursor,
+    })
+}
+
+// Navigate to previous page
+if result.HasPrevious {
+    prevPage, err := postQueries.GetPublishedPostsPaginated(ctx, "published_at", repositories.PaginationParams{
+        Limit:        10,
+        BeforeCursor: result.BeforeCursor,
+    })
+}
+```
+
+**Why Use cursor_columns:**
+- **Generation-time validation**: Invalid columns caught during code generation, not at runtime (unless using dynamic strings)
+- **Self-documenting**: Function signature shows exactly which columns can be used for sorting
+- **SQL injection safe**: Only allowlisted columns can be used in ORDER BY
+- **Consistent API**: Same pagination interface as table-based repositories
+
+**When to Use cursor_columns:**
+- Custom queries that need pagination
+- Queries with complex WHERE conditions or JOINs
+- When you want explicit control over which columns can be sorted
+- Performance-critical queries where you want indexed columns only
+
+**Comparison with ListPaginated:**
+
+| Feature | `cursor_columns` | `ListPaginated` |
+|---------|------------------|-----------------|
+| Use Case | Custom queries | Table-based repositories |
+| Sort Column Validation | Allowlist at generation time | All table columns at runtime |
+| SQL Injection Risk | None - allowlist only | None - table column validation |
+| Flexibility | Fixed columns | Any table column |
+| Documentation | Explicit in function signature | Must check table schema |
+| Best For | Custom queries with pagination | Simple table queries |
 
 ### 3. Error Handling
 

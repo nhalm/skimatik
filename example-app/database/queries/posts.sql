@@ -23,7 +23,7 @@ WHERE author_id = $1
 ORDER BY created_at DESC;
 
 -- name: PublishPost :exec
-UPDATE posts 
+UPDATE posts
 SET is_published = true, published_at = NOW()
 WHERE id = $1 AND is_published = false;
 
@@ -37,4 +37,10 @@ LEFT JOIN comments c ON p.id = c.post_id AND c.is_approved = true
 WHERE p.is_published = true
 GROUP BY p.id, p.title, p.author_id, p.published_at, p.created_at, u.name
 ORDER BY p.published_at DESC
-LIMIT $1; 
+LIMIT $1;
+
+-- name: GetPublishedPostsPaginated :many
+-- cursor_columns: published_at, id
+SELECT p.id, p.title, p.content, p.published_at, p.created_at
+FROM posts p
+WHERE p.is_published = true

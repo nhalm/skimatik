@@ -152,6 +152,124 @@ UPDATE users SET is_active = false WHERE id = $1;
 	t.Log("✅ Query-only generation test passed: queries work with tables disabled")
 }
 
+// TestSystem_CursorColumnsPagination tests cursor_columns annotation and dual function generation
+func TestSystem_CursorColumnsPagination(t *testing.T) {
+	tempDir := setupIntegrationTest(t)
+
+	// Create queries directory
+	queriesDir := filepath.Join(tempDir, "queries")
+	if err := os.MkdirAll(queriesDir, 0755); err != nil {
+		t.Fatalf("Failed to create queries directory: %v", err)
+	}
+
+	// Write query with cursor_columns annotation - note: no ORDER BY in the query
+	queryContent := `-- name: GetPublishedPosts :many
+-- cursor_columns: published_at, id
+SELECT id, name, email, is_active, created_at, updated_at
+FROM users
+WHERE is_active = true;
+
+-- name: SearchUsers :many
+-- cursor_columns: created_at, id, name
+SELECT id, name, email, is_active, created_at, updated_at
+FROM users
+WHERE name LIKE $1;
+`
+	if err := os.WriteFile(filepath.Join(queriesDir, "pagination.sql"), []byte(queryContent), 0644); err != nil {
+		t.Fatalf("Failed to write query file: %v", err)
+	}
+
+	// Configure for query generation with cursor_columns
+	config := &Config{
+		DSN:         "postgres://skimatik:skimatik_test_password@localhost:5432/skimatik_test",
+		Schema:      "public",
+		OutputDir:   tempDir,
+		PackageName: "testgen",
+		Tables:      false,
+		QueriesDir:  queriesDir,
+		Verbose:     true,
+	}
+
+	// Test: Generate code
+	generator := New(config, "test")
+	ctx := context.Background()
+	err := generator.Generate(ctx)
+	if err != nil {
+		t.Fatalf("Cursor columns generation failed: %v", err)
+	}
+
+	// Test: Query file was generated
+	generatedFile := filepath.Join(tempDir, "pagination_queries_generated.go")
+	if _, err := os.Stat(generatedFile); os.IsNotExist(err) {
+		t.Fatalf("Expected file pagination_queries_generated.go was not generated")
+	}
+
+	// Test: Verify dual functions are generated (regular + paginated)
+	content, err := os.ReadFile(generatedFile)
+	if err != nil {
+		t.Fatalf("Failed to read generated file: %v", err)
+	}
+	generatedCode := string(content)
+
+	// Check for regular function
+	if !strings.Contains(generatedCode, "func (r *QueriesRepository) GetPublishedPosts(") {
+		t.Error("Regular GetPublishedPosts function not generated")
+	}
+
+	// Check for paginated function
+	if !strings.Contains(generatedCode, "func (r *QueriesRepository) GetPublishedPostsPaginated(") {
+		t.Error("Paginated GetPublishedPostsPaginated function not generated")
+	}
+
+	// Check for orderBy parameter in paginated function
+	if !strings.Contains(generatedCode, "orderBy string") {
+		t.Error("Paginated function missing orderBy parameter")
+	}
+
+	// Check for allowlist validation
+	if !strings.Contains(generatedCode, "validOrderBy := map[string]bool{") {
+		t.Error("Paginated function missing orderBy allowlist validation")
+	}
+
+	// Check that cursor columns are in the allowlist
+	if !strings.Contains(generatedCode, `"published_at": true`) {
+		t.Error("published_at not in orderBy allowlist")
+	}
+	if !strings.Contains(generatedCode, `"id": true`) {
+		t.Error("id not in orderBy allowlist")
+	}
+
+	// Check for second query's regular function
+	if !strings.Contains(generatedCode, "func (r *QueriesRepository) SearchUsers(") {
+		t.Error("Regular SearchUsers function not generated")
+	}
+
+	// Check for second query's paginated function
+	if !strings.Contains(generatedCode, "func (r *QueriesRepository) SearchUsersPaginated(") {
+		t.Error("Paginated SearchUsersPaginated function not generated")
+	}
+
+	// Check that second query has all three cursor columns in allowlist
+	if !strings.Contains(generatedCode, `"created_at": true`) {
+		t.Error("created_at not in SearchUsers orderBy allowlist")
+	}
+	if !strings.Contains(generatedCode, `"name": true`) {
+		t.Error("name not in SearchUsers orderBy allowlist")
+	}
+
+	// Test: Generated code compiles
+	if !compileGeneratedCode(t, tempDir) {
+		t.Fatal("Generated cursor_columns code failed to compile")
+	}
+
+	// Test: Generated code is properly formatted
+	if !verifyCodeFormatting(t, tempDir) {
+		t.Fatal("Generated cursor_columns code is not properly formatted")
+	}
+
+	t.Log("✅ Cursor columns pagination test passed: dual functions generated correctly")
+}
+
 // TestSystem_RealWorldScenarios tests representative table scenarios
 func TestSystem_RealWorldScenarios(t *testing.T) {
 	setupIntegrationTest(t)
