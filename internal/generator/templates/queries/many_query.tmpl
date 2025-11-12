@@ -49,9 +49,9 @@ func (r *{{.RepositoryName}}) {{.FunctionName}}Paginated(ctx context.Context{{.P
 
 	// Parse cursor if provided
 	var cursorValue interface{}
-	if params.Cursor != "" {
+	if params.NextCursor != "" {
 		// Decode base64 cursor to get the actual value
-		decoded, err := base64.URLEncoding.DecodeString(params.Cursor)
+		decoded, err := base64.URLEncoding.DecodeString(params.NextCursor)
 		if err != nil {
 			return nil, fmt.Errorf("invalid cursor format: %w", err)
 		}
