@@ -308,46 +308,6 @@ Where:
 - `idGen`: Optional ID generator function parameter (pass nil for default UUID v7)
 - `generateIdFunc`: Private field for ID generation (set from constructor parameter)
 
-## Testing Patterns
-
-### Unit Tests with Mock IDs
-
-```go
-func TestUserService_CreateUser(t *testing.T) {
-    expectedID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
-
-    db := setupTestDB(t)
-    // Pass deterministic generator to constructor
-    userRepo := repositories.NewUsersRepository(db, func() uuid.UUID { return expectedID })
-
-    userService := NewUserService(userRepo)
-
-    user, err := userService.Register(ctx, "Test User", "test@example.com")
-
-    require.NoError(t, err)
-    assert.Equal(t, expectedID, user.Id)
-}
-```
-
-### Integration Tests with Default Generator
-
-```go
-func TestIntegration_UserFlow(t *testing.T) {
-    db := setupIntegrationDB(t)
-
-    // Use default UUID v7 generator (pass nil)
-    userRepo := repositories.NewUsersRepository(db, nil)
-
-    user, err := userRepo.Create(ctx, CreateUsersParams{
-        Name:  "Integration Test",
-        Email: "integration@example.com",
-    })
-
-    require.NoError(t, err)
-    assert.NotEqual(t, uuid.Nil, user.Id)
-}
-```
-
 ## Troubleshooting
 
 ### IDs Not Being Generated
