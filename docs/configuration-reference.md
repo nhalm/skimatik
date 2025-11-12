@@ -139,7 +139,7 @@ output:
 #### `default_functions`
 - **Type**: String or Array
 - **Required**: No
-- **Default**: `null` (no functions generated)
+- **Default**: All functions (`["create", "get", "update", "delete", "list", "paginate"]`)
 - **Description**: Functions to generate for all tables unless overridden
 
 **String format** (shorthand):
@@ -440,19 +440,78 @@ types:
 
 skimatik validates configuration on startup. Common errors:
 
+### Configuration Validation
+
 **Missing required fields:**
 ```
-Error: database.dsn is required
+Error: database connection string (DSN) is required
 ```
 
-**Invalid function names:**
+**No generation targets:**
 ```
-Error: unknown function "upsert" (valid: create, get, update, delete, list, paginate)
+Error: must enable either table generation (--tables) or query generation (--queries)
 ```
 
-**Table not found:**
+**Invalid queries directory:**
 ```
-Error: table "users" not found in schema "public"
+Error: queries directory does not exist: ./database/queries
+```
+
+**Output directory creation failed:**
+```
+Error: failed to create output directory: permission denied
+```
+
+**default_functions validation:**
+```
+Error: invalid string value for default_functions: "some_value" (only 'all' is supported)
+Error: default_functions array must contain only strings
+Error: default_functions must be a string ('all') or array of strings
+```
+
+### Table Validation
+
+**Primary key errors:**
+```
+Error: table has no primary key
+Error: composite primary keys are not supported
+Error: primary key column id not found
+Error: primary key column id must be UUID type, got integer. skimatik requires UUID v7 primary keys for consistent time-ordered pagination. Please migrate your table to use UUID primary keys
+```
+
+### Query Validation
+
+**Basic query validation:**
+```
+Error: query name cannot be empty
+Error: query SQL cannot be empty
+Error: query type cannot be empty
+Error: query name 'Get-Users' is not a valid Go identifier
+Error: query type :one requires SELECT statement or CTE
+Error: query type :exec cannot use SELECT statement or CTE
+```
+
+**Parameter annotation validation:**
+```
+Error: duplicate parameter annotation for $1
+Error: parameter annotations must be sequential starting at $1, missing $2
+Error: invalid Go type "BadType" for parameter $1
+Error: parameter count mismatch: query expects 2 parameters, found 3
+```
+
+**Result annotation validation:**
+```
+Error: duplicate result annotation for column "email"
+Error: invalid Go type "BadType" for result column "status"
+Error: query has result annotations but no columns were detected
+Error: result annotation for column 'missing_column' not found in query results
+```
+
+**cursor_columns validation:**
+```
+Error: cursor_columns annotation only valid for :many queries, got :one
+Error: invalid column name in cursor_columns: "bad-name"
+Error: query 'GetPosts' has cursor_columns but contains ORDER BY clause - remove ORDER BY, sort order is determined by orderBy parameter in paginated function
 ```
 
 ---

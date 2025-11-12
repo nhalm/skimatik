@@ -58,19 +58,18 @@ go install github.com/nhalm/skimatik/cmd/skimatik@latest
 # Create a configuration file
 cat > skimatik.yaml << EOF
 database:
-  host: localhost
-  port: 5432
-  name: mydb
-  user: postgres
-  password: postgres
+  dsn: "postgres://postgres:postgres@localhost:5432/mydb?sslmode=disable"
+  schema: "public"
 
 output:
-  package: repository
-  dir: ./repository/generated
+  directory: "./repository/generated"
+  package: "repository"
+
+default_functions: "all"
 
 tables:
-  - users
-  - posts
+  users:
+  posts:
 EOF
 
 # Generate repositories
@@ -96,29 +95,34 @@ Here's a simple example of what skimatik generates:
 
 ```go
 // Generated repository with full CRUD operations
-type UserRepository struct {
-    db         pgxkit.DBConn
-    operations *DatabaseOperations
+type UsersRepository struct {
+    db             *pgxkit.DB
+    generateIdFunc func() uuid.UUID
 }
 
+// Constructor - pass nil for idGen to use default UUID v7 generator
+userRepo := generated.NewUsersRepository(db, nil)
+
 // Type-safe user retrieval
-user, err := userRepo.GetByID(ctx, userID)
+user, err := userRepo.Get(ctx, userID)
 
 // Built-in cursor-based pagination
-page, err := userRepo.ListPaginated(ctx, ListUsersParams{
-    Limit:  20,
-    Cursor: cursor,
+result, err := userRepo.ListPaginated(ctx, generated.PaginationParams{
+    Limit:      20,
+    NextCursor: cursor,
+    OrderBy:    "created_at",
 })
 
-// Custom queries from SQL files with semantic parameter names
-activeUsers, err := userRepo.GetActiveUsers(ctx, 50) // limit parameter
-userByEmail, err := userRepo.GetUserByEmail(ctx, "user@example.com") // email parameter
-searchResults, err := userRepo.SearchUsers(ctx, "john", 20) // searchTerm, limit parameters
+// Custom queries from SQL files (generated as separate structs)
+userQueries := generated.NewUsersQueries(db)
+activeUsers, err := userQueries.GetActiveUsers(ctx, 50)
+userByEmail, err := userQueries.GetUserByEmail(ctx, "user@example.com")
+searchResults, err := userQueries.SearchUsers(ctx, "john", 20)
 
 // Optional parameters with nullable types
-allUsers, err := userRepo.ListUsersWithFilters(ctx, 100, nil, nil) // all users
+allUsers, err := userQueries.ListUsersWithOptionalFilters(ctx, 100, nil, nil)
 activeOnly := true
-activeUsers, err := userRepo.ListUsersWithFilters(ctx, 100, &activeOnly, nil) // filtered by status
+filtered, err := userQueries.ListUsersWithOptionalFilters(ctx, 100, &activeOnly, nil)
 ```
 
 ### Nullable Parameters for Optional Filters
@@ -159,7 +163,7 @@ func (q *Queries) ListUsersWithFilters(
 
 - Go 1.24+
 - PostgreSQL (any version supported by pgx)
-- Tables must have UUID v7 primary keys for pagination support
+- Tables must have UUID primary keys for pagination support
 
 ## Installation
 
