@@ -4,7 +4,7 @@
 
 skimatik generates shared utility functions that eliminate code duplication across repositories while maintaining full type safety and performance. These utilities are available in every generated package and can be used in custom repository extensions.
 
-## 🔧 Phase 1: Database Operation Utilities
+## 🔧 Database Operation Utilities
 
 ### Generated Functions
 
@@ -99,7 +99,7 @@ func (s *UserService) CreateUserWithProfile(ctx context.Context, userData reposi
 }
 ```
 
-## 🔄 Phase 2: Retry Operation Utilities
+## 🔄 Retry Operation Utilities
 
 ### Generated Functions
 
