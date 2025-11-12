@@ -44,6 +44,7 @@ errors.go
 # Exception: Allow generated files in example-app (removed - now ignored for cleaner PRs)
 # example-app/repository/generated/ is ignored to reduce noise in PRs
 # CI validates generation via make example-app-test
+example-app/repository/generated/
 
 # Coverage files
 coverage.out
