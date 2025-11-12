@@ -242,6 +242,27 @@ UPDATE users SET is_active = false WHERE id = $1;
 - `:many` - Returns array of records
 - `:exec` - Executes without returning data
 
+**Optional annotations for `:many` queries:**
+- `cursor_columns:` - Comma-separated list of columns for pagination sorting
+
+**Pagination with cursor_columns:**
+```sql
+-- name: GetPublishedPosts :many
+-- cursor_columns: published_at, id
+SELECT id, title, content, published_at
+FROM posts
+WHERE is_published = true
+```
+
+This generates two functions:
+- `GetPublishedPosts(ctx)` - Returns all results
+- `GetPublishedPostsPaginated(ctx, orderBy, params)` - Paginated with allowlist-validated `orderBy`
+
+**Requirements:**
+- All `cursor_columns` must be in the SELECT clause
+- Query must NOT include ORDER BY (sort is controlled by `orderBy` parameter)
+- Columns should typically be indexed for performance
+
 **Example configuration:**
 ```yaml
 queries:
