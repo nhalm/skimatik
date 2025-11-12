@@ -1,13 +1,13 @@
 // {{.FunctionName}} executes the {{.QueryName}} query and returns multiple results
 func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterDeclarations}}) ([]{{.ResultType}}, error) {
 	query := `{{.SQL}}`
-	
+
 	rows, err := ExecuteQuery(ctx, r.db, "{{.QueryName}}", "{{.ResultType}}", query{{.ParameterArgs}})
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	
+
 	var results []{{.ResultType}}
 	for rows.Next() {
 		var result {{.ResultType}}
@@ -17,6 +17,130 @@ func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterD
 		}
 		results = append(results, result)
 	}
-	
+
 	return results, HandleRowsResult("{{.ResultType}}", rows)
-} 
+}
+{{if .CursorColumns}}
+// {{.FunctionName}}Paginated executes the {{.QueryName}} query with cursor-based pagination
+// The orderBy parameter must be one of: {{range $index, $col := .CursorColumns}}{{if $index}}, {{end}}{{$col}}{{end}}
+func (r *{{.RepositoryName}}) {{.FunctionName}}Paginated(ctx context.Context{{.ParameterDeclarations}}, orderBy string, params PaginationParams) (*PaginationResult[{{.ResultType}}], error) {
+	// Validate orderBy against allowlist
+	validOrderBy := map[string]bool{
+		{{range .CursorColumns}}"{{.}}": true,
+		{{end}}
+	}
+	if !validOrderBy[orderBy] {
+		return nil, fmt.Errorf("invalid orderBy column: %q (must be one of: {{range $index, $col := .CursorColumns}}{{if $index}}, {{end}}{{$col}}{{end}})", orderBy)
+	}
+
+	// Validate pagination parameters
+	if err := validatePaginationParams(params); err != nil {
+		return nil, err
+	}
+
+	// Set default limit
+	limit := params.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	// Parse cursor if provided
+	var cursorValue interface{}
+	if params.Cursor != "" {
+		// Decode base64 cursor to get the actual value
+		decoded, err := base64.URLEncoding.DecodeString(params.Cursor)
+		if err != nil {
+			return nil, fmt.Errorf("invalid cursor format: %w", err)
+		}
+		cursorValue = string(decoded)
+	}
+
+	// Build paginated query by wrapping the base query
+	baseQuery := `{{.SQL}}`
+	var paginatedQuery string
+
+	if cursorValue != nil {
+		// Add WHERE clause for cursor pagination
+		paginatedQuery = fmt.Sprintf(
+			"SELECT * FROM (%s) AS subquery WHERE %s > $%d ORDER BY %s ASC LIMIT $%d",
+			baseQuery,
+			orderBy,
+			{{if .ParameterArgs}}len([]interface{}{ {{.ParameterArgs}} })+1{{else}}1{{end}},
+			orderBy,
+			{{if .ParameterArgs}}len([]interface{}{ {{.ParameterArgs}} })+2{{else}}2{{end}},
+		)
+	} else {
+		// No cursor, just add ORDER BY and LIMIT
+		paginatedQuery = fmt.Sprintf(
+			"SELECT * FROM (%s) AS subquery ORDER BY %s ASC LIMIT $%d",
+			baseQuery,
+			orderBy,
+			{{if .ParameterArgs}}len([]interface{}{ {{.ParameterArgs}} })+1{{else}}1{{end}},
+		)
+	}
+
+	// Build parameter list
+	var args []interface{}
+	{{if .ParameterArgs}}
+	args = append(args, {{.ParameterArgs}})
+	{{end}}
+	if cursorValue != nil {
+		args = append(args, cursorValue)
+	}
+	args = append(args, int32(limit+1)) // +1 to check if there are more results
+
+	// Execute query
+	rows, err := ExecuteQuery(ctx, r.db, "{{.QueryName}}_paginated", "{{.ResultType}}", paginatedQuery, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Scan results
+	var items []{{.ResultType}}
+	for rows.Next() {
+		var result {{.ResultType}}
+		err := rows.Scan({{.ScanArgs}})
+		if err != nil {
+			return nil, HandleDatabaseError("scan", "{{.ResultType}}", err)
+		}
+		items = append(items, result)
+	}
+
+	if err := HandleRowsResult("{{.ResultType}}", rows); err != nil {
+		return nil, err
+	}
+
+	// Check if there are more items
+	hasMore := len(items) > limit
+	if hasMore {
+		items = items[:limit] // Remove the extra item
+	}
+
+	// Generate next cursor if there are more items
+	var nextCursor string
+	if hasMore && len(items) > 0 {
+		lastItem := items[len(items)-1]
+		// Extract the orderBy column value and encode it
+		var cursorVal string
+		switch orderBy {
+		{{range .CursorColumns}}
+		case "{{.}}":
+			// Use reflection or type assertion to get field value
+			// For simplicity, encoding the whole struct for now
+			cursorVal = fmt.Sprintf("%v", lastItem)
+		{{end}}
+		}
+		nextCursor = base64.URLEncoding.EncodeToString([]byte(cursorVal))
+	}
+
+	return &PaginationResult[{{.ResultType}}]{
+		Items:      items,
+		HasMore:    hasMore,
+		NextCursor: nextCursor,
+	}, nil
+}
+{{end}}

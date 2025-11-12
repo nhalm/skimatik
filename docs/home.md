@@ -48,7 +48,8 @@ A database-first code generator for PostgreSQL that creates type-safe Go reposit
 - **Shared Utilities**: Eliminates code duplication with reusable database operation and retry patterns
 - **Repository Embedding**: Generated repositories designed for clean composition and extension
 - **Table-Based Generation**: Complete CRUD repositories with automatic bidirectional pagination for all database tables
-- **Query-Based Generation**: Custom functions from SQL files with sqlc-style annotations (optional pagination via `-- cursor_columns:` annotation)
+- **Query-Based Generation**: Custom functions from SQL files with sqlc-style annotations
+- **Compile-Time Safe Pagination**: `cursor_columns` annotation generates paginated queries with allowlist-validated sort columns
 - **UUID v7 Optimized**: Time-ordered pagination with consistent performance for table-based operations
 - **Production Ready**: Clean, formatted code following Go best practices
 

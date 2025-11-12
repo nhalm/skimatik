@@ -112,6 +112,9 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 				if err := qp.validateResultAnnotations(currentQuery); err != nil {
 					return nil, fmt.Errorf("error in query %s: %w", currentQuery.Name, err)
 				}
+				if err := qp.validateCursorColumns(currentQuery); err != nil {
+					return nil, fmt.Errorf("error in query %s: %w", currentQuery.Name, err)
+				}
 				queries = append(queries, *currentQuery)
 			}
 
@@ -126,6 +129,7 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 			sqlLines = []string{}
 			paramAnnotations = []ParameterAnnotation{}
 			resultAnnotations = []ResultAnnotation{}
+			cursorColumns = []string{}
 			continue
 		}
 
@@ -178,6 +182,9 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 			return nil, fmt.Errorf("error in query %s: %w", currentQuery.Name, err)
 		}
 		if err := qp.validateResultAnnotations(currentQuery); err != nil {
+			return nil, fmt.Errorf("error in query %s: %w", currentQuery.Name, err)
+		}
+		if err := qp.validateCursorColumns(currentQuery); err != nil {
 			return nil, fmt.Errorf("error in query %s: %w", currentQuery.Name, err)
 		}
 		queries = append(queries, *currentQuery)
@@ -358,6 +365,34 @@ func (qp *QueryParser) parseResultAnnotation(line string) *ResultAnnotation {
 	}
 }
 
+// parseCursorColumnsAnnotation parses cursor_columns annotation
+// Expected format: -- cursor_columns: col1, col2, col3
+func (qp *QueryParser) parseCursorColumnsAnnotation(line string) []string {
+	// Regex to match: -- cursor_columns: col1, col2, col3
+	cursorRegex := regexp.MustCompile(`^--\s*cursor_columns:\s*(.+)$`)
+
+	matches := cursorRegex.FindStringSubmatch(line)
+	if len(matches) != 2 {
+		return nil
+	}
+
+	columnsList := strings.TrimSpace(matches[1])
+	if columnsList == "" {
+		return nil
+	}
+
+	// Split by comma and trim whitespace
+	var columns []string
+	for _, col := range strings.Split(columnsList, ",") {
+		col = strings.TrimSpace(col)
+		if col != "" {
+			columns = append(columns, col)
+		}
+	}
+
+	return columns
+}
+
 // validateParameterAnnotations validates parameter annotations for a query
 func (qp *QueryParser) validateParameterAnnotations(query *Query) error {
 	if len(query.ParameterAnnotations) == 0 {
@@ -413,6 +448,48 @@ func (qp *QueryParser) validateResultAnnotations(query *Query) error {
 	}
 
 	return nil
+}
+
+// validateCursorColumns validates cursor_columns annotation
+func (qp *QueryParser) validateCursorColumns(query *Query) error {
+	if len(query.CursorColumns) == 0 {
+		return nil
+	}
+
+	// cursor_columns only valid for :many queries
+	if query.Type != QueryTypeMany {
+		return fmt.Errorf("cursor_columns annotation only valid for :many queries, got :%s", query.Type)
+	}
+
+	// Validate column names
+	for _, col := range query.CursorColumns {
+		if !isValidColumnName(col) {
+			return fmt.Errorf("invalid column name in cursor_columns: %q", col)
+		}
+	}
+
+	return nil
+}
+
+// isValidColumnName checks if a string is a valid PostgreSQL column name
+func isValidColumnName(name string) bool {
+	if name == "" {
+		return false
+	}
+
+	// Must start with letter or underscore
+	if (name[0] < 'a' || name[0] > 'z') && (name[0] < 'A' || name[0] > 'Z') && name[0] != '_' {
+		return false
+	}
+
+	// Rest must be letters, digits, or underscores
+	for i := 1; i < len(name); i++ {
+		if (name[i] < 'a' || name[i] > 'z') && (name[i] < 'A' || name[i] > 'Z') && (name[i] < '0' || name[i] > '9') && name[i] != '_' {
+			return false
+		}
+	}
+
+	return true
 }
 
 // isValidGoType performs basic validation of Go type syntax

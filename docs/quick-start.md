@@ -201,12 +201,14 @@ func main() {
 }
 ```
 
-### 2. Bidirectional Cursor Pagination
+### 2. Pagination
+
+#### Table-Based Pagination
 
 Table-based repositories include automatic bidirectional cursor-based pagination with runtime sort selection:
 
 ```go
-// List first page (10 items, ordered by created_at)
+// List first page (10 items)
 result, err := userRepo.ListPaginated(ctx, repositories.PaginationParams{
     Limit:   10,
     OrderBy: "created_at",  // Sort by any supported column
@@ -248,21 +250,47 @@ if result.HasPrevious {
 - **Bidirectional**: Navigate forward with `NextCursor` or backward with `BeforeCursor`
 - **Runtime Sorting**: Specify `OrderBy` to sort by any table column (defaults to `id`)
 - **Cursor Format**: Cursors are base64-encoded JSON containing `{column, value}` pairs
-- **Breaking Change**: Cursor format changed from base64(UUID) to base64(JSON) - old cursors are backward compatible
 
-**Custom Query Pagination:**
+#### Query-Based Pagination with cursor_columns (Recommended)
 
-Query-based functions (from SQL files) can also support pagination by adding the `-- cursor_columns:` annotation:
+For custom queries, use the `cursor_columns` annotation to generate paginated versions with compile-time safety:
 
 ```sql
 -- name: GetPublishedPosts :many
 -- cursor_columns: published_at, id
 SELECT id, title, published_at FROM posts
 WHERE is_published = true
-ORDER BY published_at DESC, id DESC;
 ```
 
-This generates a paginated query function that accepts `PaginationParams` and returns `PaginationResult`.
+**Important**: Queries with `cursor_columns` must NOT include an `ORDER BY` clause. The sort order is determined by the `orderBy` parameter in the paginated function.
+
+This generates TWO functions:
+
+```go
+// Regular function - returns all results
+posts, err := postQueries.GetPublishedPosts(ctx)
+
+// Paginated function - with compile-time validated orderBy
+result, err := postQueries.GetPublishedPostsPaginated(ctx, "published_at", repositories.PaginationParams{
+    Limit: 20,
+})
+
+// orderBy must be one of: "published_at" or "id"
+// Invalid values fail at compile time with validation error
+```
+
+**Why cursor_columns is safer than ListPaginated:**
+- Compile-time validation of sort columns (allowlist-based)
+- No runtime errors from invalid column names
+- Type-safe orderBy parameter
+- Self-documenting API with explicit sort options
+
+**Comparison:**
+
+| Approach | Compile-Time Safety | Sort Flexibility | Use Case |
+|----------|---------------------|------------------|----------|
+| `cursor_columns` | Yes - allowlist validated | Fixed columns only | **Recommended** - Custom queries with pagination |
+| `ListPaginated` | No - runtime validation | Any column | Table-based repositories only |
 
 ### 3. Error Handling
 

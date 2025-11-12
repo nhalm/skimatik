@@ -588,6 +588,13 @@ func (cg *CodeGenerator) GenerateQueries(queries []Query) error {
 		return nil
 	}
 
+	// Validate queries with cursor_columns
+	for i := range queries {
+		if err := cg.validateQueryForCursorPagination(&queries[i]); err != nil {
+			return fmt.Errorf("validation failed for query %s: %w", queries[i].Name, err)
+		}
+	}
+
 	// Group queries by source file
 	queryGroups := cg.groupQueriesByFile(queries)
 
@@ -599,6 +606,61 @@ func (cg *CodeGenerator) GenerateQueries(queries []Query) error {
 	}
 
 	return nil
+}
+
+// validateQueryForCursorPagination validates queries with cursor_columns annotation
+func (cg *CodeGenerator) validateQueryForCursorPagination(query *Query) error {
+	if len(query.CursorColumns) == 0 {
+		return nil
+	}
+
+	// Check for ORDER BY clause
+	if containsOrderBy(query.SQL) {
+		return fmt.Errorf("query '%s' has cursor_columns but contains ORDER BY clause - remove ORDER BY, sort order is determined by orderBy parameter in paginated function", query.Name)
+	}
+
+	return nil
+}
+
+// containsOrderBy checks if SQL contains an ORDER BY clause (case-insensitive)
+func containsOrderBy(sql string) bool {
+	// Normalize to lowercase for case-insensitive comparison
+	sqlLower := strings.ToLower(sql)
+
+	// Remove string literals to avoid false positives
+	sqlLower = removeStringLiterals(sqlLower)
+
+	// Look for ORDER BY clause
+	return strings.Contains(sqlLower, "order by")
+}
+
+// removeStringLiterals removes string literals from SQL to avoid false ORDER BY detection
+func removeStringLiterals(sql string) string {
+	result := []rune(sql)
+	inSingleQuote := false
+
+	for i := 0; i < len(result); i++ {
+		if result[i] == '\'' {
+			if inSingleQuote {
+				// Check for escaped quote ''
+				if i+1 < len(result) && result[i+1] == '\'' {
+					result[i] = ' '
+					result[i+1] = ' '
+					i++
+				} else {
+					inSingleQuote = false
+					result[i] = ' '
+				}
+			} else {
+				inSingleQuote = true
+				result[i] = ' '
+			}
+		} else if inSingleQuote {
+			result[i] = ' '
+		}
+	}
+
+	return string(result)
 }
 
 // groupQueriesByFile groups queries by their source file
@@ -647,10 +709,10 @@ func (cg *CodeGenerator) generateQueryCode(sourceFile string, queries []Query) (
 		"github.com/google/uuid",
 	}
 
-	// Check if any queries are paginated and add pagination imports
+	// Check if any queries are paginated or have cursor_columns
 	hasPaginatedQueries := false
 	for _, query := range queries {
-		if query.Type == QueryTypePaginated {
+		if query.Type == QueryTypePaginated || len(query.CursorColumns) > 0 {
 			hasPaginatedQueries = true
 			break
 		}
@@ -698,15 +760,8 @@ func (cg *CodeGenerator) generateQueryCode(sourceFile string, queries []Query) (
 		}
 	}
 
-	// Generate pagination types and utilities if needed
-	if hasPaginatedQueries {
-		paginationCode, err := cg.generateInlinePaginationTypes()
-		if err != nil {
-			return "", fmt.Errorf("failed to generate pagination types: %w", err)
-		}
-		code.WriteString(paginationCode)
-		code.WriteString("\n\n")
-	}
+
+	// Pagination types are in the shared pagination.go file
 
 	// Generate repository struct and constructor
 	repoCode, err := cg.generateQueryRepository(sourceFile, queries)
@@ -994,5 +1049,6 @@ func (cg *CodeGenerator) prepareQueryTemplateData(query Query) (map[string]inter
 		"ParameterDeclarations": paramDeclStr,
 		"ParameterArgs":         paramArgStr,
 		"ScanArgs":              strings.Join(scanArgs, ", "),
+		"CursorColumns":         query.CursorColumns,
 	}, nil
 }
