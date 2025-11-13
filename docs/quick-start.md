@@ -265,9 +265,10 @@ WHERE is_published = true
 ```
 
 **Important Requirements:**
-- **No ORDER BY clause** in the SQL - sort order is controlled via the `orderBy` parameter
+- **No ORDER BY clause** in the SQL - sort order is controlled via the `orderBy` parameter at runtime
 - **All cursor columns must be in SELECT** - the columns listed in `cursor_columns` must be returned by the query
 - **Columns must support ordering** - typically indexed columns for performance
+- **Forward-only pagination** - cursor_columns queries only support NextCursor (no BeforeCursor/backward navigation)
 
 **Generated Code:**
 
@@ -277,14 +278,13 @@ This generates TWO functions:
 // Regular function - returns all results (no pagination)
 posts, err := postQueries.GetPublishedPosts(ctx)
 
-// Paginated function - with allowlist-validated orderBy parameter
+// Paginated function - with allowlist-validated orderBy parameter (separate from params)
 result, err := postQueries.GetPublishedPostsPaginated(
     ctx,
-    "published_at",  // orderBy: must be "published_at" or "id"
+    "published_at",  // orderBy: must be "published_at" or "id" (from cursor_columns allowlist)
     repositories.PaginationParams{
         Limit: 20,
-        // NextCursor: result.NextCursor,  // for next page
-        // BeforeCursor: result.BeforeCursor,  // for previous page
+        // NextCursor: result.NextCursor,  // for next page (forward-only)
     },
 )
 ```
@@ -306,36 +306,38 @@ result, err := postQueries.GetPublishedPostsPaginated(ctx, "created_at", params)
 **Pagination Navigation:**
 
 ```go
-// Get first page
-result, err := postQueries.GetPublishedPostsPaginated(ctx, "published_at", repositories.PaginationParams{
-    Limit: 10,
-})
+// Get first page, orderBy is separate parameter before PaginationParams
+result, err := postQueries.GetPublishedPostsPaginated(
+    ctx,
+    "published_at",  // orderBy parameter
+    repositories.PaginationParams{
+        Limit: 10,
+    },
+)
 
-// Navigate to next page
+// Navigate to next page (forward-only)
 if result.HasMore {
-    nextPage, err := postQueries.GetPublishedPostsPaginated(ctx, "published_at", repositories.PaginationParams{
-        Limit:      10,
-        NextCursor: result.NextCursor,
-    })
+    nextPage, err := postQueries.GetPublishedPostsPaginated(
+        ctx,
+        "published_at",  // orderBy parameter
+        repositories.PaginationParams{
+            Limit:      10,
+            NextCursor: result.NextCursor,
+        },
+    )
 }
 
-// Navigate to previous page
-if result.HasPrevious {
-    prevPage, err := postQueries.GetPublishedPostsPaginated(ctx, "published_at", repositories.PaginationParams{
-        Limit:        10,
-        BeforeCursor: result.BeforeCursor,
-    })
-}
+// Note: cursor_columns pagination is forward-only (no BeforeCursor support)
 ```
 
 **Why Use cursor_columns:**
 - **Generation-time validation**: Invalid columns caught during code generation, not at runtime (unless using dynamic strings)
 - **Self-documenting**: Function signature shows exactly which columns can be used for sorting
 - **SQL injection safe**: Only allowlisted columns can be used in ORDER BY
-- **Consistent API**: Same pagination interface as table-based repositories
+- **Clean separation**: orderBy parameter separate from pagination params for clarity
 
 **When to Use cursor_columns:**
-- Custom queries that need pagination
+- Custom queries that need forward pagination
 - Queries with complex WHERE conditions or JOINs
 - When you want explicit control over which columns can be sorted
 - Performance-critical queries where you want indexed columns only
@@ -346,9 +348,10 @@ if result.HasPrevious {
 |---------|------------------|-----------------|
 | Use Case | Custom queries | Table-based repositories |
 | Sort Column Validation | Allowlist at generation time | All table columns at runtime |
+| Navigation | Forward-only (NextCursor) | Bidirectional (NextCursor + BeforeCursor) |
 | SQL Injection Risk | None - allowlist only | None - table column validation |
 | Flexibility | Fixed columns | Any table column |
-| Documentation | Explicit in function signature | Must check table schema |
+| orderBy Parameter | Separate parameter | Inside PaginationParams |
 | Best For | Custom queries with pagination | Simple table queries |
 
 ### 3. Error Handling

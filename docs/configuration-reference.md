@@ -246,6 +246,9 @@ UPDATE users SET is_active = false WHERE id = $1;
 - `cursor_columns:` - Comma-separated list of columns for pagination sorting
 
 **Pagination with cursor_columns:**
+
+The `cursor_columns` annotation generates paginated query functions with compile-time safe column allowlists:
+
 ```sql
 -- name: GetPublishedPosts :many
 -- cursor_columns: published_at, id
@@ -254,14 +257,62 @@ FROM posts
 WHERE is_published = true
 ```
 
-This generates two functions:
-- `GetPublishedPosts(ctx)` - Returns all results
-- `GetPublishedPostsPaginated(ctx, orderBy, params)` - Paginated with allowlist-validated `orderBy`
+**Generated Functions:**
+
+This generates TWO functions with different signatures:
+
+```go
+// 1. Regular function - returns all results (no pagination)
+func (r *PostsQueries) GetPublishedPosts(ctx context.Context) ([]GetPublishedPostsResult, error)
+
+// 2. Paginated function - orderBy as separate parameter before PaginationParams
+func (r *PostsQueries) GetPublishedPostsPaginated(
+    ctx context.Context,
+    orderBy string,              // Must be "published_at" or "id" (validated at runtime)
+    params PaginationParams,     // Only NextCursor supported (forward-only)
+) (*PaginationResult[GetPublishedPostsResult], error)
+```
+
+**Function Signature Details:**
+- `orderBy` parameter is **separate** from `PaginationParams`
+- `orderBy` must be one of the columns listed in `cursor_columns` annotation
+- Runtime validation returns error if orderBy not in allowlist
+- Only `NextCursor` supported in params (forward-only pagination)
 
 **Requirements:**
 - All `cursor_columns` must be in the SELECT clause
-- Query must NOT include ORDER BY (sort is controlled by `orderBy` parameter)
+- Query must NOT include ORDER BY (sort is controlled by `orderBy` parameter at runtime)
 - Columns should typically be indexed for performance
+- Forward-only pagination (no BeforeCursor support)
+
+**Usage Example:**
+```go
+// First page
+result, err := queries.GetPublishedPostsPaginated(
+    ctx,
+    "published_at",  // orderBy - must be from cursor_columns allowlist
+    repositories.PaginationParams{
+        Limit: 20,
+    },
+)
+
+// Next page (forward-only)
+if result.HasMore {
+    nextResult, err := queries.GetPublishedPostsPaginated(
+        ctx,
+        "published_at",
+        repositories.PaginationParams{
+            Limit:      20,
+            NextCursor: result.NextCursor,
+        },
+    )
+}
+```
+
+**Validation Errors:**
+- Generation-time: Query contains ORDER BY clause
+- Generation-time: cursor_columns contains invalid identifier
+- Runtime: orderBy value not in cursor_columns allowlist
 
 **Example configuration:**
 ```yaml
