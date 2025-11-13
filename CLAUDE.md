@@ -179,7 +179,7 @@ docs/
 ## Database Requirements
 
 - PostgreSQL (any version pgx supports)
-- Tables must have UUID v7 primary keys for pagination
+- Tables must have UUID primary keys for pagination
 - Uses `information_schema` for metadata
 
 ## Code Generation Flow
