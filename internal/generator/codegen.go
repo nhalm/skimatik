@@ -221,11 +221,13 @@ func (cg *CodeGenerator) generateEnhancedFeatures(table Table) (string, error) {
 // generateStruct generates the Go struct for a table
 func (cg *CodeGenerator) generateStruct(table Table) (string, error) {
 	// Prepare template data
+	idColumn := table.GetPrimaryKeyColumn()
 	data := struct {
 		StructName   string
 		TableName    string
 		ReceiverName string
 		IDField      string
+		IDType       string
 		Fields       []struct {
 			Name string
 			Type string
@@ -235,7 +237,8 @@ func (cg *CodeGenerator) generateStruct(table Table) (string, error) {
 		StructName:   table.GoStructName(),
 		TableName:    table.Name,
 		ReceiverName: strings.ToLower(table.GoStructName()[:1]),
-		IDField:      table.GetPrimaryKeyColumn().GoFieldName(),
+		IDField:      idColumn.GoFieldName(),
+		IDType:       idColumn.GoType,
 	}
 
 	// Add fields
@@ -821,6 +824,7 @@ func (cg *CodeGenerator) generateQueryResultStruct(query Query) (string, error) 
 		StructName      string
 		QueryName       string
 		IDField         string
+		IDType          string
 		IDFieldIsPgtype bool
 		Fields          []struct {
 			Name string
@@ -845,9 +849,10 @@ func (cg *CodeGenerator) generateQueryResultStruct(query Query) (string, error) 
 		}
 		data.Fields = append(data.Fields, field)
 
-		// Use the first UUID field as the ID field for pagination
-		if data.IDField == "" && col.IsUUID() {
+		// Use the first field named "id" or ending with "_id" as the ID field for pagination
+		if data.IDField == "" && (col.Name == "id" || strings.HasSuffix(col.Name, "_id")) {
 			data.IDField = col.GoFieldName()
+			data.IDType = col.GoType
 			data.IDFieldIsPgtype = col.GoType == "pgtype.UUID"
 		}
 	}

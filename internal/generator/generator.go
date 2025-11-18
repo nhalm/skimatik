@@ -233,7 +233,7 @@ func (g *Generator) generateQueries(ctx context.Context) error {
 	return nil
 }
 
-// validateTablePrimaryKey ensures the table has a UUID primary key
+// validateTablePrimaryKey ensures the table has a single-column primary key
 func (g *Generator) validateTablePrimaryKey(table Table) error {
 	if len(table.PrimaryKey) == 0 {
 		return fmt.Errorf("table has no primary key")
@@ -247,12 +247,6 @@ func (g *Generator) validateTablePrimaryKey(table Table) error {
 	column := table.GetColumn(pkColumn)
 	if column == nil {
 		return fmt.Errorf("primary key column %s not found", pkColumn)
-	}
-
-	if !column.IsUUID() {
-		return fmt.Errorf("primary key column %s must be UUID type, got %s. "+
-			"skimatik requires UUID v7 primary keys for consistent time-ordered pagination. "+
-			"Please migrate your table to use UUID primary keys", pkColumn, column.Type)
 	}
 
 	return nil

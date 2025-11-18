@@ -4,6 +4,6 @@ type {{.StructName}} struct {
 {{end}}}
 
 // GetID returns the ID of the {{.StructName}} for pagination
-func ({{.ReceiverName}} {{.StructName}}) GetID() uuid.UUID {
+func ({{.ReceiverName}} {{.StructName}}) GetID() {{.IDType}} {
 	return {{.ReceiverName}}.{{.IDField}}
 } 
