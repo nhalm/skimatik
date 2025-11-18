@@ -453,37 +453,6 @@ func TestSystem_ErrorHandling(t *testing.T) {
 			t.Errorf("Error message should mention connection issue: %v", err)
 		}
 	})
-
-	t.Run("invalid_primary_key_table", func(t *testing.T) {
-		tempDir := t.TempDir()
-
-		config := &Config{
-			DSN:         "postgres://skimatik:skimatik_test_password@localhost:5432/skimatik_test",
-			Schema:      "public",
-			OutputDir:   tempDir,
-			PackageName: "testgen",
-			Tables:      true,
-			Include:     []string{"invalid_pk_table"}, // This table has serial PK, not UUID
-			TableConfigs: map[string]TableConfig{
-				"invalid_pk_table": {Functions: []string{"create", "get", "list"}},
-			},
-			Verbose: false,
-		}
-
-		generator := New(config, "test")
-		ctx := context.Background()
-		err := generator.Generate(ctx)
-
-		// Test: System rejects tables without UUID primary keys
-		if err == nil {
-			t.Error("Expected error for table without UUID primary key")
-		}
-
-		// Test: Error message mentions UUID requirement
-		if !strings.Contains(err.Error(), "UUID") && !strings.Contains(err.Error(), "primary key") {
-			t.Errorf("Error message should mention UUID primary key requirement: %v", err)
-		}
-	})
 }
 
 // Helper function to compile generated code

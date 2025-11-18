@@ -3,10 +3,10 @@ type {{.StructName}} struct {
 {{range .Fields}}	{{.Name}} {{.Type}} `{{.Tag}}`
 {{end}}}
 
-// GetID returns the ID field for pagination (assumes first UUID field is the ID)
-func (r {{.StructName}}) GetID() uuid.UUID {
+// GetID returns the ID field for pagination
+func (r {{.StructName}}) GetID() {{if .IDType}}{{.IDType}}{{else}}interface{}{{end}} {
 {{if .IDField}}{{if .IDFieldIsPgtype}}	return uuid.UUID(r.{{.IDField}}.Bytes)
 {{else}}	return r.{{.IDField}}
-{{end}}{{else}}	// No UUID field found, return zero UUID
-	return uuid.UUID{}
+{{end}}{{else}}	// No ID field found, return nil
+	return nil
 {{end}}} 
