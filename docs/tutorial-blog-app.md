@@ -190,8 +190,8 @@ func getBoolValue(b *bool) bool {
 The example includes comprehensive integration testing that validates the **complete pipeline**:
 
 ```bash
-# Run complete integration test
-make example-app-test
+# Run complete integration test (from project root)
+make test-example-app
 
 # This validates:
 # 1. Database setup and schema migration
