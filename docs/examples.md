@@ -28,8 +28,8 @@ This guide demonstrates **real usage** of skimatik generated repositories with *
 
 ### 1. Setup Database
 ```bash
-# From project root
-make dev-setup      # Start PostgreSQL with test data
+# From project root - database auto-starts with test commands
+make test-integration   # Auto-starts PostgreSQL
 ```
 
 ### 2. Generate Repositories (if needed)
