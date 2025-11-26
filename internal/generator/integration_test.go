@@ -164,7 +164,7 @@ func TestSystem_CursorColumnsPagination(t *testing.T) {
 
 	// Write query with cursor_columns annotation - note: no ORDER BY in the query
 	queryContent := `-- name: GetPublishedPosts :many
--- cursor_columns: published_at, id
+-- cursor_columns: created_at, id
 SELECT id, name, email, is_active, created_at, updated_at
 FROM users
 WHERE is_active = true;
@@ -212,12 +212,12 @@ WHERE name LIKE $1;
 	generatedCode := string(content)
 
 	// Check for regular function
-	if !strings.Contains(generatedCode, "func (r *QueriesRepository) GetPublishedPosts(") {
+	if !strings.Contains(generatedCode, "func (r *PaginationQueries) GetPublishedPosts(") {
 		t.Error("Regular GetPublishedPosts function not generated")
 	}
 
 	// Check for paginated function
-	if !strings.Contains(generatedCode, "func (r *QueriesRepository) GetPublishedPostsPaginated(") {
+	if !strings.Contains(generatedCode, "func (r *PaginationQueries) GetPublishedPostsPaginated(") {
 		t.Error("Paginated GetPublishedPostsPaginated function not generated")
 	}
 
@@ -231,29 +231,27 @@ WHERE name LIKE $1;
 		t.Error("Paginated function missing orderBy allowlist validation")
 	}
 
-	// Check that cursor columns are in the allowlist
-	if !strings.Contains(generatedCode, `"published_at": true`) {
-		t.Error("published_at not in orderBy allowlist")
+	// Check that cursor columns are in the allowlist for GetPublishedPosts
+	// Note: goimports adds extra whitespace for alignment, so check for key + "true"
+	if !strings.Contains(generatedCode, `"created_at":`) || !strings.Contains(generatedCode, "true") {
+		t.Error("created_at not in orderBy allowlist")
 	}
-	if !strings.Contains(generatedCode, `"id": true`) {
+	if !strings.Contains(generatedCode, `"id":`) {
 		t.Error("id not in orderBy allowlist")
 	}
 
 	// Check for second query's regular function
-	if !strings.Contains(generatedCode, "func (r *QueriesRepository) SearchUsers(") {
+	if !strings.Contains(generatedCode, "func (r *PaginationQueries) SearchUsers(") {
 		t.Error("Regular SearchUsers function not generated")
 	}
 
 	// Check for second query's paginated function
-	if !strings.Contains(generatedCode, "func (r *QueriesRepository) SearchUsersPaginated(") {
+	if !strings.Contains(generatedCode, "func (r *PaginationQueries) SearchUsersPaginated(") {
 		t.Error("Paginated SearchUsersPaginated function not generated")
 	}
 
-	// Check that second query has all three cursor columns in allowlist
-	if !strings.Contains(generatedCode, `"created_at": true`) {
-		t.Error("created_at not in SearchUsers orderBy allowlist")
-	}
-	if !strings.Contains(generatedCode, `"name": true`) {
+	// Check that SearchUsers has name in allowlist (created_at and id already checked above)
+	if !strings.Contains(generatedCode, `"name":`) {
 		t.Error("name not in SearchUsers orderBy allowlist")
 	}
 

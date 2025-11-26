@@ -4,7 +4,7 @@ type Update{{.StructName}}Params struct {
 {{end}}}
 
 // Update updates an existing {{.StructName}}
-func (r *{{.RepositoryName}}) Update(ctx context.Context, id uuid.UUID, params Update{{.StructName}}Params) (*{{.StructName}}, error) {
+func (r *{{.RepositoryName}}) Update(ctx context.Context, id {{.IDType}}, params Update{{.StructName}}Params) (*{{.StructName}}, error) {
 	query := `
 		UPDATE {{.TableName}}
 		SET {{.UpdateColumns}}

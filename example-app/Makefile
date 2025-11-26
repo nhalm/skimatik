@@ -1,7 +1,7 @@
 # Example Blog Application - Simple Makefile
 
 # Configuration
-DATABASE_URL = postgres://postgres:password@localhost:5432/blog?sslmode=disable
+DATABASE_URL = postgres://postgres:password@localhost:15987/blog?sslmode=disable
 MIGRATE_VERSION = v4.17.0
 
 .PHONY: help setup generate test test-ci start-and-test run clean install-migrate migrate-up migrate-down migrate-status migrate-create
@@ -48,7 +48,7 @@ setup: install-migrate ## Start database and run migrations
 		-e POSTGRES_DB=blog \
 		-e POSTGRES_USER=postgres \
 		-e POSTGRES_PASSWORD=password \
-		-p 5432:5432 \
+		-p 15987:5432 \
 		-d postgres:15-alpine || echo "Database already running"
 	@sleep 3
 	@echo "📝 Running migrations..."
