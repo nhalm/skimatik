@@ -453,6 +453,170 @@ func TestSystem_ErrorHandling(t *testing.T) {
 	})
 }
 
+// TestIssue90_CTEDeleteWithLimitParameter tests CTE with DELETE and parameterized LIMIT
+// This reproduces issue #90 where the query fails with "expected 1 arguments, got 0"
+func TestIssue90_CTEDeleteWithLimitParameter(t *testing.T) {
+	db := getTestDB(t)
+	ctx := context.Background()
+
+	analyzer := NewQueryAnalyzer(db, "public")
+
+	// Exact query pattern from issue #90
+	query := &Query{
+		Name: "DeleteOldUsersBatch",
+		Type: QueryTypeOne,
+		SQL: `WITH deleted AS (
+  DELETE FROM users WHERE id IN (
+    SELECT id FROM users WHERE is_active = false LIMIT $1
+  ) RETURNING id
+)
+SELECT count(*) as deleted_count FROM deleted`,
+		ParameterAnnotations: []ParameterAnnotation{
+			{Position: 1, Name: "limit", GoType: "int"},
+		},
+	}
+
+	err := analyzer.AnalyzeQuery(ctx, query)
+	if err != nil {
+		t.Fatalf("Failed to analyze CTE DELETE query: %v", err)
+	}
+
+	// Verify parameter was detected and annotation applied
+	if len(query.Parameters) != 1 {
+		t.Errorf("Expected 1 parameter, got %d", len(query.Parameters))
+	}
+
+	if len(query.Parameters) > 0 {
+		param := query.Parameters[0]
+		if param.GoType != "int" {
+			t.Errorf("Expected parameter GoType 'int', got %q", param.GoType)
+		}
+	}
+
+	// Verify result column
+	if len(query.Columns) != 1 {
+		t.Errorf("Expected 1 column, got %d", len(query.Columns))
+	}
+
+	t.Log("✅ Issue #90 test passed: CTE DELETE with LIMIT parameter analyzed successfully")
+}
+
+// TestCTEUpdateWithParameter tests CTE with UPDATE statement containing parameters
+func TestCTEUpdateWithParameter(t *testing.T) {
+	db := getTestDB(t)
+	ctx := context.Background()
+
+	analyzer := NewQueryAnalyzer(db, "public")
+
+	query := &Query{
+		Name: "UpdateAndCountUsers",
+		Type: QueryTypeOne,
+		SQL: `WITH updated AS (
+  UPDATE users SET is_active = $1 WHERE name LIKE $2 RETURNING id
+)
+SELECT count(*) as updated_count FROM updated`,
+	}
+
+	err := analyzer.AnalyzeQuery(ctx, query)
+	if err != nil {
+		t.Fatalf("Failed to analyze CTE UPDATE query: %v", err)
+	}
+
+	if len(query.Parameters) != 2 {
+		t.Errorf("Expected 2 parameters, got %d", len(query.Parameters))
+	}
+
+	if len(query.Columns) != 1 {
+		t.Errorf("Expected 1 column, got %d", len(query.Columns))
+	}
+
+	t.Log("✅ CTE UPDATE with parameters analyzed successfully")
+}
+
+// TestCTEInsertWithParameter tests CTE with INSERT statement containing parameters
+func TestCTEInsertWithParameter(t *testing.T) {
+	db := getTestDB(t)
+	ctx := context.Background()
+
+	analyzer := NewQueryAnalyzer(db, "public")
+
+	query := &Query{
+		Name: "InsertAndReturnUser",
+		Type: QueryTypeOne,
+		SQL: `WITH inserted AS (
+  INSERT INTO users (id, name, email) VALUES ($1, $2, $3) RETURNING id, name
+)
+SELECT id, name FROM inserted`,
+	}
+
+	err := analyzer.AnalyzeQuery(ctx, query)
+	if err != nil {
+		t.Fatalf("Failed to analyze CTE INSERT query: %v", err)
+	}
+
+	if len(query.Parameters) != 3 {
+		t.Errorf("Expected 3 parameters, got %d", len(query.Parameters))
+	}
+
+	if len(query.Columns) != 2 {
+		t.Errorf("Expected 2 columns, got %d", len(query.Columns))
+	}
+
+	t.Log("✅ CTE INSERT with parameters analyzed successfully")
+}
+
+// TestComplexMultiCTE tests a complex query with DELETE, UPDATE, and INSERT CTEs all with parameters
+func TestComplexMultiCTE(t *testing.T) {
+	db := getTestDB(t)
+	ctx := context.Background()
+
+	analyzer := NewQueryAnalyzer(db, "public")
+
+	// Complex query with multiple CTEs: DELETE, UPDATE, INSERT - each with params
+	query := &Query{
+		Name: "ComplexMultiCTEOperation",
+		Type: QueryTypeOne,
+		SQL: `WITH
+deleted AS (
+  DELETE FROM users WHERE id IN (
+    SELECT id FROM users WHERE is_active = false LIMIT $1
+  ) RETURNING id
+),
+updated AS (
+  UPDATE users SET name = $2 WHERE email LIKE $3 RETURNING id
+),
+inserted AS (
+  INSERT INTO users (id, name, email)
+  VALUES ($4, $5, $6)
+  RETURNING id
+)
+SELECT
+  (SELECT count(*) FROM deleted) as deleted_count,
+  (SELECT count(*) FROM updated) as updated_count,
+  (SELECT count(*) FROM inserted) as inserted_count`,
+	}
+
+	err := analyzer.AnalyzeQuery(ctx, query)
+	if err != nil {
+		t.Fatalf("Failed to analyze complex multi-CTE query: %v", err)
+	}
+
+	// Should find all 6 parameters: $1 (limit), $2 (name), $3 (email pattern), $4 (id), $5 (name), $6 (email)
+	if len(query.Parameters) != 6 {
+		t.Errorf("Expected 6 parameters, got %d", len(query.Parameters))
+		for i, p := range query.Parameters {
+			t.Logf("  param[%d]: position=%d name=%s", i, p.Index, p.Name)
+		}
+	}
+
+	// Should have 3 result columns
+	if len(query.Columns) != 3 {
+		t.Errorf("Expected 3 columns, got %d", len(query.Columns))
+	}
+
+	t.Log("✅ Complex multi-CTE (DELETE + UPDATE + INSERT) with parameters analyzed successfully")
+}
+
 // Helper function to compile generated code
 func compileGeneratedCode(t *testing.T, tempDir string) bool {
 	// Create go.mod file

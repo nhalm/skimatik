@@ -369,13 +369,19 @@ func (sp *SQLParser) extractParameters(stmt *pg_query_go.Node) []ParameterInfo {
 	params := make(map[int]*ParameterInfo)
 
 	if selectStmt := stmt.GetSelectStmt(); selectStmt != nil {
-		// Walk CTEs first
+		// Walk CTEs first (CTEs can contain SELECT, DELETE, UPDATE, or INSERT)
 		if selectStmt.WithClause != nil {
 			for _, cteNode := range selectStmt.WithClause.Ctes {
 				if commonTableExpr := cteNode.GetCommonTableExpr(); commonTableExpr != nil {
 					if commonTableExpr.Ctequery != nil {
 						if cteSelect := commonTableExpr.Ctequery.GetSelectStmt(); cteSelect != nil {
 							sp.walkSelectForParams(cteSelect, params)
+						} else if cteDelete := commonTableExpr.Ctequery.GetDeleteStmt(); cteDelete != nil {
+							sp.walkDeleteForParams(cteDelete, params)
+						} else if cteUpdate := commonTableExpr.Ctequery.GetUpdateStmt(); cteUpdate != nil {
+							sp.walkUpdateForParams(cteUpdate, params)
+						} else if cteInsert := commonTableExpr.Ctequery.GetInsertStmt(); cteInsert != nil {
+							sp.walkInsertForParams(cteInsert, params)
 						}
 					}
 				}
@@ -572,6 +578,12 @@ func (sp *SQLParser) walkExprForParams(node *pg_query_go.Node, params map[int]*P
 	if subLink := node.GetSubLink(); subLink != nil {
 		if subLink.Testexpr != nil {
 			sp.walkExprForParams(subLink.Testexpr, params, isInWhere, isInSet)
+		}
+		// Walk the subquery inside SubLink (e.g., IN (SELECT ...), EXISTS (SELECT ...))
+		if subLink.Subselect != nil {
+			if subSelect := subLink.Subselect.GetSelectStmt(); subSelect != nil {
+				sp.walkSelectForParams(subSelect, params)
+			}
 		}
 	}
 
