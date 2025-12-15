@@ -651,3 +651,181 @@ func TestSQLParser_ExtractSelectTargets(t *testing.T) {
 		})
 	}
 }
+
+func TestSQLParser_ExtractOrderBy(t *testing.T) {
+	parser := NewSQLParser()
+
+	tests := []struct {
+		name     string
+		sql      string
+		expected []OrderByColumn
+	}{
+		{
+			name:     "single column ASC explicit",
+			sql:      "SELECT id, name FROM users ORDER BY name ASC",
+			expected: []OrderByColumn{{Name: "name", Direction: "ASC"}},
+		},
+		{
+			name:     "single column DESC",
+			sql:      "SELECT id, name FROM users ORDER BY name DESC",
+			expected: []OrderByColumn{{Name: "name", Direction: "DESC"}},
+		},
+		{
+			name:     "single column default (ASC)",
+			sql:      "SELECT id, name FROM users ORDER BY name",
+			expected: []OrderByColumn{{Name: "name", Direction: "ASC"}},
+		},
+		{
+			name: "multiple columns same direction",
+			sql:  "SELECT id, created_at FROM posts ORDER BY created_at DESC, id DESC",
+			expected: []OrderByColumn{
+				{Name: "created_at", Direction: "DESC"},
+				{Name: "id", Direction: "DESC"},
+			},
+		},
+		{
+			name: "multiple columns mixed direction",
+			sql:  "SELECT id, created_at FROM posts ORDER BY created_at DESC, id ASC",
+			expected: []OrderByColumn{
+				{Name: "created_at", Direction: "DESC"},
+				{Name: "id", Direction: "ASC"},
+			},
+		},
+		{
+			name:     "no ORDER BY returns nil",
+			sql:      "SELECT id, name FROM users WHERE active = true",
+			expected: nil,
+		},
+		{
+			name: "subquery in FROM - use outer ORDER BY",
+			sql: `SELECT * FROM (
+				SELECT id, name, created_at FROM users ORDER BY name ASC
+			) AS sub
+			ORDER BY created_at DESC`,
+			expected: []OrderByColumn{{Name: "created_at", Direction: "DESC"}},
+		},
+		{
+			name: "subquery in FROM - no outer ORDER BY returns nil",
+			sql: `SELECT * FROM (
+				SELECT id, name FROM users ORDER BY name ASC
+			) AS sub
+			WHERE sub.id > 10`,
+			expected: nil,
+		},
+		{
+			name: "subquery in WHERE - use outer ORDER BY",
+			sql: `SELECT id, name FROM users
+			WHERE id IN (SELECT user_id FROM active_users ORDER BY user_id)
+			ORDER BY name DESC`,
+			expected: []OrderByColumn{{Name: "name", Direction: "DESC"}},
+		},
+		{
+			name: "CTE with ORDER BY in CTE - use main query ORDER BY",
+			sql: `WITH ranked_users AS (
+				SELECT id, name, created_at
+				FROM users
+				ORDER BY created_at DESC
+			)
+			SELECT * FROM ranked_users
+			ORDER BY name ASC`,
+			expected: []OrderByColumn{{Name: "name", Direction: "ASC"}},
+		},
+		{
+			name: "CTE without main query ORDER BY returns nil",
+			sql: `WITH active AS (
+				SELECT id, name FROM users WHERE active = true ORDER BY name
+			)
+			SELECT * FROM active WHERE id > 5`,
+			expected: nil,
+		},
+		{
+			name: "multiple CTEs - use main query ORDER BY",
+			sql: `WITH
+				cte1 AS (SELECT id, name FROM users ORDER BY id),
+				cte2 AS (SELECT id, title FROM posts ORDER BY title DESC)
+			SELECT u.name, p.title
+			FROM cte1 u JOIN cte2 p ON u.id = p.id
+			ORDER BY u.name DESC, p.title ASC`,
+			expected: []OrderByColumn{
+				{Name: "name", Direction: "DESC"},
+				{Name: "title", Direction: "ASC"},
+			},
+		},
+		{
+			name:     "table-qualified column",
+			sql:      "SELECT u.id, u.name FROM users u ORDER BY u.name DESC",
+			expected: []OrderByColumn{{Name: "name", Direction: "DESC"}},
+		},
+		{
+			name: "JOIN with multiple table-qualified ORDER BY columns",
+			sql: `SELECT p.id, p.amount, p.created_at, pm.name, pm.created_at AS pm_created_at
+				  FROM payments p
+				  JOIN payment_methods pm ON p.payment_method_id = pm.id
+				  ORDER BY p.created_at DESC, pm.created_at DESC`,
+			expected: []OrderByColumn{
+				{Name: "created_at", Direction: "DESC"},
+				{Name: "pm_created_at", Direction: "DESC"},
+			},
+		},
+		{
+			name: "JOIN ORDER BY column from joined table",
+			sql: `SELECT o.id, o.total, c.name AS customer_name
+				  FROM orders o
+				  JOIN customers c ON o.customer_id = c.id
+				  ORDER BY c.name ASC, o.created_at DESC`,
+			expected: []OrderByColumn{
+				{Name: "customer_name", Direction: "ASC"},
+				{Name: "created_at", Direction: "DESC"},
+			},
+		},
+		{
+			name: "LEFT JOIN with ORDER BY on nullable joined column",
+			sql: `SELECT u.id, u.name, p.last_login
+				  FROM users u
+				  LEFT JOIN profiles p ON u.id = p.user_id
+				  ORDER BY p.last_login DESC`,
+			expected: []OrderByColumn{{Name: "last_login", Direction: "DESC"}},
+		},
+		{
+			name:     "ORDER BY alias",
+			sql:      "SELECT id, name AS username FROM users ORDER BY username DESC",
+			expected: []OrderByColumn{{Name: "username", Direction: "DESC"}},
+		},
+		{
+			name:     "ordinal position - extract column name from SELECT",
+			sql:      "SELECT id, name, created_at FROM users ORDER BY 2 DESC",
+			expected: []OrderByColumn{{Name: "name", Direction: "DESC"}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := parser.ExtractOrderBy(tt.sql)
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if tt.expected == nil {
+				if result != nil {
+					t.Errorf("expected nil, got %+v", result)
+				}
+				return
+			}
+
+			if len(result) != len(tt.expected) {
+				t.Errorf("expected %d columns, got %d", len(tt.expected), len(result))
+				return
+			}
+
+			for i, exp := range tt.expected {
+				if result[i].Name != exp.Name {
+					t.Errorf("column %d: expected name %q, got %q", i, exp.Name, result[i].Name)
+				}
+				if result[i].Direction != exp.Direction {
+					t.Errorf("column %d: expected direction %q, got %q", i, exp.Direction, result[i].Direction)
+				}
+			}
+		})
+	}
+}

@@ -149,7 +149,7 @@ func (cg *CodeGenerator) combineImports(lists ...[]string) []string {
 func (cg *CodeGenerator) getQueryImports(queries []Query) []string {
 	imports := make(map[string]bool)
 
-	hasCursorColumns := false
+	hasPaginatedQueries := false
 	for _, query := range queries {
 		// Get imports for result columns
 		queryImports := cg.typeMapper.GetRequiredImports(query.Columns)
@@ -163,14 +163,14 @@ func (cg *CodeGenerator) getQueryImports(queries []Query) []string {
 			imports[imp] = true
 		}
 
-		// Check if query uses cursor_columns
-		if len(query.CursorColumns) > 0 {
-			hasCursorColumns = true
+		// Check if query uses OrderByColumns (for pagination)
+		if len(query.OrderByColumns) > 0 {
+			hasPaginatedQueries = true
 		}
 	}
 
-	// Add reflect package if any query uses cursor_columns
-	if hasCursorColumns {
+	// Add reflect package if any query uses OrderByColumns
+	if hasPaginatedQueries {
 		imports["reflect"] = true
 	}
 
@@ -603,13 +603,6 @@ func (cg *CodeGenerator) GenerateQueries(queries []Query) error {
 		return nil
 	}
 
-	// Validate queries with cursor_columns
-	for i := range queries {
-		if err := cg.validateQueryForCursorPagination(&queries[i]); err != nil {
-			return fmt.Errorf("validation failed for query %s: %w", queries[i].Name, err)
-		}
-	}
-
 	// Group queries by source file
 	queryGroups := cg.groupQueriesByFile(queries)
 
@@ -618,20 +611,6 @@ func (cg *CodeGenerator) GenerateQueries(queries []Query) error {
 		if err := cg.generateQueryFile(sourceFile, fileQueries); err != nil {
 			return fmt.Errorf("failed to generate queries for file %s: %w", sourceFile, err)
 		}
-	}
-
-	return nil
-}
-
-// validateQueryForCursorPagination validates queries with cursor_columns annotation
-func (cg *CodeGenerator) validateQueryForCursorPagination(query *Query) error {
-	if len(query.CursorColumns) == 0 {
-		return nil
-	}
-
-	// Check for ORDER BY clause
-	if containsOrderBy(query.SQL) {
-		return fmt.Errorf("query '%s' has cursor_columns but contains ORDER BY clause - remove ORDER BY, sort order is determined by orderBy parameter in paginated function", query.Name)
 	}
 
 	return nil
@@ -724,10 +703,10 @@ func (cg *CodeGenerator) generateQueryCode(sourceFile string, queries []Query) (
 		"github.com/google/uuid",
 	}
 
-	// Check if any queries are paginated or have cursor_columns
+	// Check if any queries are paginated
 	hasPaginatedQueries := false
 	for _, query := range queries {
-		if query.Type == QueryTypePaginated || len(query.CursorColumns) > 0 {
+		if query.Type == QueryTypePaginated {
 			hasPaginatedQueries = true
 			break
 		}
@@ -1003,6 +982,6 @@ func (cg *CodeGenerator) prepareQueryTemplateData(query Query) (map[string]inter
 		"ParameterArgs":         paramArgStr,
 		"ParameterArgsOnly":     paramArgsOnly,
 		"ScanArgs":              strings.Join(scanArgs, ", "),
-		"CursorColumns":         query.CursorColumns,
+		"OrderByColumns":        query.OrderByColumns,
 	}, nil
 }

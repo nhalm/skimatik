@@ -97,6 +97,180 @@ func (sp *SQLParser) Parse(sql string) (*QueryInfo, error) {
 	return sp.extractInfo(result)
 }
 
+// ExtractOrderBy extracts ORDER BY columns from the outermost SELECT statement
+func (sp *SQLParser) ExtractOrderBy(sql string) ([]OrderByColumn, error) {
+	result, err := pg_query.Parse(sql)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse SQL: %w", err)
+	}
+
+	if len(result.Stmts) == 0 {
+		return nil, fmt.Errorf("no statements found in SQL")
+	}
+
+	stmt := result.Stmts[0].Stmt
+	if stmt == nil {
+		return nil, fmt.Errorf("statement is nil")
+	}
+
+	selectStmt := stmt.GetSelectStmt()
+	if selectStmt == nil {
+		return nil, nil
+	}
+
+	if len(selectStmt.SortClause) == 0 {
+		return nil, nil
+	}
+
+	var orderByColumns []OrderByColumn
+
+	for _, sortNode := range selectStmt.SortClause {
+		sortBy := sortNode.GetSortBy()
+		if sortBy == nil {
+			continue
+		}
+
+		// Extract column name from the sort node
+		columnName, err := sp.extractOrderByColumnName(sortBy.Node, selectStmt)
+		if err != nil {
+			return nil, err
+		}
+
+		if columnName == "" {
+			continue
+		}
+
+		// Map direction from SortBy.SortbyDir
+		// SORTBY_DEFAULT = 1 (default ASC), SORTBY_ASC = 2 (explicit), SORTBY_DESC = 3
+		direction := "ASC"
+		if sortBy.SortbyDir == 3 {
+			direction = "DESC"
+		}
+
+		orderByColumns = append(orderByColumns, OrderByColumn{
+			Name:      columnName,
+			Direction: direction,
+		})
+	}
+
+	if len(orderByColumns) == 0 {
+		return nil, nil
+	}
+
+	return orderByColumns, nil
+}
+
+// extractOrderByColumnName extracts the column name from an ORDER BY sort node
+func (sp *SQLParser) extractOrderByColumnName(node *pg_query_go.Node, selectStmt *pg_query_go.SelectStmt) (string, error) {
+	if node == nil {
+		return "", nil
+	}
+
+	// Handle ordinal position (ORDER BY 1, ORDER BY 2, etc.)
+	if aConst := node.GetAConst(); aConst != nil {
+		if ival := aConst.GetIval(); ival != nil {
+			position := int(ival.Ival)
+			if position < 1 || position > len(selectStmt.TargetList) {
+				return "", fmt.Errorf("ordinal position %d is out of range (1-%d)", position, len(selectStmt.TargetList))
+			}
+
+			// Get the target at the specified position (1-based)
+			targetNode := selectStmt.TargetList[position-1]
+			resTarget := targetNode.GetResTarget()
+			if resTarget == nil {
+				return "", nil
+			}
+
+			// Prefer alias if available, otherwise extract column name
+			if resTarget.Name != "" {
+				return resTarget.Name, nil
+			}
+
+			return sp.extractColumnNameFromNode(resTarget.Val), nil
+		}
+	}
+
+	// Handle column reference (most common case)
+	if colRef := node.GetColumnRef(); colRef != nil {
+		return sp.extractColumnNameFromOrderByRef(colRef, selectStmt), nil
+	}
+
+	return "", nil
+}
+
+// extractColumnNameFromOrderByRef extracts column name from ColumnRef in ORDER BY
+// Handles qualified references (table.column) and matches them to SELECT list aliases
+func (sp *SQLParser) extractColumnNameFromOrderByRef(colRef *pg_query_go.ColumnRef, selectStmt *pg_query_go.SelectStmt) string {
+	if len(colRef.Fields) == 0 {
+		return ""
+	}
+
+	// Extract the column name (last field in the reference)
+	lastField := colRef.Fields[len(colRef.Fields)-1]
+	if lastField == nil {
+		return ""
+	}
+
+	var columnName string
+	if str := lastField.GetString_(); str != nil {
+		columnName = str.Sval
+	}
+
+	if columnName == "" {
+		return ""
+	}
+
+	// Check if there's a table qualifier
+	var tableQualifier string
+	if len(colRef.Fields) >= 2 {
+		firstField := colRef.Fields[0]
+		if firstField != nil {
+			if str := firstField.GetString_(); str != nil {
+				tableQualifier = str.Sval
+			}
+		}
+	}
+
+	// If we have a table qualifier (e.g., u.name or p.created_at),
+	// check if the SELECT list has an alias for this column
+	if tableQualifier != "" {
+		for _, targetNode := range selectStmt.TargetList {
+			resTarget := targetNode.GetResTarget()
+			if resTarget == nil {
+				continue
+			}
+
+			// If there's an explicit alias in the SELECT list, use it
+			if resTarget.Name != "" {
+				// Check if this target's value matches the qualified column reference
+				if valColRef := resTarget.Val.GetColumnRef(); valColRef != nil {
+					valColumnName := sp.extractColumnNameFromRef(valColRef)
+					valTableName := sp.extractTableNameFromRef(valColRef)
+
+					if valColumnName == columnName && (valTableName == "" || valTableName == tableQualifier) {
+						return resTarget.Name
+					}
+				}
+			} else {
+				// No alias, check if the column name matches
+				valColumnName := sp.extractColumnNameFromNode(resTarget.Val)
+				if valColumnName == columnName {
+					// Check if there's a table qualifier match
+					if valColRef := resTarget.Val.GetColumnRef(); valColRef != nil {
+						valTableName := sp.extractTableNameFromRef(valColRef)
+						if valTableName == "" || valTableName == tableQualifier {
+							return columnName
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Return the column name (without table qualifier)
+	return columnName
+}
+
 // extractInfo extracts metadata from parse result
 func (sp *SQLParser) extractInfo(result *pg_query_go.ParseResult) (*QueryInfo, error) {
 	if len(result.Stmts) == 0 {
