@@ -54,7 +54,7 @@ func (tm *TypeMapper) getBaseGoType(pgType string) (string, error) {
 		return "string", nil
 
 	// Integer types - all map to int for ergonomic, idiomatic Go
-	case "smallint", "int2", "integer", "int", "int4", "bigint", "int8":
+	case "smallint", "int2", "integer", "int", "int4", "bigint", "int8", "serial", "bigserial", "smallserial":
 		return "int", nil
 
 	// Floating point types
