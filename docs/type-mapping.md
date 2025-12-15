@@ -4,7 +4,7 @@ Skimatik uses intelligent, idiomatic Go type mappings that prioritize ergonomics
 
 ## Design Philosophy
 
-- **All integers map to `int`** - Whether your column is `SMALLINT`, `INTEGER`, or `BIGINT`, it maps to Go's native `int`
+- **All integers map to `int`** - Whether your column is `SMALLINT`, `INTEGER`, `BIGINT`, `SERIAL`, `BIGSERIAL`, or `SMALLSERIAL`, it maps to Go's native `int`
 - **NOT NULL columns use native Go types** - Direct types like `int`, `string`, `uuid.UUID`, `time.Time`
 - **Nullable columns use pointers** - NULL support via `*int`, `*string`, `*uuid.UUID`, `*time.Time`
 - **No dependencies on pgtype** - Pure Go types only
@@ -13,9 +13,9 @@ Skimatik uses intelligent, idiomatic Go type mappings that prioritize ergonomics
 
 | PostgreSQL Type | NOT NULL Go Type | NULLABLE Go Type |
 |----------------|------------------|------------------|
-| `SMALLINT`, `INT2` | `int` | `*int` |
-| `INTEGER`, `INT`, `INT4` | `int` | `*int` |
-| `BIGINT`, `INT8` | `int` | `*int` |
+| `SMALLINT`, `INT2`, `SMALLSERIAL` | `int` | `*int` |
+| `INTEGER`, `INT`, `INT4`, `SERIAL` | `int` | `*int` |
+| `BIGINT`, `INT8`, `BIGSERIAL` | `int` | `*int` |
 | `TEXT`, `VARCHAR` | `string` | `*string` |
 | `BOOLEAN`, `BOOL` | `bool` | `*bool` |
 | `UUID` | `uuid.UUID` | `*uuid.UUID` |
