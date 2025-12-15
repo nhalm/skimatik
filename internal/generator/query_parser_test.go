@@ -445,32 +445,6 @@ func TestQueryParser_ValidateResultAnnotations(t *testing.T) {
 			errorMsg: "duplicate result annotation",
 		},
 		{
-			name: "invalid Go type",
-			query: Query{
-				Name: "GetUser",
-				Type: QueryTypeOne,
-				SQL:  "SELECT id FROM users",
-				ResultAnnotations: []ResultAnnotation{
-					{ColumnName: "payment_count", GoType: "invalid type"},
-				},
-			},
-			hasError: true,
-			errorMsg: "invalid Go type",
-		},
-		{
-			name: "invalid Go type with special chars",
-			query: Query{
-				Name: "GetUser",
-				Type: QueryTypeOne,
-				SQL:  "SELECT id FROM users",
-				ResultAnnotations: []ResultAnnotation{
-					{ColumnName: "payment_count", GoType: "int@invalid"},
-				},
-			},
-			hasError: true,
-			errorMsg: "invalid Go type",
-		},
-		{
 			name: "empty result annotations",
 			query: Query{
 				Name:              "GetUser",
@@ -524,13 +498,14 @@ func TestQueryParser_IsValidGoType(t *testing.T) {
 		{"string type", "string", true},
 		{"custom type", "MyCustomType", true},
 		{"qualified custom type", "pkg.MyType", true},
+		{"slice of bytes", "[]byte", true},
+		{"pointer to slice", "*[]byte", true},
+		{"json.RawMessage", "json.RawMessage", true},
+		{"pointer json.RawMessage", "*json.RawMessage", true},
+		{"slice of strings", "[]string", true},
+		{"map type", "map[string]any", true},
+		{"deeply qualified", "pkg.sub.Type", true},
 		{"empty string", "", false},
-		{"invalid with space", "int 64", false},
-		{"invalid with special char", "int@type", false},
-		{"too many dots", "pkg.sub.Type", false},
-		{"starts with number", "123Type", false},
-		{"invalid qualified", ".Type", false},
-		{"invalid qualified end", "pkg.", false},
 	}
 
 	for _, tt := range tests {
@@ -672,14 +647,6 @@ func TestQueryParser_ValidateParameterAnnotations(t *testing.T) {
 			},
 			shouldError: true,
 			errorMsg:    "parameter annotations must be sequential starting at $1, missing $2",
-		},
-		{
-			name: "invalid Go type",
-			annotations: []ParameterAnnotation{
-				{Position: 1, Name: "tenant_id", GoType: "invalid type"},
-			},
-			shouldError: true,
-			errorMsg:    "invalid Go type",
 		},
 	}
 

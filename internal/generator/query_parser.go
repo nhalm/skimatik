@@ -318,7 +318,8 @@ func isValidGoIdentifier(name string) bool {
 // Expected format: -- param: $N parameter_name go_type
 func (qp *QueryParser) parseParameterAnnotation(line string) *ParameterAnnotation {
 	// Regex to match: -- param: $N parameter_name go_type
-	paramRegex := regexp.MustCompile(`^--\s*param:\s*\$(\d+)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+(\*?[a-zA-Z_][a-zA-Z0-9_.]*)\s*$`)
+	// Type pattern allows: pointers (*), slices ([]), maps (map[]), and qualified names (pkg.Type)
+	paramRegex := regexp.MustCompile(`^--\s*param:\s*\$(\d+)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+(.+?)\s*$`)
 
 	matches := paramRegex.FindStringSubmatch(line)
 	if len(matches) != 4 {
@@ -345,7 +346,8 @@ func (qp *QueryParser) parseParameterAnnotation(line string) *ParameterAnnotatio
 // Expected format: -- result: column_name go_type
 func (qp *QueryParser) parseResultAnnotation(line string) *ResultAnnotation {
 	// Regex to match: -- result: column_name go_type
-	resultRegex := regexp.MustCompile(`^--\s*result:\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+(\*?[a-zA-Z_][a-zA-Z0-9_.]*)\s*$`)
+	// Type pattern allows: pointers (*), slices ([]), maps (map[]), and qualified names (pkg.Type)
+	resultRegex := regexp.MustCompile(`^--\s*result:\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+(.+?)\s*$`)
 
 	matches := resultRegex.FindStringSubmatch(line)
 	if len(matches) != 3 {
@@ -465,23 +467,22 @@ func isValidColumnName(name string) bool {
 }
 
 // isValidGoType performs basic validation of Go type syntax
+// This is intentionally permissive - the Go compiler will catch actual type errors
 func isValidGoType(goType string) bool {
 	if goType == "" {
 		return false
 	}
 
-	// Handle pointer types
-	goType = strings.TrimPrefix(goType, "*")
-
-	// Must be a valid Go identifier or qualified identifier (e.g., uuid.UUID, time.Time)
-	parts := strings.Split(goType, ".")
-	for _, part := range parts {
-		if !isValidGoIdentifier(part) {
-			return false
+	// Basic sanity check: must contain at least one letter
+	hasLetter := false
+	for _, r := range goType {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+			hasLetter = true
+			break
 		}
 	}
 
-	return len(parts) <= 2
+	return hasLetter
 }
 
 // parseCursorColumnsAnnotation parses a cursor_columns annotation
