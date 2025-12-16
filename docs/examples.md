@@ -391,6 +391,124 @@ This example demonstrates the foundation patterns. In a real application, you wo
 
 The shared utility patterns ensure consistency across your entire codebase while maintaining the flexibility to implement complex business requirements.
 
+## 📄 Paginated Query Examples
+
+The `:paginated` query type generates cursor-based pagination functions. Here are examples showing SQL queries and their generated Go code.
+
+### Basic Paginated Query (No Parameters)
+
+**SQL:**
+```sql
+-- name: GetPublishedPosts :paginated
+SELECT id, title, content, published_at
+FROM posts
+WHERE is_published = true
+ORDER BY published_at DESC
+```
+
+**Generated Function Signatures:**
+```go
+// Regular function - returns all results
+func (r *PostsQueries) GetPublishedPosts(ctx context.Context) ([]GetPublishedPostsResult, error)
+
+// Paginated function - cursor-based pagination
+func (r *PostsQueries) GetPublishedPostsPaginated(ctx context.Context, params PaginationParams) (*PaginationResult[GetPublishedPostsResult], error)
+```
+
+**Usage:**
+```go
+// Get first page
+result, err := postQueries.GetPublishedPostsPaginated(ctx, generated.PaginationParams{
+    Limit: 20,
+})
+
+// Get next page
+if result.HasMore {
+    nextPage, err := postQueries.GetPublishedPostsPaginated(ctx, generated.PaginationParams{
+        Limit:      20,
+        NextCursor: result.NextCursor,
+    })
+}
+```
+
+### Paginated Query with Filter Parameters
+
+**SQL:**
+```sql
+-- name: GetPostsByAuthor :paginated
+-- param: author_id uuid
+SELECT id, title, content, published_at
+FROM posts
+WHERE author_id = $1 AND is_published = true
+ORDER BY published_at DESC
+```
+
+**Generated Function Signatures:**
+```go
+// Regular function - filter parameter included
+func (r *PostsQueries) GetPostsByAuthor(ctx context.Context, authorId uuid.UUID) ([]GetPostsByAuthorResult, error)
+
+// Paginated function - filter parameters come BEFORE PaginationParams
+func (r *PostsQueries) GetPostsByAuthorPaginated(ctx context.Context, authorId uuid.UUID, params PaginationParams) (*PaginationResult[GetPostsByAuthorResult], error)
+```
+
+**Usage:**
+```go
+authorID := uuid.MustParse("...")
+
+// Get first page of posts by author
+result, err := postQueries.GetPostsByAuthorPaginated(ctx, authorID, generated.PaginationParams{
+    Limit: 10,
+})
+
+// Get next page (same author filter)
+if result.HasMore {
+    nextPage, err := postQueries.GetPostsByAuthorPaginated(ctx, authorID, generated.PaginationParams{
+        Limit:      10,
+        NextCursor: result.NextCursor,
+    })
+}
+```
+
+### ASC vs DESC Ordering
+
+The sort direction in your SQL determines cursor comparison:
+
+**DESC (newest first):**
+```sql
+-- name: GetRecentPosts :paginated
+SELECT id, title, created_at FROM posts
+ORDER BY created_at DESC
+```
+- Uses `<` comparison for cursor
+- First page returns newest items
+- NextCursor navigates to older items
+
+**ASC (oldest first):**
+```sql
+-- name: GetOldestPosts :paginated
+SELECT id, title, created_at FROM posts
+ORDER BY created_at ASC
+```
+- Uses `>` comparison for cursor
+- First page returns oldest items
+- NextCursor navigates to newer items
+
+### PaginationResult Structure
+
+```go
+type PaginationResult[T any] struct {
+    Items      []T    // The items for this page
+    HasMore    bool   // True if more pages exist
+    NextCursor string // Pass to NextCursor for next page (empty if no more)
+}
+
+type PaginationParams struct {
+    Limit      int    // Max items per page (default: 20, max: 100)
+    NextCursor string // Cursor from previous result (empty for first page)
+}
+```
+
 ## 🎯 Next Steps
 
 - **[Complete Blog Application Tutorial](tutorial-blog-app)** - Full-stack example app with HTTP API, database persistence, and production patterns
