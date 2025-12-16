@@ -187,6 +187,7 @@ func IsInvalidReference(err error) bool
 func IsValidationError(err error) bool
 func IsConnectionError(err error) bool
 func IsTimeout(err error) bool
+func IsDatabaseError(err error) bool  // Catch-all for unexpected database errors
 
 // Usage example
 if err != nil {
@@ -213,9 +214,12 @@ if err != nil {
     case IsConnectionError(err):
         // Handle connection issues
         return nil, fmt.Errorf("database connection failed")
+    case IsDatabaseError(err):
+        // Handle unexpected database errors (catch-all)
+        return nil, fmt.Errorf("unexpected database error: %w", err)
     default:
-        // Handle other database errors
-        return nil, fmt.Errorf("database error: %w", err)
+        // Handle non-database errors
+        return nil, fmt.Errorf("error: %w", err)
     }
 }
 ```
@@ -294,6 +298,8 @@ func mapDatabaseErrorToHTTPStatus(err error) (int, string) {
         return 408, "Request timeout"
     case IsConnectionError(err):
         return 503, "Service temporarily unavailable"
+    case IsDatabaseError(err):
+        return 500, "Internal server error"
     default:
         return 500, "Internal server error"
     }
@@ -372,8 +378,11 @@ func (s *UserService) logError(operation string, err error, context map[string]i
     case IsConnectionError(err):
         logData["error_type"] = "connection"
         logData["severity"] = "critical"
-    default:
+    case IsDatabaseError(err):
         logData["error_type"] = "database"
+        logData["severity"] = "error"
+    default:
+        logData["error_type"] = "unknown"
         logData["severity"] = "error"
     }
 
