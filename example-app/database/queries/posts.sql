@@ -50,3 +50,10 @@ SELECT p.id, p.title, p.content, p.published_at, p.created_at
 FROM posts p
 WHERE p.is_published = true
 ORDER BY p.published_at ASC
+
+-- name: GetPostsByAuthorPaginated :paginated
+-- param: author_id uuid
+SELECT id, title, content, published_at, created_at
+FROM posts
+WHERE author_id = $1 AND is_published = true
+ORDER BY published_at DESC

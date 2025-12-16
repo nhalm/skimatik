@@ -42,12 +42,12 @@ func (r *{{.RepositoryName}}) {{.FunctionName}}Paginated(ctx context.Context{{.P
 	// Parse cursor if provided
 	var cursorValue interface{}
 	if params.NextCursor != "" {
-		// Decode base64 cursor to get the actual value
-		decoded, err := base64.URLEncoding.DecodeString(params.NextCursor)
+		// Decode JSON cursor to get the actual value
+		_, value, err := decodeJSONCursor(params.NextCursor)
 		if err != nil {
 			return nil, fmt.Errorf("invalid cursor format: %w", err)
 		}
-		cursorValue = string(decoded)
+		cursorValue = value
 	}
 
 	// Build paginated query by wrapping the base query
