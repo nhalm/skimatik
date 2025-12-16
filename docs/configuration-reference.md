@@ -240,79 +240,82 @@ UPDATE users SET is_active = false WHERE id = $1;
 **Annotation syntax:**
 - `:one` - Returns single record (error if not found)
 - `:many` - Returns array of records
+- `:paginated` - Returns array with pagination support (generates two functions)
 - `:exec` - Executes without returning data
 
-**Optional annotations for `:many` queries:**
-- `cursor_columns:` - Comma-separated list of columns for pagination sorting
+**Pagination with :paginated:**
 
-**Pagination with cursor_columns:**
-
-The `cursor_columns` annotation generates paginated query functions with compile-time safe column allowlists:
+The `:paginated` query type extracts ORDER BY direction from your SQL and generates paginated query functions:
 
 ```sql
--- name: GetPublishedPosts :many
--- cursor_columns: published_at, id
+-- name: GetPublishedPosts :paginated
 SELECT id, title, content, published_at
 FROM posts
 WHERE is_published = true
+ORDER BY published_at DESC
 ```
 
 **Generated Functions:**
 
-This generates TWO functions with different signatures:
+This generates TWO functions:
 
 ```go
-// 1. Regular function - returns all results (no pagination)
+// 1. Regular function - returns all results using your ORDER BY
 func (r *PostsQueries) GetPublishedPosts(ctx context.Context) ([]GetPublishedPostsResult, error)
 
-// 2. Paginated function - orderBy as separate parameter before PaginationParams
+// 2. Paginated function - uses ORDER BY direction from your SQL
 func (r *PostsQueries) GetPublishedPostsPaginated(
     ctx context.Context,
-    orderBy string,              // Must be "published_at" or "id" (validated at runtime)
-    params PaginationParams,     // Only NextCursor supported (forward-only)
+    params PaginationParams,     // Supports NextCursor and BeforeCursor
 ) (*PaginationResult[GetPublishedPostsResult], error)
 ```
 
-**Function Signature Details:**
-- `orderBy` parameter is **separate** from `PaginationParams`
-- `orderBy` must be one of the columns listed in `cursor_columns` annotation
-- Runtime validation returns error if orderBy not in allowlist
-- Only `NextCursor` supported in params (forward-only pagination)
+**How It Works:**
+- Sort direction is extracted from ORDER BY at code generation time
+- DESC ordering uses `<` for forward, `>` for backward pagination
+- ASC ordering uses `>` for forward, `<` for backward pagination
+- No runtime `orderBy` parameter - ordering is fixed by your SQL
 
 **Requirements:**
-- All `cursor_columns` must be in the SELECT clause
-- Query must NOT include ORDER BY (sort is controlled by `orderBy` parameter at runtime)
-- Columns should typically be indexed for performance
-- Forward-only pagination (no BeforeCursor support)
+- ORDER BY column must be in the SELECT clause
+- Only simple column references supported (no expressions)
 
 **Usage Example:**
 ```go
 // First page
 result, err := queries.GetPublishedPostsPaginated(
     ctx,
-    "published_at",  // orderBy - must be from cursor_columns allowlist
     repositories.PaginationParams{
         Limit: 20,
     },
 )
 
-// Next page (forward-only)
+// Next page (forward)
 if result.HasMore {
     nextResult, err := queries.GetPublishedPostsPaginated(
         ctx,
-        "published_at",
         repositories.PaginationParams{
             Limit:      20,
             NextCursor: result.NextCursor,
         },
     )
 }
+
+// Previous page (backward)
+if result.HasPrevious {
+    prevResult, err := queries.GetPublishedPostsPaginated(
+        ctx,
+        repositories.PaginationParams{
+            Limit:        20,
+            BeforeCursor: result.BeforeCursor,
+        },
+    )
+}
 ```
 
 **Validation Errors:**
-- Generation-time: Query contains ORDER BY clause
-- Generation-time: cursor_columns contains invalid identifier
-- Runtime: orderBy value not in cursor_columns allowlist
+- Generation-time: ORDER BY column not in SELECT list
+- Generation-time: ORDER BY uses expression instead of column reference
 
 **Example configuration:**
 ```yaml
@@ -579,11 +582,9 @@ Error: query has result annotations but no columns were detected
 Error: result annotation for column 'missing_column' not found in query results
 ```
 
-**cursor_columns validation:**
+**:paginated validation:**
 ```
-Error: cursor_columns annotation only valid for :many queries, got :one
-Error: invalid column name in cursor_columns: "bad-name"
-Error: query 'GetPosts' has cursor_columns but contains ORDER BY clause - remove ORDER BY, sort order is determined by orderBy parameter in paginated function
+Error: ORDER BY column "missing_col" not found in SELECT list for query GetPosts
 ```
 
 ---

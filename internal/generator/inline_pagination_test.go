@@ -187,3 +187,95 @@ func TestInlinePagination_GetIDMethod(t *testing.T) {
 		t.Error("GetID method should not use pointer receiver")
 	}
 }
+
+func TestPaginatedQuery_BidirectionalSupport(t *testing.T) {
+	config := getTestConfigWithTempDir(t)
+	cg := NewCodeGenerator(config, "test")
+
+	// Create a paginated query with ORDER BY DESC
+	query := Query{
+		Name: "GetRecentPosts",
+		Type: QueryTypePaginated,
+		SQL:  "SELECT id, title, created_at FROM posts WHERE is_published = true ORDER BY created_at DESC",
+		OrderByColumns: []OrderByColumn{
+			{Name: "created_at", Direction: "DESC"},
+		},
+		Columns: []Column{
+			{Name: "id", GoType: "uuid.UUID"},
+			{Name: "title", GoType: "string"},
+			{Name: "created_at", GoType: "time.Time"},
+		},
+	}
+
+	// Generate the query code
+	code, err := cg.generateQueryCode("posts.sql", []Query{query})
+	if err != nil {
+		t.Fatalf("generateQueryCode failed: %v", err)
+	}
+
+	// Test bidirectional pagination components
+	bidirectionalComponents := []string{
+		"isBackward := params.BeforeCursor",              // Check for backward direction
+		"params.BeforeCursor",                            // BeforeCursor parameter handling
+		"decodeJSONCursor(params.BeforeCursor)",          // Decode BeforeCursor
+		"HasPrevious:",                                   // HasPrevious in result
+		"BeforeCursor:",                                  // BeforeCursor in result
+		"if isBackward {",                                // Backward pagination branch
+		"for i, j := 0, len(items)-1; i < j; i, j = i+1", // Reverse items for backward
+	}
+
+	for _, component := range bidirectionalComponents {
+		if !strings.Contains(code, component) {
+			t.Errorf("Paginated query code missing bidirectional component: %s", component)
+		}
+	}
+
+	// Test that both forward and backward operators are present for DESC ordering
+	// DESC: forward uses <, backward uses >
+	if !strings.Contains(code, "< $") {
+		t.Error("DESC ordering should use < operator for forward pagination")
+	}
+	if !strings.Contains(code, "> $") {
+		t.Error("DESC ordering should use > operator for backward pagination")
+	}
+}
+
+func TestPaginatedQuery_ASCBidirectional(t *testing.T) {
+	config := getTestConfigWithTempDir(t)
+	cg := NewCodeGenerator(config, "test")
+
+	// Create a paginated query with ORDER BY ASC
+	query := Query{
+		Name: "GetOldestPosts",
+		Type: QueryTypePaginated,
+		SQL:  "SELECT id, title, created_at FROM posts WHERE is_published = true ORDER BY created_at ASC",
+		OrderByColumns: []OrderByColumn{
+			{Name: "created_at", Direction: "ASC"},
+		},
+		Columns: []Column{
+			{Name: "id", GoType: "uuid.UUID"},
+			{Name: "title", GoType: "string"},
+			{Name: "created_at", GoType: "time.Time"},
+		},
+	}
+
+	// Generate the query code
+	code, err := cg.generateQueryCode("posts.sql", []Query{query})
+	if err != nil {
+		t.Fatalf("generateQueryCode failed: %v", err)
+	}
+
+	// Test that both forward and backward operators are present for ASC ordering
+	// ASC: forward uses >, backward uses <
+	if !strings.Contains(code, "> $") {
+		t.Error("ASC ordering should use > operator for forward pagination")
+	}
+	if !strings.Contains(code, "< $") {
+		t.Error("ASC ordering should use < operator for backward pagination")
+	}
+
+	// Test reverse direction is present (in fmt.Sprintf format string)
+	if !strings.Contains(code, "ORDER BY %s DESC") {
+		t.Error("ASC ordering should have DESC reverse direction for backward pagination")
+	}
+}

@@ -92,6 +92,49 @@ func (qa *QueryAnalyzer) AnalyzeQuery(ctx context.Context, query *Query) error {
 		return fmt.Errorf("query syntax validation failed: %w", err)
 	}
 
+	// For :paginated queries, extract ORDER BY columns
+	if query.Type == QueryTypePaginated {
+		if err := qa.extractOrderByColumns(query); err != nil {
+			return fmt.Errorf("failed to extract ORDER BY columns: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// extractOrderByColumns extracts ORDER BY columns and resolves their types
+func (qa *QueryAnalyzer) extractOrderByColumns(query *Query) error {
+	// Extract ORDER BY from SQL
+	orderByCols, err := qa.sqlParser.ExtractOrderBy(query.SQL)
+	if err != nil {
+		return fmt.Errorf("failed to parse ORDER BY: %w", err)
+	}
+
+	// No ORDER BY is valid - user takes responsibility for pagination behavior
+	if len(orderByCols) == 0 {
+		query.OrderByColumns = nil
+		return nil
+	}
+
+	// Resolve types from Query.Columns
+	for i := range orderByCols {
+		colName := orderByCols[i].Name
+		found := false
+
+		for _, qCol := range query.Columns {
+			if strings.EqualFold(qCol.Name, colName) {
+				orderByCols[i].GoType = qCol.GoType
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return fmt.Errorf("ORDER BY column %q not found in SELECT list for query %s", colName, query.Name)
+		}
+	}
+
+	query.OrderByColumns = orderByCols
 	return nil
 }
 

@@ -251,75 +251,58 @@ if result.HasPrevious {
 - **Runtime Sorting**: Specify `OrderBy` to sort by any table column (defaults to `id`)
 - **Cursor Format**: Cursors are base64-encoded JSON containing `{column, value}` pairs
 
-#### Query-Based Pagination with cursor_columns (Recommended)
+#### Query-Based Pagination with :paginated
 
-For custom queries with pagination, use the `cursor_columns` annotation. This creates a paginated function with an allowlist of valid sort columns determined at code generation time:
+For custom queries with pagination, use the `:paginated` query type with an ORDER BY clause. The sort direction is inferred from your SQL:
 
-**SQL Query with Annotation:**
+**SQL Query:**
 ```sql
--- name: GetPublishedPosts :many
--- cursor_columns: published_at, id
+-- name: GetPublishedPosts :paginated
 SELECT id, title, content, published_at
 FROM posts
 WHERE is_published = true
+ORDER BY published_at DESC
 ```
-
-**Important Requirements:**
-- **No ORDER BY clause** in the SQL - sort order is controlled via the `orderBy` parameter at runtime
-- **All cursor columns must be in SELECT** - the columns listed in `cursor_columns` must be returned by the query
-- **Columns must support ordering** - typically indexed columns for performance
-- **Forward-only pagination** - cursor_columns queries only support NextCursor (no BeforeCursor/backward navigation)
 
 **Generated Code:**
 
 This generates TWO functions:
 
 ```go
-// Regular function - returns all results (no pagination)
+// Regular function - returns all results using your ORDER BY
 posts, err := postQueries.GetPublishedPosts(ctx)
 
-// Paginated function - with allowlist-validated orderBy parameter (separate from params)
+// Paginated function - uses ORDER BY direction from your SQL
 result, err := postQueries.GetPublishedPostsPaginated(
     ctx,
-    "published_at",  // orderBy: must be "published_at" or "id" (from cursor_columns allowlist)
     repositories.PaginationParams{
         Limit: 20,
-        // NextCursor: result.NextCursor,  // for next page (forward-only)
+        // NextCursor: result.NextCursor,  // for next page
     },
 )
 ```
 
-**Runtime Validation:**
-
-The `orderBy` parameter is validated at runtime against the allowlist:
-```go
-// Valid - "published_at" is in cursor_columns
-result, err := postQueries.GetPublishedPostsPaginated(ctx, "published_at", params)
-
-// Valid - "id" is in cursor_columns
-result, err := postQueries.GetPublishedPostsPaginated(ctx, "id", params)
-
-// Invalid - panics with "orderBy 'created_at' not in allowed columns"
-result, err := postQueries.GetPublishedPostsPaginated(ctx, "created_at", params)
-```
+**How It Works:**
+- Sort direction is extracted from your ORDER BY clause at code generation time
+- DESC ordering uses `<` for forward, `>` for backward pagination
+- ASC ordering uses `>` for forward, `<` for backward pagination
+- No runtime `orderBy` parameter needed - the order is fixed by your SQL
 
 **Pagination Navigation:**
 
 ```go
-// Get first page, orderBy is separate parameter before PaginationParams
+// Get first page
 result, err := postQueries.GetPublishedPostsPaginated(
     ctx,
-    "published_at",  // orderBy parameter
     repositories.PaginationParams{
         Limit: 10,
     },
 )
 
-// Navigate to next page (forward-only)
+// Navigate to next page (forward)
 if result.HasMore {
     nextPage, err := postQueries.GetPublishedPostsPaginated(
         ctx,
-        "published_at",  // orderBy parameter
         repositories.PaginationParams{
             Limit:      10,
             NextCursor: result.NextCursor,
@@ -327,32 +310,48 @@ if result.HasMore {
     )
 }
 
-// Note: cursor_columns pagination is forward-only (no BeforeCursor support)
+// Navigate to previous page (backward)
+if result.HasPrevious {
+    prevPage, err := postQueries.GetPublishedPostsPaginated(
+        ctx,
+        repositories.PaginationParams{
+            Limit:        10,
+            BeforeCursor: result.BeforeCursor,
+        },
+    )
+}
 ```
 
-**Why Use cursor_columns:**
-- **Generation-time validation**: Invalid columns caught during code generation, not at runtime (unless using dynamic strings)
-- **Self-documenting**: Function signature shows exactly which columns can be used for sorting
-- **SQL injection safe**: Only allowlisted columns can be used in ORDER BY
-- **Clean separation**: orderBy parameter separate from pagination params for clarity
+**Requirements:**
+- ORDER BY column must be in the SELECT list
+- Only simple column references supported (no expressions like `ORDER BY LOWER(name)`)
 
-**When to Use cursor_columns:**
-- Custom queries that need forward pagination
-- Queries with complex WHERE conditions or JOINs
-- When you want explicit control over which columns can be sorted
-- Performance-critical queries where you want indexed columns only
+**When to Use :paginated vs :many:**
 
-**Comparison with ListPaginated:**
+| Query Type | Use Case | ORDER BY | Generates |
+|------------|----------|----------|-----------|
+| `:many` | Simple queries, fixed result sets | Optional (used as-is) | Single function |
+| `:paginated` | Large result sets needing pagination | Required (direction extracted) | Two functions: regular + `*Paginated` |
 
-| Feature | `cursor_columns` | `ListPaginated` |
-|---------|------------------|-----------------|
-| Use Case | Custom queries | Table-based repositories |
-| Sort Column Validation | Allowlist at generation time | All table columns at runtime |
-| Navigation | Forward-only (NextCursor) | Bidirectional (NextCursor + BeforeCursor) |
-| SQL Injection Risk | None - allowlist only | None - table column validation |
-| Flexibility | Fixed columns | Any table column |
-| orderBy Parameter | Separate parameter | Inside PaginationParams |
-| Best For | Custom queries with pagination | Simple table queries |
+**Examples:**
+
+```sql
+-- Simple query - no pagination needed
+-- name: GetLatestPost :many
+SELECT id, title FROM posts ORDER BY created_at DESC LIMIT 1
+
+-- Paginated query - newest first (DESC)
+-- name: GetRecentPosts :paginated
+SELECT id, title, created_at FROM posts
+WHERE is_published = true
+ORDER BY created_at DESC
+
+-- Paginated query - oldest first (ASC)
+-- name: GetOldestPosts :paginated
+SELECT id, title, created_at FROM posts
+WHERE is_published = true
+ORDER BY created_at ASC
+```
 
 ### 3. Error Handling
 

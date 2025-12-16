@@ -41,7 +41,7 @@ type Query struct {
 	SourceFile           string                `json:"source_file"`
 	ParameterAnnotations []ParameterAnnotation `json:"parameter_annotations"` // Optional type annotations
 	ResultAnnotations    []ResultAnnotation    `json:"result_annotations"`    // Optional result column type annotations
-	CursorColumns        []string              `json:"cursor_columns"`        // Columns allowed for cursor pagination (only for :many)
+	OrderByColumns       []OrderByColumn       `json:"order_by_columns"`      // Columns from ORDER BY clause (for :paginated queries)
 }
 
 // QueryType represents the type of query operation
@@ -76,6 +76,13 @@ type ParameterAnnotation struct {
 type ResultAnnotation struct {
 	ColumnName string `json:"column_name"` // Column name in snake_case
 	GoType     string `json:"go_type"`     // Go type (supports pointers like "*string")
+}
+
+// OrderByColumn represents a column in an ORDER BY clause with its sort direction
+type OrderByColumn struct {
+	Name      string `json:"name"`      // Column name (from SELECT alias or column name)
+	Direction string `json:"direction"` // "ASC" or "DESC"
+	GoType    string `json:"go_type"`   // Resolved Go type from Query.Columns
 }
 
 // GetColumn returns a column by name, or nil if not found
