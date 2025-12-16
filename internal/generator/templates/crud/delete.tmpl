@@ -9,7 +9,11 @@ func (r *{{.RepositoryName}}) Delete(ctx context.Context, id {{.IDType}}) error 
 	
 	// Check if any rows were affected
 	if rowsAffected == 0 {
-		return fmt.Errorf("{{.StructName}} not found")
+		return &DatabaseError{
+			Type:      ErrNotFound,
+			Operation: "delete",
+			Entity:    "{{.StructName}}",
+		}
 	}
 	
 	return nil

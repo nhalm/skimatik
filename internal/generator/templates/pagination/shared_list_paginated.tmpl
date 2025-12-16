@@ -84,7 +84,7 @@ func (r *{{.RepositoryName}}) ListPaginated(ctx context.Context, params Paginati
 		var {{.ReceiverName}} {{.StructName}}
 		err := rows.Scan({{.ScanArgs}})
 		if err != nil {
-			return nil, err
+			return nil, HandleDatabaseError("scan", "{{.StructName}}", err)
 		}
 		items = append(items, {{.ReceiverName}})
 	}
