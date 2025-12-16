@@ -89,7 +89,7 @@ Skimatik generates comprehensive repositories for each table:
 - **CRUD Operations**: Create, Get, Update, Delete, List
 - **Bidirectional Pagination**: Cursor-based pagination with `ListPaginated()` supporting forward/backward navigation and runtime sort selection
 - **Query Pagination**: Use `:paginated` query type with ORDER BY for custom paginated queries
-- **Retry Logic**: `CreateWithRetry()`, `GetWithRetry()`, etc.
+- **Retry Logic**: `CreateWithRetry()`, `GetWithRetry()`, `UpdateWithRetry()`, `DeleteWithRetry()`, `ListWithRetry()`
 - **Custom Queries**: Generated from `database/queries/*.sql` files with compile-time safety
 - **Type Safety**: Full PostgreSQL type mapping to Go types
 

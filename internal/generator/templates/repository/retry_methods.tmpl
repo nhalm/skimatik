@@ -19,6 +19,14 @@ func (r *{{.RepositoryName}}) UpdateWithRetry(ctx context.Context, id {{.IDType}
 	})
 }
 
+// DeleteWithRetry deletes a {{.StructName}} by ID with retry logic
+func (r *{{.RepositoryName}}) DeleteWithRetry(ctx context.Context, id {{.IDType}}) error {
+	_, err := RetryOperation(ctx, DefaultRetryConfig, "delete", func(ctx context.Context) (*struct{}, error) {
+		return nil, r.Delete(ctx, id)
+	})
+	return err
+}
+
 // ListWithRetry retrieves all {{.StructName}}s with retry logic
 func (r *{{.RepositoryName}}) ListWithRetry(ctx context.Context) ([]{{.StructName}}, error) {
 	return RetryOperationSlice(ctx, DefaultRetryConfig, "list", func(ctx context.Context) ([]{{.StructName}}, error) {
