@@ -44,7 +44,7 @@ func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterD
 		var result {{.ResultType}}
 		err := rows.Scan({{.ScanArgs}})
 		if err != nil {
-			return nil, err
+			return nil, HandleDatabaseError("scan", "{{.ResultType}}", err)
 		}
 		results = append(results, result)
 	}

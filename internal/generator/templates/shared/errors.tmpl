@@ -20,6 +20,7 @@ var (
 	ErrRequiredField      = errors.New("required field missing")
 	ErrTimeout            = errors.New("operation timeout")
 	ErrDatabaseConnection = errors.New("database connection error")
+	ErrDatabase           = errors.New("database error")
 )
 
 // DatabaseError provides structured error information
@@ -124,8 +125,14 @@ func HandleDatabaseError(operation, entity string, err error) error {
 		}
 	}
 	
-	// Generic database error - wrap the original error
-	return fmt.Errorf("database error during %s for %s: %w", operation, entity, err)
+	// Generic database error
+	return &DatabaseError{
+		Type:      ErrDatabase,
+		Operation: operation,
+		Entity:    entity,
+		Detail:    err.Error(),
+		Cause:     err,
+	}
 }
 
 // HandleRowsError checks for iteration errors after scanning rows
@@ -133,7 +140,13 @@ func HandleRowsError(entity string, err error) error {
 	if err == nil {
 		return nil
 	}
-	return fmt.Errorf("error iterating %s results: %w", entity, err)
+	return &DatabaseError{
+		Type:      ErrDatabase,
+		Operation: "iterate",
+		Entity:    entity,
+		Detail:    err.Error(),
+		Cause:     err,
+	}
 }
 
 // IsNotFound checks if an error is a "not found" error
@@ -144,6 +157,11 @@ func IsNotFound(err error) bool {
 // IsAlreadyExists checks if an error is an "already exists" error
 func IsAlreadyExists(err error) bool {
 	return errors.Is(err, ErrAlreadyExists)
+}
+
+// IsInvalidReference checks if an error is a foreign key violation error
+func IsInvalidReference(err error) bool {
+	return errors.Is(err, ErrInvalidReference)
 }
 
 // IsValidationError checks if an error is a validation error
@@ -159,6 +177,11 @@ func IsConnectionError(err error) bool {
 // IsTimeout checks if an error is a timeout error
 func IsTimeout(err error) bool {
 	return errors.Is(err, ErrTimeout)
+}
+
+// IsDatabaseError checks if an error is a generic database error
+func IsDatabaseError(err error) bool {
+	return errors.Is(err, ErrDatabase)
 }
 
 // isConnectionError detects connection-related errors by examining the error message

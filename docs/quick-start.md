@@ -365,12 +365,17 @@ if err != nil {
         // Handle not found
         return nil, fmt.Errorf("user not found")
     }
-    
+
     if repositories.IsAlreadyExists(err) {
         // Handle duplicate
         return nil, fmt.Errorf("user already exists")
     }
-    
+
+    if repositories.IsInvalidReference(err) {
+        // Handle foreign key violation
+        return nil, fmt.Errorf("referenced resource does not exist")
+    }
+
     // Handle other database errors
     return nil, fmt.Errorf("database error: %w", err)
 }

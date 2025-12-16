@@ -122,6 +122,10 @@ make test-example-app # Example app tests (auto-setup)
 make test-all         # All tests
 ```
 
+## Before Committing
+
+Always run `make lint` before committing to ensure code passes formatting and linting checks.
+
 ## Common Development Tasks
 
 ### Adding New Generator Features
