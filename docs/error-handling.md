@@ -76,6 +76,33 @@ if err != nil {
 }
 ```
 
+#### `InvalidReferenceError`
+Used when a foreign key constraint is violated. The error handling automatically detects PostgreSQL foreign key violations (error code 23503) and converts them to `ErrInvalidReference`.
+
+```go
+// Generated usage when referencing non-existent foreign key
+func (r *PostsRepository) Create(ctx context.Context, params CreatePostsParams) (*Posts, error) {
+    query := `INSERT INTO posts (title, user_id) VALUES ($1, $2) RETURNING id, title, user_id, created_at`
+
+    row := ExecuteQueryRow(ctx, r.db, "create", "Posts", query, params.Title, params.UserID)
+    var post Posts
+    err := row.Scan(&post.Id, &post.Title, &post.UserID, &post.CreatedAt)
+    if err := HandleQueryRowError("create", "Posts", err); err != nil {
+        return nil, err
+    }
+    return &post, nil
+}
+
+// Usage in application code
+post, err := postRepo.Create(ctx, params)
+if err != nil {
+    if IsInvalidReference(err) {
+        return nil, fmt.Errorf("user %s does not exist", params.UserID)
+    }
+    return nil, fmt.Errorf("failed to create post: %w", err)
+}
+```
+
 #### `ValidationError`
 Used when database constraints are violated. The error handling automatically detects PostgreSQL check constraint violations (error code 23514) and NOT NULL violations (error code 23502) and converts them to `ErrValidationFailed` or `ErrRequiredField`.
 
@@ -156,6 +183,7 @@ Every generated package includes these error detection utilities:
 // Check specific error types
 func IsNotFound(err error) bool
 func IsAlreadyExists(err error) bool
+func IsInvalidReference(err error) bool
 func IsValidationError(err error) bool
 func IsConnectionError(err error) bool
 func IsTimeout(err error) bool
@@ -169,6 +197,9 @@ if err != nil {
     case IsAlreadyExists(err):
         // Handle duplicate resource
         return nil, fmt.Errorf("resource already exists")
+    case IsInvalidReference(err):
+        // Handle foreign key violation
+        return nil, fmt.Errorf("referenced resource does not exist")
     case IsValidationError(err):
         // Handle validation failure
         var dbErr *DatabaseError
@@ -255,6 +286,8 @@ func mapDatabaseErrorToHTTPStatus(err error) (int, string) {
         return 404, "Resource not found"
     case IsAlreadyExists(err):
         return 409, "Resource already exists"
+    case IsInvalidReference(err):
+        return 422, "Referenced resource does not exist"
     case IsValidationError(err):
         return 400, "Invalid input data"
     case IsTimeout(err):
@@ -322,6 +355,9 @@ func (s *UserService) logError(operation string, err error, context map[string]i
         logData["severity"] = "info"  // Expected condition
     case IsAlreadyExists(err):
         logData["error_type"] = "already_exists"
+        logData["severity"] = "warning"
+    case IsInvalidReference(err):
+        logData["error_type"] = "invalid_reference"
         logData["severity"] = "warning"
     case IsValidationError(err):
         logData["error_type"] = "validation"

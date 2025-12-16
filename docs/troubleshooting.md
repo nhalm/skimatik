@@ -222,12 +222,12 @@ if err != nil {
 
 **Cause**: Attempting to reference non-existent related record.
 
-**Fix**: Generated code wraps these as `ErrInvalidReference`. Check using `errors.Is()`:
+**Fix**: Generated code wraps these as `ErrInvalidReference`. Use the helper function:
 
 ```go
 post, err := repo.Create(ctx, params)
 if err != nil {
-    if errors.Is(err, generated.ErrInvalidReference) {
+    if IsInvalidReference(err) {
         // Handle invalid foreign key
         return fmt.Errorf("invalid author_id")
     }

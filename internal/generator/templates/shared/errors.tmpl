@@ -146,6 +146,11 @@ func IsAlreadyExists(err error) bool {
 	return errors.Is(err, ErrAlreadyExists)
 }
 
+// IsInvalidReference checks if an error is a foreign key violation error
+func IsInvalidReference(err error) bool {
+	return errors.Is(err, ErrInvalidReference)
+}
+
 // IsValidationError checks if an error is a validation error
 func IsValidationError(err error) bool {
 	return errors.Is(err, ErrValidationFailed) || errors.Is(err, ErrRequiredField)
