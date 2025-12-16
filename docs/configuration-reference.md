@@ -266,20 +266,19 @@ func (r *PostsQueries) GetPublishedPosts(ctx context.Context) ([]GetPublishedPos
 // 2. Paginated function - uses ORDER BY direction from your SQL
 func (r *PostsQueries) GetPublishedPostsPaginated(
     ctx context.Context,
-    params PaginationParams,     // Only NextCursor supported (forward-only)
+    params PaginationParams,     // Supports NextCursor and BeforeCursor
 ) (*PaginationResult[GetPublishedPostsResult], error)
 ```
 
 **How It Works:**
 - Sort direction is extracted from ORDER BY at code generation time
-- DESC ordering uses `<` comparison for cursor pagination
-- ASC ordering uses `>` comparison for cursor pagination
+- DESC ordering uses `<` for forward, `>` for backward pagination
+- ASC ordering uses `>` for forward, `<` for backward pagination
 - No runtime `orderBy` parameter - ordering is fixed by your SQL
 
 **Requirements:**
 - ORDER BY column must be in the SELECT clause
 - Only simple column references supported (no expressions)
-- Forward-only pagination (NextCursor only)
 
 **Usage Example:**
 ```go
@@ -291,13 +290,24 @@ result, err := queries.GetPublishedPostsPaginated(
     },
 )
 
-// Next page (forward-only)
+// Next page (forward)
 if result.HasMore {
     nextResult, err := queries.GetPublishedPostsPaginated(
         ctx,
         repositories.PaginationParams{
             Limit:      20,
             NextCursor: result.NextCursor,
+        },
+    )
+}
+
+// Previous page (backward)
+if result.HasPrevious {
+    prevResult, err := queries.GetPublishedPostsPaginated(
+        ctx,
+        repositories.PaginationParams{
+            Limit:        20,
+            BeforeCursor: result.BeforeCursor,
         },
     )
 }

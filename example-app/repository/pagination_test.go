@@ -377,3 +377,144 @@ func TestPaginatedQuery_WithFilterParameter(t *testing.T) {
 
 	t.Log("✅ Parameterized pagination test passed")
 }
+
+func TestPaginatedQuery_BidirectionalNavigation(t *testing.T) {
+	db := getTestDB(t)
+	if db == nil {
+		return
+	}
+
+	ctx := context.Background()
+
+	// Clean up any existing test data
+	_, err := db.Exec(ctx, "DELETE FROM posts WHERE title LIKE 'Bidir Test Post%'")
+	if err != nil {
+		t.Fatalf("Failed to clean up test data: %v", err)
+	}
+
+	// Create a test user
+	testUserID := uuid.New()
+	_, err = db.Exec(ctx,
+		"INSERT INTO users (id, name, email, is_active) VALUES ($1, $2, $3, true)",
+		testUserID, "Bidir Test User", "bidir-test@example.com")
+	if err != nil {
+		t.Fatalf("Failed to create test user: %v", err)
+	}
+	t.Cleanup(func() {
+		db.Exec(ctx, "DELETE FROM users WHERE id = $1", testUserID)
+	})
+
+	// Create 5 test posts with distinct times (DESC order means newest first)
+	now := time.Now()
+	testPosts := []struct {
+		id          uuid.UUID
+		title       string
+		publishedAt time.Time
+	}{
+		{uuid.New(), "Bidir Test Post 1", now.Add(-5 * time.Hour)}, // oldest
+		{uuid.New(), "Bidir Test Post 2", now.Add(-4 * time.Hour)},
+		{uuid.New(), "Bidir Test Post 3", now.Add(-3 * time.Hour)},
+		{uuid.New(), "Bidir Test Post 4", now.Add(-2 * time.Hour)},
+		{uuid.New(), "Bidir Test Post 5", now.Add(-1 * time.Hour)}, // newest
+	}
+
+	for _, post := range testPosts {
+		_, err := db.Exec(ctx,
+			"INSERT INTO posts (id, title, content, author_id, is_published, published_at) VALUES ($1, $2, $3, $4, true, $5)",
+			post.id, post.title, "Test content", testUserID, post.publishedAt)
+		if err != nil {
+			t.Fatalf("Failed to create test post %s: %v", post.title, err)
+		}
+	}
+
+	t.Cleanup(func() {
+		for _, post := range testPosts {
+			db.Exec(ctx, "DELETE FROM posts WHERE id = $1", post.id)
+		}
+	})
+
+	postsQueries := generated.NewPostsQueries(db)
+
+	// Test forward pagination: Page 1 (Post 5), Page 2 (Post 4), Page 3 (Post 3)
+	page1, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, testUserID, generated.PaginationParams{
+		Limit: 1,
+	})
+	if err != nil {
+		t.Fatalf("First page query failed: %v", err)
+	}
+
+	if page1.Items[0].Title != "Bidir Test Post 5" {
+		t.Errorf("Expected Post 5 on first page (newest), got: %s", page1.Items[0].Title)
+	}
+	if page1.HasPrevious {
+		t.Error("First page should not have previous")
+	}
+	if !page1.HasMore {
+		t.Error("First page should have more")
+	}
+	t.Logf("Page 1: %s (hasMore=%v, hasPrevious=%v)", page1.Items[0].Title, page1.HasMore, page1.HasPrevious)
+
+	// Page 2 (forward)
+	page2, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, testUserID, generated.PaginationParams{
+		Limit:      1,
+		NextCursor: page1.NextCursor,
+	})
+	if err != nil {
+		t.Fatalf("Second page query failed: %v", err)
+	}
+
+	if page2.Items[0].Title != "Bidir Test Post 4" {
+		t.Errorf("Expected Post 4 on second page, got: %s", page2.Items[0].Title)
+	}
+	if !page2.HasPrevious {
+		t.Error("Second page should have previous")
+	}
+	if !page2.HasMore {
+		t.Error("Second page should have more")
+	}
+	t.Logf("Page 2: %s (hasMore=%v, hasPrevious=%v)", page2.Items[0].Title, page2.HasMore, page2.HasPrevious)
+
+	// Page 3 (forward)
+	page3, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, testUserID, generated.PaginationParams{
+		Limit:      1,
+		NextCursor: page2.NextCursor,
+	})
+	if err != nil {
+		t.Fatalf("Third page query failed: %v", err)
+	}
+
+	if page3.Items[0].Title != "Bidir Test Post 3" {
+		t.Errorf("Expected Post 3 on third page, got: %s", page3.Items[0].Title)
+	}
+	t.Logf("Page 3: %s (hasMore=%v, hasPrevious=%v)", page3.Items[0].Title, page3.HasMore, page3.HasPrevious)
+
+	// Now go BACKWARD from page 3 using BeforeCursor
+	pageBack, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, testUserID, generated.PaginationParams{
+		Limit:        1,
+		BeforeCursor: page3.BeforeCursor,
+	})
+	if err != nil {
+		t.Fatalf("Backward page query failed: %v", err)
+	}
+
+	if pageBack.Items[0].Title != "Bidir Test Post 4" {
+		t.Errorf("Expected Post 4 going backward from page 3, got: %s", pageBack.Items[0].Title)
+	}
+	t.Logf("Page back from 3: %s (hasMore=%v, hasPrevious=%v)", pageBack.Items[0].Title, pageBack.HasMore, pageBack.HasPrevious)
+
+	// Go backward again to get back to page 1
+	pageBack2, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, testUserID, generated.PaginationParams{
+		Limit:        1,
+		BeforeCursor: pageBack.BeforeCursor,
+	})
+	if err != nil {
+		t.Fatalf("Second backward page query failed: %v", err)
+	}
+
+	if pageBack2.Items[0].Title != "Bidir Test Post 5" {
+		t.Errorf("Expected Post 5 going backward twice, got: %s", pageBack2.Items[0].Title)
+	}
+	t.Logf("Page back from 4: %s (hasMore=%v, hasPrevious=%v)", pageBack2.Items[0].Title, pageBack2.HasMore, pageBack2.HasPrevious)
+
+	t.Log("✅ Bidirectional pagination test passed")
+}

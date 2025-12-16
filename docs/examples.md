@@ -498,14 +498,35 @@ ORDER BY created_at ASC
 
 ```go
 type PaginationResult[T any] struct {
-    Items      []T    // The items for this page
-    HasMore    bool   // True if more pages exist
-    NextCursor string // Pass to NextCursor for next page (empty if no more)
+    Items        []T    // The items for this page
+    HasMore      bool   // True if more pages exist (forward)
+    HasPrevious  bool   // True if previous pages exist (backward)
+    NextCursor   string // Pass to NextCursor for next page
+    BeforeCursor string // Pass to BeforeCursor for previous page
 }
 
 type PaginationParams struct {
-    Limit      int    // Max items per page (default: 20, max: 100)
-    NextCursor string // Cursor from previous result (empty for first page)
+    Limit        int    // Max items per page (default: 20, max: 100)
+    NextCursor   string // Cursor for forward pagination (empty for first page)
+    BeforeCursor string // Cursor for backward pagination
+}
+```
+
+### Bidirectional Navigation Example
+
+```go
+// Get page 2, then navigate backward to page 1
+page2, _ := postQueries.GetPublishedPostsPaginated(ctx, generated.PaginationParams{
+    Limit:      10,
+    NextCursor: page1.NextCursor,
+})
+
+// Go back to page 1
+if page2.HasPrevious {
+    page1Again, _ := postQueries.GetPublishedPostsPaginated(ctx, generated.PaginationParams{
+        Limit:        10,
+        BeforeCursor: page2.BeforeCursor,
+    })
 }
 ```
 

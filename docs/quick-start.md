@@ -284,8 +284,8 @@ result, err := postQueries.GetPublishedPostsPaginated(
 
 **How It Works:**
 - Sort direction is extracted from your ORDER BY clause at code generation time
-- DESC ordering uses `<` comparison for cursor pagination
-- ASC ordering uses `>` comparison for cursor pagination
+- DESC ordering uses `<` for forward, `>` for backward pagination
+- ASC ordering uses `>` for forward, `<` for backward pagination
 - No runtime `orderBy` parameter needed - the order is fixed by your SQL
 
 **Pagination Navigation:**
@@ -299,7 +299,7 @@ result, err := postQueries.GetPublishedPostsPaginated(
     },
 )
 
-// Navigate to next page
+// Navigate to next page (forward)
 if result.HasMore {
     nextPage, err := postQueries.GetPublishedPostsPaginated(
         ctx,
@@ -309,12 +309,22 @@ if result.HasMore {
         },
     )
 }
+
+// Navigate to previous page (backward)
+if result.HasPrevious {
+    prevPage, err := postQueries.GetPublishedPostsPaginated(
+        ctx,
+        repositories.PaginationParams{
+            Limit:        10,
+            BeforeCursor: result.BeforeCursor,
+        },
+    )
+}
 ```
 
 **Requirements:**
 - ORDER BY column must be in the SELECT list
 - Only simple column references supported (no expressions like `ORDER BY LOWER(name)`)
-- Forward-only pagination (NextCursor only)
 
 **When to Use :paginated vs :many:**
 
