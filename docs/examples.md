@@ -139,10 +139,37 @@ func NewUserRepository(db *pgxkit.DB) *UserRepository {
 
 ### Retry Operations
 ```go
-// Retry with shared utilities
+// All CRUD operations have retry variants that handle transient errors
+// (connection issues, deadlocks, serialization failures)
+
 func (r *UsersRepository) CreateWithRetry(ctx context.Context, params CreateUsersParams) (*Users, error) {
     return RetryOperation(ctx, DefaultRetryConfig, "create", func(ctx context.Context) (*Users, error) {
         return r.Create(ctx, params)
+    })
+}
+
+func (r *UsersRepository) GetWithRetry(ctx context.Context, id uuid.UUID) (*Users, error) {
+    return RetryOperation(ctx, DefaultRetryConfig, "get", func(ctx context.Context) (*Users, error) {
+        return r.Get(ctx, id)
+    })
+}
+
+func (r *UsersRepository) UpdateWithRetry(ctx context.Context, id uuid.UUID, params UpdateUsersParams) (*Users, error) {
+    return RetryOperation(ctx, DefaultRetryConfig, "update", func(ctx context.Context) (*Users, error) {
+        return r.Update(ctx, id, params)
+    })
+}
+
+func (r *UsersRepository) DeleteWithRetry(ctx context.Context, id uuid.UUID) error {
+    _, err := RetryOperation(ctx, DefaultRetryConfig, "delete", func(ctx context.Context) (*struct{}, error) {
+        return nil, r.Delete(ctx, id)
+    })
+    return err
+}
+
+func (r *UsersRepository) ListWithRetry(ctx context.Context) ([]Users, error) {
+    return RetryOperationSlice(ctx, DefaultRetryConfig, "list", func(ctx context.Context) ([]Users, error) {
+        return r.List(ctx)
     })
 }
 ```
