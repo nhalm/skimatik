@@ -548,7 +548,6 @@ Error: default_functions must be a string ('all') or array of strings
 Error: table has no primary key
 Error: composite primary keys are not supported
 Error: primary key column id not found
-Error: primary key column id must be UUID type, got integer. skimatik requires UUID v7 primary keys for consistent time-ordered pagination. Please migrate your table to use UUID primary keys
 ```
 
 ### Query Validation

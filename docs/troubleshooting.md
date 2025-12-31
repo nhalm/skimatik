@@ -37,25 +37,16 @@ See [Configuration Reference](configuration-reference) for correct field names.
 
 ## Schema Errors
 
-### "Table does not have UUID primary key"
+### "Composite primary keys are not supported"
 
-**Cause**: Table primary key is not UUID type, or table doesn't have a primary key.
+**Cause**: Table has a multi-column primary key.
 
-**Fix**: Skimatik requires UUID primary keys. Update your table:
+**Fix**: Skimatik requires single-column primary keys. Composite keys are not supported. Restructure your table to use a single primary key column:
 
 ```sql
--- Add UUID extension if not already added
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Alter existing table
-ALTER TABLE your_table
-  ALTER COLUMN id TYPE UUID USING uuid_generate_v4(),
-  ALTER COLUMN id SET DEFAULT uuid_generate_v4();
-
--- Or create new table with UUID primary key
 CREATE TABLE your_table (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    -- other columns...
+    id BIGSERIAL PRIMARY KEY,
+    -- other columns that were part of composite key become regular columns or unique constraints
 );
 ```
 

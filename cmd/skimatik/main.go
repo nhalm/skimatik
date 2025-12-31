@@ -65,7 +65,7 @@ DESCRIPTION:
 
 REQUIREMENTS:
     - PostgreSQL 12+ database
-    - Tables must have UUID primary keys for pagination
+    - Tables must have single-column primary keys (composite keys not supported)
     - Go 1.24+ for generated code
 
 OPTIONS:

@@ -481,11 +481,11 @@ skimatik --help
 
 ### Common Issues
 
-**1. "Table does not have UUID primary key"**
+**1. "Composite primary keys are not supported"**
 ```
-Error: Table 'users' does not have a UUID primary key. Only UUID v7 primary keys are supported for pagination.
+Error: table users validation failed: composite primary keys are not supported
 ```
-Solution: Ensure your tables use UUID v7 primary keys for pagination support.
+Solution: Ensure your tables use single-column primary keys. Composite (multi-column) primary keys are not supported.
 
 **2. "Cannot connect to database"**
 ```

@@ -163,7 +163,7 @@ func (q *Queries) ListUsersWithFilters(
 
 - Go 1.24+
 - PostgreSQL (any version supported by pgx)
-- Tables must have UUID primary keys for pagination support
+- Tables must have single-column primary keys (composite keys not supported)
 
 ## Installation
 

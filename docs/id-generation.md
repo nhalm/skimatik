@@ -131,7 +131,7 @@ func TestMultipleUsers(t *testing.T) {
 
 ## Alternative ID Formats
 
-While skimatik generates code for UUID primary keys, you can adapt the pattern for other ID formats.
+While skimatik supports any primary key type, here are some alternative ID formats you can use.
 
 ### ULID (Universally Unique Lexicographically Sortable Identifier)
 
