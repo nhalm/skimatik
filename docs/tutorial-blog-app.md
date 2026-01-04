@@ -45,7 +45,7 @@ The application will start on `http://localhost:8080` with a REST API for managi
 The example uses a realistic blog schema with proper relationships:
 
 ```sql
--- Users table with UUID primary key (required for skimatik)
+-- Users table with UUID primary key
 CREATE TABLE users (
     id          UUID PRIMARY KEY,
     name        TEXT NOT NULL,
@@ -236,7 +236,7 @@ verbose: true
 This example demonstrates:
 
 1. **Complete Application**: Real HTTP API with database persistence
-2. **Schema Design**: Proper UUID primary keys and foreign key relationships
+2. **Schema Design**: Proper primary keys and foreign key relationships
 3. **Repository Embedding**: How to extend generated code with custom logic
 4. **Service Layer**: Business logic separation with domain type conversion
 5. **Integration Testing**: End-to-end validation of the complete pipeline

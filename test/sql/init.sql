@@ -14,7 +14,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Users table - Basic table with UUID primary key (UUID v7 required)
+-- Users table - Basic table with UUID primary key
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
     name VARCHAR(255) NOT NULL,
@@ -176,9 +176,9 @@ CREATE TABLE data_types_test (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Test table with non-UUID primary key (should be rejected by generator)
-CREATE TABLE invalid_pk_table (
-    id SERIAL PRIMARY KEY,  -- This should cause skimatik to reject the table
+-- Test table with SERIAL primary key (valid - any single-column PK works)
+CREATE TABLE serial_pk_table (
+    id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

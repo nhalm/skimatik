@@ -157,7 +157,7 @@ func (g *Generator) generateTables(ctx context.Context) error {
 			slog.Info("Generating repository for table", "table", table.Name)
 		}
 
-		// Validate table has UUID primary key
+		// Validate table has single-column primary key
 		if err := g.validateTablePrimaryKey(table); err != nil {
 			return fmt.Errorf("table %s validation failed: %w", table.Name, err)
 		}

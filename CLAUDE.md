@@ -110,7 +110,7 @@ All documentation lives in `/docs/` as Markdown files. Push to `main` and the wi
 ## Database Requirements
 
 - PostgreSQL (any version pgx supports)
-- Tables must have UUID primary keys for pagination
+- Tables must have single-column primary keys (composite keys not supported)
 - Uses `information_schema` for metadata
 
 ## Testing
