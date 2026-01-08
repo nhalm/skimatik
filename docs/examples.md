@@ -8,7 +8,7 @@ This guide demonstrates **real usage** of skimatik generated repositories with *
 
 ### 🔧 **Shared Utility Patterns**
 - **Database Operations**: `ExecuteQueryRow()`, `ExecuteQuery()`, `HandleQueryRowError()`
-- **Retry Operations**: `RetryOperation()`, `RetryOperationSlice()`, `ShouldRetryError()`
+- **Retry Operations**: Uses `pgxkit.Retry()` for transient error handling
 - **Error Handling**: Consistent patterns across generated and custom code
 - **Zero Duplication**: Shared utilities eliminate code repetition
 
@@ -141,34 +141,35 @@ func NewUserRepository(db *pgxkit.DB) *UserRepository {
 ```go
 // All CRUD operations have retry variants that handle transient errors
 // (connection issues, deadlocks, serialization failures)
+// Uses pgxkit.Retry for exponential backoff with jitter
 
 func (r *UsersRepository) CreateWithRetry(ctx context.Context, params CreateUsersParams) (*Users, error) {
-    return RetryOperation(ctx, DefaultRetryConfig, "create", func(ctx context.Context) (*Users, error) {
+    return pgxkit.Retry(ctx, func(ctx context.Context) (*Users, error) {
         return r.Create(ctx, params)
     })
 }
 
 func (r *UsersRepository) GetWithRetry(ctx context.Context, id uuid.UUID) (*Users, error) {
-    return RetryOperation(ctx, DefaultRetryConfig, "get", func(ctx context.Context) (*Users, error) {
+    return pgxkit.Retry(ctx, func(ctx context.Context) (*Users, error) {
         return r.Get(ctx, id)
     })
 }
 
 func (r *UsersRepository) UpdateWithRetry(ctx context.Context, id uuid.UUID, params UpdateUsersParams) (*Users, error) {
-    return RetryOperation(ctx, DefaultRetryConfig, "update", func(ctx context.Context) (*Users, error) {
+    return pgxkit.Retry(ctx, func(ctx context.Context) (*Users, error) {
         return r.Update(ctx, id, params)
     })
 }
 
 func (r *UsersRepository) DeleteWithRetry(ctx context.Context, id uuid.UUID) error {
-    _, err := RetryOperation(ctx, DefaultRetryConfig, "delete", func(ctx context.Context) (*struct{}, error) {
-        return nil, r.Delete(ctx, id)
+    _, err := pgxkit.Retry(ctx, func(ctx context.Context) (struct{}, error) {
+        return struct{}{}, r.Delete(ctx, id)
     })
     return err
 }
 
 func (r *UsersRepository) ListWithRetry(ctx context.Context) ([]Users, error) {
-    return RetryOperationSlice(ctx, DefaultRetryConfig, "list", func(ctx context.Context) ([]Users, error) {
+    return pgxkit.Retry(ctx, func(ctx context.Context) ([]Users, error) {
         return r.List(ctx)
     })
 }
