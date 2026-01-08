@@ -252,7 +252,7 @@ func (s *UserService) GetUser(ctx context.Context, id uuid.UUID) (*User, error) 
 
 ```go
 func (s *UserService) CreateUserWithProfile(ctx context.Context, userData CreateUsersParams, profileData string) (*User, error) {
-    return RetryOperation(ctx, DefaultRetryConfig, "create_user_with_profile", func(ctx context.Context) (*User, error) {
+    return pgxkit.Retry(ctx, func(ctx context.Context) (*User, error) {
         user, err := s.userRepo.Create(ctx, userData)
         if err != nil {
             if IsAlreadyExists(err) {
@@ -263,7 +263,7 @@ func (s *UserService) CreateUserWithProfile(ctx context.Context, userData Create
             }
             return nil, fmt.Errorf("failed to create user: %w", err)
         }
-        
+
         _, err = s.profileRepo.Create(ctx, CreateProfileParams{
             UserID: user.Id,
             Bio:    profileData,
@@ -275,7 +275,7 @@ func (s *UserService) CreateUserWithProfile(ctx context.Context, userData Create
             }
             return nil, fmt.Errorf("failed to create profile for user %s: %w", user.Id, err)
         }
-        
+
         return user, nil
     })
 }
@@ -441,44 +441,35 @@ func (m *ErrorMetrics) RecordError(operation string, err error) {
 
 ### Smart Retry Based on Error Type
 
+The generated `*WithRetry` methods use `pgxkit.Retry` which automatically handles transient errors (connection issues, deadlocks, serialization failures) with exponential backoff and jitter.
+
 ```go
 func (r *UsersRepository) CreateWithRetry(ctx context.Context, params CreateUsersParams) (*Users, error) {
-    return RetryOperation(ctx, DefaultRetryConfig, "create", func(ctx context.Context) (*Users, error) {
-        user, err := r.Create(ctx, params)
-        if err != nil {
-            // Don't retry validation or already exists errors
-            if IsValidationError(err) || IsAlreadyExists(err) {
-                return nil, err  // No retry for these
-            }
-            // Retry for connection, timeout, and other database errors
-            return nil, err
-        }
-        return user, nil
+    return pgxkit.Retry(ctx, func(ctx context.Context) (*Users, error) {
+        return r.Create(ctx, params)
     })
 }
 ```
 
 ### Custom Retry Configuration
 
+Use `pgxkit.RetryOption` functions to customize retry behavior:
+
 ```go
 // Custom retry for critical operations
 func (s *UserService) CreateCriticalUser(ctx context.Context, params CreateUsersParams) (*User, error) {
-    criticalRetryConfig := RetryConfig{
-        MaxRetries: 5,
-        BaseDelay:  500 * time.Millisecond,
-    }
-    
-    return RetryOperation(ctx, criticalRetryConfig, "create_critical_user", func(ctx context.Context) (*User, error) {
+    return pgxkit.Retry(ctx, func(ctx context.Context) (*User, error) {
         user, err := s.userRepo.Create(ctx, params)
         if err != nil {
-            // Log retry attempts
             s.logError("create_critical_user_attempt", err, map[string]interface{}{
                 "user_email": params.Email,
-                "attempt":    "retry",
             })
         }
         return user, err
-    })
+    },
+        pgxkit.WithMaxRetries(5),
+        pgxkit.WithBaseDelay(500*time.Millisecond),
+    )
 }
 ```
 
@@ -525,18 +516,8 @@ if IsConnectionError(err) {
 }
 ```
 
-### 4. Don't Retry Non-Retriable Errors
-```go
-// Good - selective retry
-if IsValidationError(err) || IsAlreadyExists(err) {
-    return nil, err  // Don't retry
-}
-
-// Bad - retry everything
-return RetryOperation(ctx, config, "operation", func(ctx context.Context) (*T, error) {
-    return someOperation(ctx)
-})
-```
+### 4. Non-Retriable Errors
+`pgxkit.Retry` automatically skips retry for non-retriable errors like validation failures and unique constraint violations. Only transient errors (connection issues, deadlocks, serialization failures) are retried.
 
 ## 🔗 Integration with External Systems
 
