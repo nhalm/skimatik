@@ -1,35 +1,35 @@
 // CreateWithRetry creates a new {{.StructName}} with retry logic
 func (r *{{.RepositoryName}}) CreateWithRetry(ctx context.Context, params Create{{.StructName}}Params) (*{{.StructName}}, error) {
-	return RetryOperation(ctx, DefaultRetryConfig, "create", func(ctx context.Context) (*{{.StructName}}, error) {
+	return pgxkit.Retry(ctx, func(ctx context.Context) (*{{.StructName}}, error) {
 		return r.Create(ctx, params)
 	})
 }
 
 // GetWithRetry retrieves a {{.StructName}} by ID with retry logic
 func (r *{{.RepositoryName}}) GetWithRetry(ctx context.Context, id {{.IDType}}) (*{{.StructName}}, error) {
-	return RetryOperation(ctx, DefaultRetryConfig, "get", func(ctx context.Context) (*{{.StructName}}, error) {
+	return pgxkit.Retry(ctx, func(ctx context.Context) (*{{.StructName}}, error) {
 		return r.Get(ctx, id)
 	})
 }
 
 // UpdateWithRetry updates an existing {{.StructName}} with retry logic
 func (r *{{.RepositoryName}}) UpdateWithRetry(ctx context.Context, id {{.IDType}}, params Update{{.StructName}}Params) (*{{.StructName}}, error) {
-	return RetryOperation(ctx, DefaultRetryConfig, "update", func(ctx context.Context) (*{{.StructName}}, error) {
+	return pgxkit.Retry(ctx, func(ctx context.Context) (*{{.StructName}}, error) {
 		return r.Update(ctx, id, params)
 	})
 }
 
 // DeleteWithRetry deletes a {{.StructName}} by ID with retry logic
 func (r *{{.RepositoryName}}) DeleteWithRetry(ctx context.Context, id {{.IDType}}) error {
-	_, err := RetryOperation(ctx, DefaultRetryConfig, "delete", func(ctx context.Context) (*struct{}, error) {
-		return nil, r.Delete(ctx, id)
+	_, err := pgxkit.Retry(ctx, func(ctx context.Context) (struct{}, error) {
+		return struct{}{}, r.Delete(ctx, id)
 	})
 	return err
 }
 
 // ListWithRetry retrieves all {{.StructName}}s with retry logic
 func (r *{{.RepositoryName}}) ListWithRetry(ctx context.Context) ([]{{.StructName}}, error) {
-	return RetryOperationSlice(ctx, DefaultRetryConfig, "list", func(ctx context.Context) ([]{{.StructName}}, error) {
+	return pgxkit.Retry(ctx, func(ctx context.Context) ([]{{.StructName}}, error) {
 		return r.List(ctx)
 	})
-} 
+}
