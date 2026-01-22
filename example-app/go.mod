@@ -9,6 +9,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/nhalm/pgxkit v1.4.0
+	github.com/nhalm/pgxkit/v2 v2.0.0
 )
 
 require (

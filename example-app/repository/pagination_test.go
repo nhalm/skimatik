@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/nhalm/pgxkit"
+	"github.com/nhalm/pgxkit/v2"
 	"github.com/nhalm/skimatik/example-app/repository/generated"
 )
 
