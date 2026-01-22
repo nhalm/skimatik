@@ -14,6 +14,15 @@ func ExecuteQueryRow(ctx context.Context, db pgxkit.Executor, operation, entity,
 	return db.QueryRow(ctx, query, args...)
 }
 
+// ExecuteReadQueryRow executes a single-row read query, routing to read replica when available
+// Falls back to standard QueryRow when db is not *pgxkit.DB (e.g., within a transaction)
+func ExecuteReadQueryRow(ctx context.Context, db pgxkit.Executor, operation, entity, query string, args ...interface{}) pgx.Row {
+	if dbConn, ok := db.(*pgxkit.DB); ok {
+		return dbConn.ReadQueryRow(ctx, query, args...)
+	}
+	return db.QueryRow(ctx, query, args...)
+}
+
 // ExecuteQuery executes a multi-row query and returns rows for scanning
 // This eliminates duplication across List, Many queries, and paginated operations
 func ExecuteQuery(ctx context.Context, db pgxkit.Executor, operation, entity, query string, args ...interface{}) (pgx.Rows, error) {
