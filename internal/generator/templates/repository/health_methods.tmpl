@@ -14,7 +14,7 @@ func (r *{{.RepositoryName}}) HealthCheck(ctx context.Context, db pgxkit.Executo
 	// Check if table is accessible with a simple count query
 	query := `SELECT COUNT(*) FROM {{.TableName}} LIMIT 1`
 	var count int64
-	err := db.QueryRow(ctx, query).Scan(&count)
+	err := pgdb.QueryRow(ctx, query).Scan(&count)
 	if err != nil {
 		return fmt.Errorf("table {{.TableName}} is not accessible: %w", err)
 	}
@@ -50,7 +50,7 @@ func (r *{{.RepositoryName}}) HealthCheckDetailed(ctx context.Context, db pgxkit
 	// Test table accessibility
 	countQuery := `SELECT COUNT(*) FROM {{.TableName}}`
 	var totalRecords int64
-	if err := db.QueryRow(ctx, countQuery).Scan(&totalRecords); err != nil {
+	if err := pgdb.QueryRow(ctx, countQuery).Scan(&totalRecords); err != nil {
 		status.Healthy = false
 		status.Checks["table_access"] = fmt.Sprintf("FAILED: %v", err)
 		status.Error = err.Error()
@@ -61,7 +61,7 @@ func (r *{{.RepositoryName}}) HealthCheckDetailed(ctx context.Context, db pgxkit
 
 	// Test table structure by attempting to select from all expected columns
 	structQuery := `SELECT {{.SelectColumns}} FROM {{.TableName}} LIMIT 1`
-	rows, err := db.Query(ctx, structQuery)
+	rows, err := pgdb.Query(ctx, structQuery)
 	if err != nil {
 		status.Healthy = false
 		status.Checks["table_structure"] = fmt.Sprintf("FAILED: %v", err)
