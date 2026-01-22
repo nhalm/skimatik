@@ -1,13 +1,13 @@
 // Get retrieves a {{.StructName}} by ID
-func (r *{{.RepositoryName}}) Get(ctx context.Context, id {{.IDType}}) (*{{.StructName}}, error) {
+func (r *{{.RepositoryName}}) Get(ctx context.Context, db pgxkit.Executor, id {{.IDType}}) (*{{.StructName}}, error) {
 	query := `
 		SELECT {{.SelectColumns}}
 		FROM {{.TableName}}
 		WHERE {{.IDColumn}} = $1
 	`
-	
+
 	var {{.ReceiverName}} {{.StructName}}
-	row := ExecuteQueryRow(ctx, r.db, "get", "{{.StructName}}", query, id)
+	row := ExecuteReadQueryRow(ctx, db, "get", "{{.StructName}}", query, id)
 	err := row.Scan({{.ScanArgs}})
 	if err := HandleQueryRowError("get", "{{.StructName}}", err); err != nil {
 		return nil, err
