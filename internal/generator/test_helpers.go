@@ -3,7 +3,7 @@ package generator
 import (
 	"testing"
 
-	"github.com/nhalm/pgxkit"
+	"github.com/nhalm/pgxkit/v2"
 )
 
 // packageTestDB is the shared test database connection for all integration tests

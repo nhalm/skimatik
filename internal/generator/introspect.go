@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/nhalm/pgxkit"
+	"github.com/nhalm/pgxkit/v2"
 )
 
 // Introspector handles database schema introspection

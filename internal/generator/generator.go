@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/nhalm/pgxkit"
+	"github.com/nhalm/pgxkit/v2"
 )
 
 // Generator handles the code generation process

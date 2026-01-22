@@ -10,7 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/nhalm/pgxkit"
+	"github.com/nhalm/pgxkit/v2"
 )
 
 // QueryAnalyzer introspects SQL queries using PostgreSQL's PREPARE and EXPLAIN features
@@ -838,7 +838,7 @@ func (qa *QueryAnalyzer) inferParameterTypesFromPrepare(ctx context.Context, que
 
 	// Prepare the statement with a unique name
 	stmtName := fmt.Sprintf("infer_types_%s", query.Name)
-	stmt, err := tx.Prepare(ctx, stmtName, query.SQL)
+	stmt, err := tx.Tx().Prepare(ctx, stmtName, query.SQL)
 	if err != nil {
 		return fmt.Errorf("query preparation failed: %w", err)
 	}
