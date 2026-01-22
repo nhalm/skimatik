@@ -1,12 +1,12 @@
 // List retrieves all {{.StructName}}s
-func (r *{{.RepositoryName}}) List(ctx context.Context) ([]{{.StructName}}, error) {
+func (r *{{.RepositoryName}}) List(ctx context.Context, db pgxkit.Executor) ([]{{.StructName}}, error) {
 	query := `
 		SELECT {{.SelectColumns}}
 		FROM {{.TableName}}
 		ORDER BY {{.IDColumn}} ASC
 	`
-	
-	rows, err := ExecuteQuery(ctx, r.db, "list", "{{.StructName}}", query)
+
+	rows, err := ExecuteReadQuery(ctx, db, "list", "{{.StructName}}", query)
 	if err != nil {
 		return nil, err
 	}
