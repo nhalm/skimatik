@@ -4,16 +4,16 @@ type Update{{.StructName}}Params struct {
 {{end}}}
 
 // Update updates an existing {{.StructName}}
-func (r *{{.RepositoryName}}) Update(ctx context.Context, id {{.IDType}}, params Update{{.StructName}}Params) (*{{.StructName}}, error) {
+func (r *{{.RepositoryName}}) Update(ctx context.Context, db pgxkit.Executor, id {{.IDType}}, params Update{{.StructName}}Params) (*{{.StructName}}, error) {
 	query := `
 		UPDATE {{.TableName}}
 		SET {{.UpdateColumns}}
 		WHERE {{.IDColumn}} = ${{.IDParamIndex}}
 		RETURNING {{.SelectColumns}}
 	`
-	
+
 	var {{.ReceiverName}} {{.StructName}}
-	row := ExecuteQueryRow(ctx, r.db, "update", "{{.StructName}}", query, {{.UpdateArgs}})
+	row := ExecuteQueryRow(ctx, db, "update", "{{.StructName}}", query, {{.UpdateArgs}})
 	err := row.Scan({{.ScanArgs}})
 	if err := HandleQueryRowError("update", "{{.StructName}}", err); err != nil {
 		return nil, err
