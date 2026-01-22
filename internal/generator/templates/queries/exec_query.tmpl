@@ -1,6 +1,6 @@
 // {{.FunctionName}} executes the {{.QueryName}} query
-func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterDeclarations}}) error {
+func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context, db pgxkit.Executor{{.ParameterDeclarations}}) error {
 	query := `{{.SQL}}`
-	
-	return ExecuteNonQuery(ctx, r.db, "{{.QueryName}}", "{{.QueryName}}", query{{.ParameterArgs}})
+
+	return ExecuteNonQuery(ctx, db, "{{.QueryName}}", "{{.QueryName}}", query{{.ParameterArgs}})
 } 
