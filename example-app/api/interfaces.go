@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/nhalm/skimatik/example-app/domain"
+	"github.com/nhalm/skimatik/v2/example-app/domain"
 )
 
 // UserService defines what the API layer needs from a user service

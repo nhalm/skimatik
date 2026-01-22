@@ -1,4 +1,4 @@
-module github.com/nhalm/skimatik/example-app
+module github.com/nhalm/skimatik/v2/example-app
 
 go 1.24.0
 

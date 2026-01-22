@@ -8,7 +8,7 @@ import (
 	"os"
 	"runtime/debug"
 
-	"github.com/nhalm/skimatik/internal/generator"
+	"github.com/nhalm/skimatik/v2/internal/generator"
 )
 
 var (

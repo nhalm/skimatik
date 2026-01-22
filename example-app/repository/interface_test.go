@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"github.com/nhalm/skimatik/example-app/service"
+	"github.com/nhalm/skimatik/v2/example-app/service"
 )
 
 // Compile-time interface compliance tests

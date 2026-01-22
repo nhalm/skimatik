@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/nhalm/skimatik/example-app/domain"
+	"github.com/nhalm/skimatik/v2/example-app/domain"
 )
 
 // PostHandler handles HTTP requests for post operations

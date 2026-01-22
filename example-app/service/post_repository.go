@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/nhalm/skimatik/example-app/domain"
+	"github.com/nhalm/skimatik/v2/example-app/domain"
 )
 
 // PostRepository defines what the service layer needs from a post repository

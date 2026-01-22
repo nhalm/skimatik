@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nhalm/pgxkit/v2"
-	"github.com/nhalm/skimatik/example-app/domain"
-	"github.com/nhalm/skimatik/example-app/repository/generated"
+	"github.com/nhalm/skimatik/v2/example-app/domain"
+	"github.com/nhalm/skimatik/v2/example-app/repository/generated"
 )
 
 // PostRepository represents a custom repository that embeds the generated queries

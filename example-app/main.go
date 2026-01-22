@@ -10,9 +10,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/nhalm/pgxkit/v2"
-	"github.com/nhalm/skimatik/example-app/api"
-	"github.com/nhalm/skimatik/example-app/repository"
-	"github.com/nhalm/skimatik/example-app/service"
+	"github.com/nhalm/skimatik/v2/example-app/api"
+	"github.com/nhalm/skimatik/v2/example-app/repository"
+	"github.com/nhalm/skimatik/v2/example-app/service"
 )
 
 func main() {

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/nhalm/skimatik/example-app/domain"
+	"github.com/nhalm/skimatik/v2/example-app/domain"
 )
 
 var ErrPostNotFound = fmt.Errorf("post not found")
