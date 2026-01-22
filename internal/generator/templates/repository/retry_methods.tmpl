@@ -1,35 +1,60 @@
-// CreateWithRetry creates a new {{.StructName}} with retry logic
-func (r *{{.RepositoryName}}) CreateWithRetry(ctx context.Context, params Create{{.StructName}}Params) (*{{.StructName}}, error) {
+// CreateWithRetry creates a new {{.StructName}} with retry logic.
+// If db is not *pgxkit.DB (e.g., a transaction), falls back to Create without retry.
+func (r *{{.RepositoryName}}) CreateWithRetry(ctx context.Context, db pgxkit.Executor, params Create{{.StructName}}Params) (*{{.StructName}}, error) {
+	pgdb, ok := db.(*pgxkit.DB)
+	if !ok {
+		return r.Create(ctx, db, params)
+	}
 	return pgxkit.Retry(ctx, func(ctx context.Context) (*{{.StructName}}, error) {
-		return r.Create(ctx, params)
+		return r.Create(ctx, pgdb, params)
 	})
 }
 
-// GetWithRetry retrieves a {{.StructName}} by ID with retry logic
-func (r *{{.RepositoryName}}) GetWithRetry(ctx context.Context, id {{.IDType}}) (*{{.StructName}}, error) {
+// GetWithRetry retrieves a {{.StructName}} by ID with retry logic.
+// If db is not *pgxkit.DB (e.g., a transaction), falls back to Get without retry.
+func (r *{{.RepositoryName}}) GetWithRetry(ctx context.Context, db pgxkit.Executor, id {{.IDType}}) (*{{.StructName}}, error) {
+	pgdb, ok := db.(*pgxkit.DB)
+	if !ok {
+		return r.Get(ctx, db, id)
+	}
 	return pgxkit.Retry(ctx, func(ctx context.Context) (*{{.StructName}}, error) {
-		return r.Get(ctx, id)
+		return r.Get(ctx, pgdb, id)
 	})
 }
 
-// UpdateWithRetry updates an existing {{.StructName}} with retry logic
-func (r *{{.RepositoryName}}) UpdateWithRetry(ctx context.Context, id {{.IDType}}, params Update{{.StructName}}Params) (*{{.StructName}}, error) {
+// UpdateWithRetry updates an existing {{.StructName}} with retry logic.
+// If db is not *pgxkit.DB (e.g., a transaction), falls back to Update without retry.
+func (r *{{.RepositoryName}}) UpdateWithRetry(ctx context.Context, db pgxkit.Executor, id {{.IDType}}, params Update{{.StructName}}Params) (*{{.StructName}}, error) {
+	pgdb, ok := db.(*pgxkit.DB)
+	if !ok {
+		return r.Update(ctx, db, id, params)
+	}
 	return pgxkit.Retry(ctx, func(ctx context.Context) (*{{.StructName}}, error) {
-		return r.Update(ctx, id, params)
+		return r.Update(ctx, pgdb, id, params)
 	})
 }
 
-// DeleteWithRetry deletes a {{.StructName}} by ID with retry logic
-func (r *{{.RepositoryName}}) DeleteWithRetry(ctx context.Context, id {{.IDType}}) error {
+// DeleteWithRetry deletes a {{.StructName}} by ID with retry logic.
+// If db is not *pgxkit.DB (e.g., a transaction), falls back to Delete without retry.
+func (r *{{.RepositoryName}}) DeleteWithRetry(ctx context.Context, db pgxkit.Executor, id {{.IDType}}) error {
+	pgdb, ok := db.(*pgxkit.DB)
+	if !ok {
+		return r.Delete(ctx, db, id)
+	}
 	_, err := pgxkit.Retry(ctx, func(ctx context.Context) (struct{}, error) {
-		return struct{}{}, r.Delete(ctx, id)
+		return struct{}{}, r.Delete(ctx, pgdb, id)
 	})
 	return err
 }
 
-// ListWithRetry retrieves all {{.StructName}}s with retry logic
-func (r *{{.RepositoryName}}) ListWithRetry(ctx context.Context) ([]{{.StructName}}, error) {
+// ListWithRetry retrieves all {{.StructName}}s with retry logic.
+// If db is not *pgxkit.DB (e.g., a transaction), falls back to List without retry.
+func (r *{{.RepositoryName}}) ListWithRetry(ctx context.Context, db pgxkit.Executor) ([]{{.StructName}}, error) {
+	pgdb, ok := db.(*pgxkit.DB)
+	if !ok {
+		return r.List(ctx, db)
+	}
 	return pgxkit.Retry(ctx, func(ctx context.Context) ([]{{.StructName}}, error) {
-		return r.List(ctx)
+		return r.List(ctx, pgdb)
 	})
 }
