@@ -33,6 +33,23 @@ func ExecuteQuery(ctx context.Context, db pgxkit.Executor, operation, entity, qu
 	return rows, nil
 }
 
+// ExecuteReadQuery executes a multi-row read query, routing to read replica when available
+// Falls back to standard Query when db is not *pgxkit.DB (e.g., within a transaction)
+func ExecuteReadQuery(ctx context.Context, db pgxkit.Executor, operation, entity, query string, args ...interface{}) (pgx.Rows, error) {
+	if dbConn, ok := db.(*pgxkit.DB); ok {
+		rows, err := dbConn.ReadQuery(ctx, query, args...)
+		if err != nil {
+			return nil, HandleDatabaseError(operation, entity, err)
+		}
+		return rows, nil
+	}
+	rows, err := db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, HandleDatabaseError(operation, entity, err)
+	}
+	return rows, nil
+}
+
 // HandleQueryRowError processes errors from single-row operations with consistent error handling
 func HandleQueryRowError(operation, entity string, err error) error {
 	if err != nil {
