@@ -1,9 +1,9 @@
 // {{.FunctionName}} executes the {{.QueryName}} query and returns a single result
-func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterDeclarations}}) (*{{.ResultType}}, error) {
+func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context, db pgxkit.Executor{{.ParameterDeclarations}}) (*{{.ResultType}}, error) {
 	query := `{{.SQL}}`
-	
+
 	var result {{.ResultType}}
-	row := ExecuteQueryRow(ctx, r.db, "{{.QueryName}}", "{{.ResultType}}", query{{.ParameterArgs}})
+	row := ExecuteReadQueryRow(ctx, db, "{{.QueryName}}", "{{.ResultType}}", query{{.ParameterArgs}})
 	err := row.Scan({{.ScanArgs}})
 	if err := HandleQueryRowError("{{.QueryName}}", "{{.ResultType}}", err); err != nil {
 		return nil, err
