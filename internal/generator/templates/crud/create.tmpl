@@ -4,7 +4,7 @@ type Create{{.StructName}}Params struct {
 {{end}}}
 
 // Create creates a new {{.StructName}}
-func (r *{{.RepositoryName}}) Create(ctx context.Context, params Create{{.StructName}}Params) (*{{.StructName}}, error) {
+func (r *{{.RepositoryName}}) Create(ctx context.Context, db pgxkit.Executor, params Create{{.StructName}}Params) (*{{.StructName}}, error) {
 	id := r.generateIdFunc()
 	query := `
 		INSERT INTO {{.TableName}} ({{.InsertColumns}})
@@ -13,7 +13,7 @@ func (r *{{.RepositoryName}}) Create(ctx context.Context, params Create{{.Struct
 	`
 
 	var {{.ReceiverName}} {{.StructName}}
-	row := ExecuteQueryRow(ctx, r.db, "create", "{{.StructName}}", query, {{.InsertArgs}})
+	row := ExecuteQueryRow(ctx, db, "create", "{{.StructName}}", query, {{.InsertArgs}})
 	err := row.Scan({{.ScanArgs}})
 	if err := HandleQueryRowError("create", "{{.StructName}}", err); err != nil {
 		return nil, err
