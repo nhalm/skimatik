@@ -99,10 +99,10 @@ func TestPaginatedQuery_CursorNavigation(t *testing.T) {
 	})
 
 	// Create the queries repository
-	postsQueries := generated.NewPostsQueries(db)
+	postsQueries := generated.NewPostsQueries()
 
 	// Test: First page with limit 1 (should get newest post - Post 3)
-	page1, err := postsQueries.GetPublishedPostsPaginatedPaginated(ctx, generated.PaginationParams{
+	page1, err := postsQueries.GetPublishedPostsPaginatedPaginated(ctx, db, generated.PaginationParams{
 		Limit: 1,
 	})
 	if err != nil {
@@ -125,7 +125,7 @@ func TestPaginatedQuery_CursorNavigation(t *testing.T) {
 	t.Logf("Page 1: %s (cursor: %s)", firstPageTitle, page1.NextCursor)
 
 	// Test: Second page using cursor from first page (should get Post 2)
-	page2, err := postsQueries.GetPublishedPostsPaginatedPaginated(ctx, generated.PaginationParams{
+	page2, err := postsQueries.GetPublishedPostsPaginatedPaginated(ctx, db, generated.PaginationParams{
 		Limit:      1,
 		NextCursor: page1.NextCursor,
 	})
@@ -146,7 +146,7 @@ func TestPaginatedQuery_CursorNavigation(t *testing.T) {
 	}
 
 	// Test: Third page using cursor from second page (should get Post 1)
-	page3, err := postsQueries.GetPublishedPostsPaginatedPaginated(ctx, generated.PaginationParams{
+	page3, err := postsQueries.GetPublishedPostsPaginatedPaginated(ctx, db, generated.PaginationParams{
 		Limit:      1,
 		NextCursor: page2.NextCursor,
 	})
@@ -189,11 +189,11 @@ func TestPaginatedQuery_ASCOrdering(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	postsQueries := generated.NewPostsQueries(db)
+	postsQueries := generated.NewPostsQueries()
 
 	// Test ASC ordering: GetOldestPostsPaginatedPaginated (oldest first)
 	// We just verify that pagination works and ordering is correct (not specific titles)
-	page1, err := postsQueries.GetOldestPostsPaginatedPaginated(ctx, generated.PaginationParams{
+	page1, err := postsQueries.GetOldestPostsPaginatedPaginated(ctx, db, generated.PaginationParams{
 		Limit: 1,
 	})
 	if err != nil {
@@ -212,7 +212,7 @@ func TestPaginatedQuery_ASCOrdering(t *testing.T) {
 		t.Fatal("Expected NextCursor to be set")
 	}
 
-	page2, err := postsQueries.GetOldestPostsPaginatedPaginated(ctx, generated.PaginationParams{
+	page2, err := postsQueries.GetOldestPostsPaginatedPaginated(ctx, db, generated.PaginationParams{
 		Limit:      1,
 		NextCursor: page1.NextCursor,
 	})
@@ -296,10 +296,10 @@ func TestPaginatedQuery_WithFilterParameter(t *testing.T) {
 		}
 	})
 
-	postsQueries := generated.NewPostsQueries(db)
+	postsQueries := generated.NewPostsQueries()
 
 	// Test: First page with author filter (should get newest post - Post 3)
-	page1, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, testUserID, generated.PaginationParams{
+	page1, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, db, testUserID, generated.PaginationParams{
 		Limit: 1,
 	})
 	if err != nil {
@@ -327,7 +327,7 @@ func TestPaginatedQuery_WithFilterParameter(t *testing.T) {
 		t.Fatal("Expected NextCursor to be set")
 	}
 
-	page2, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, testUserID, generated.PaginationParams{
+	page2, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, db, testUserID, generated.PaginationParams{
 		Limit:      1,
 		NextCursor: page1.NextCursor,
 	})
@@ -347,7 +347,7 @@ func TestPaginatedQuery_WithFilterParameter(t *testing.T) {
 	}
 
 	// Test: Third page
-	page3, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, testUserID, generated.PaginationParams{
+	page3, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, db, testUserID, generated.PaginationParams{
 		Limit:      1,
 		NextCursor: page2.NextCursor,
 	})
@@ -364,7 +364,7 @@ func TestPaginatedQuery_WithFilterParameter(t *testing.T) {
 
 	// Verify author filter works: query with different author should return empty
 	otherUserID := uuid.New()
-	otherPage, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, otherUserID, generated.PaginationParams{
+	otherPage, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, db, otherUserID, generated.PaginationParams{
 		Limit: 10,
 	})
 	if err != nil {
@@ -433,10 +433,10 @@ func TestPaginatedQuery_BidirectionalNavigation(t *testing.T) {
 		}
 	})
 
-	postsQueries := generated.NewPostsQueries(db)
+	postsQueries := generated.NewPostsQueries()
 
 	// Test forward pagination: Page 1 (Post 5), Page 2 (Post 4), Page 3 (Post 3)
-	page1, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, testUserID, generated.PaginationParams{
+	page1, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, db, testUserID, generated.PaginationParams{
 		Limit: 1,
 	})
 	if err != nil {
@@ -455,7 +455,7 @@ func TestPaginatedQuery_BidirectionalNavigation(t *testing.T) {
 	t.Logf("Page 1: %s (hasMore=%v, hasPrevious=%v)", page1.Items[0].Title, page1.HasMore, page1.HasPrevious)
 
 	// Page 2 (forward)
-	page2, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, testUserID, generated.PaginationParams{
+	page2, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, db, testUserID, generated.PaginationParams{
 		Limit:      1,
 		NextCursor: page1.NextCursor,
 	})
@@ -475,7 +475,7 @@ func TestPaginatedQuery_BidirectionalNavigation(t *testing.T) {
 	t.Logf("Page 2: %s (hasMore=%v, hasPrevious=%v)", page2.Items[0].Title, page2.HasMore, page2.HasPrevious)
 
 	// Page 3 (forward)
-	page3, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, testUserID, generated.PaginationParams{
+	page3, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, db, testUserID, generated.PaginationParams{
 		Limit:      1,
 		NextCursor: page2.NextCursor,
 	})
@@ -489,7 +489,7 @@ func TestPaginatedQuery_BidirectionalNavigation(t *testing.T) {
 	t.Logf("Page 3: %s (hasMore=%v, hasPrevious=%v)", page3.Items[0].Title, page3.HasMore, page3.HasPrevious)
 
 	// Now go BACKWARD from page 3 using BeforeCursor
-	pageBack, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, testUserID, generated.PaginationParams{
+	pageBack, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, db, testUserID, generated.PaginationParams{
 		Limit:        1,
 		BeforeCursor: page3.BeforeCursor,
 	})
@@ -503,7 +503,7 @@ func TestPaginatedQuery_BidirectionalNavigation(t *testing.T) {
 	t.Logf("Page back from 3: %s (hasMore=%v, hasPrevious=%v)", pageBack.Items[0].Title, pageBack.HasMore, pageBack.HasPrevious)
 
 	// Go backward again to get back to page 1
-	pageBack2, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, testUserID, generated.PaginationParams{
+	pageBack2, err := postsQueries.GetPostsByAuthorPaginatedPaginated(ctx, db, testUserID, generated.PaginationParams{
 		Limit:        1,
 		BeforeCursor: pageBack.BeforeCursor,
 	})

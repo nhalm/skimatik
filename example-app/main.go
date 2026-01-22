@@ -12,7 +12,6 @@ import (
 	"github.com/nhalm/pgxkit/v2"
 	"github.com/nhalm/skimatik/example-app/api"
 	"github.com/nhalm/skimatik/example-app/repository"
-	"github.com/nhalm/skimatik/example-app/repository/generated"
 	"github.com/nhalm/skimatik/example-app/service"
 )
 
@@ -45,10 +44,7 @@ func main() {
 
 	// Initialize repositories
 	userRepo := repository.NewUserRepository(db)
-
-	// For post repository, first create the generated queries, then wrap them
-	postQueries := generated.NewPostsQueries(db)
-	postRepo := repository.NewPostRepository(postQueries)
+	postRepo := repository.NewPostRepository(db)
 
 	// Initialize services with real repositories
 	userService := service.NewUserService(userRepo)
