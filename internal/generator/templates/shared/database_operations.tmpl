@@ -5,18 +5,44 @@
 import (
 	"context"
 	"github.com/jackc/pgx/v5"
-	"github.com/nhalm/pgxkit"
+	"github.com/nhalm/pgxkit/v2"
 )
 
 // ExecuteQueryRow executes a single-row query and returns the row for scanning
 // This eliminates duplication across Create, Get, Update, and One query operations
-func ExecuteQueryRow(ctx context.Context, db *pgxkit.DB, operation, entity, query string, args ...interface{}) pgx.Row {
+func ExecuteQueryRow(ctx context.Context, db pgxkit.Executor, operation, entity, query string, args ...interface{}) pgx.Row {
 	return db.QueryRow(ctx, query, args...)
 }
 
-// ExecuteQuery executes a multi-row query and returns rows for scanning  
+// ExecuteReadQueryRow executes a single-row read query, routing to read replica when available
+// Falls back to standard QueryRow when db is not *pgxkit.DB (e.g., within a transaction)
+func ExecuteReadQueryRow(ctx context.Context, db pgxkit.Executor, operation, entity, query string, args ...interface{}) pgx.Row {
+	if dbConn, ok := db.(*pgxkit.DB); ok {
+		return dbConn.ReadQueryRow(ctx, query, args...)
+	}
+	return db.QueryRow(ctx, query, args...)
+}
+
+// ExecuteQuery executes a multi-row query and returns rows for scanning
 // This eliminates duplication across List, Many queries, and paginated operations
-func ExecuteQuery(ctx context.Context, db *pgxkit.DB, operation, entity, query string, args ...interface{}) (pgx.Rows, error) {
+func ExecuteQuery(ctx context.Context, db pgxkit.Executor, operation, entity, query string, args ...interface{}) (pgx.Rows, error) {
+	rows, err := db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, HandleDatabaseError(operation, entity, err)
+	}
+	return rows, nil
+}
+
+// ExecuteReadQuery executes a multi-row read query, routing to read replica when available
+// Falls back to standard Query when db is not *pgxkit.DB (e.g., within a transaction)
+func ExecuteReadQuery(ctx context.Context, db pgxkit.Executor, operation, entity, query string, args ...interface{}) (pgx.Rows, error) {
+	if dbConn, ok := db.(*pgxkit.DB); ok {
+		rows, err := dbConn.ReadQuery(ctx, query, args...)
+		if err != nil {
+			return nil, HandleDatabaseError(operation, entity, err)
+		}
+		return rows, nil
+	}
 	rows, err := db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, HandleDatabaseError(operation, entity, err)
@@ -41,7 +67,7 @@ func HandleRowsResult(entity string, rows pgx.Rows) error {
 }
 
 // ExecuteNonQuery executes a non-query operation (INSERT, UPDATE, DELETE without RETURNING)
-func ExecuteNonQuery(ctx context.Context, db *pgxkit.DB, operation, entity, query string, args ...interface{}) error {
+func ExecuteNonQuery(ctx context.Context, db pgxkit.Executor, operation, entity, query string, args ...interface{}) error {
 	_, err := db.Exec(ctx, query, args...)
 	if err != nil {
 		return HandleDatabaseError(operation, entity, err)
@@ -50,7 +76,7 @@ func ExecuteNonQuery(ctx context.Context, db *pgxkit.DB, operation, entity, quer
 }
 
 // ExecuteNonQueryWithRowsAffected executes a non-query operation and returns rows affected
-func ExecuteNonQueryWithRowsAffected(ctx context.Context, db *pgxkit.DB, operation, entity, query string, args ...interface{}) (int64, error) {
+func ExecuteNonQueryWithRowsAffected(ctx context.Context, db pgxkit.Executor, operation, entity, query string, args ...interface{}) (int64, error) {
 	result, err := db.Exec(ctx, query, args...)
 	if err != nil {
 		return 0, HandleDatabaseError(operation, entity, err)

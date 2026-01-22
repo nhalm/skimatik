@@ -1,8 +1,8 @@
 // {{.FunctionName}} executes the {{.QueryName}} query and returns multiple results
-func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterDeclarations}}) ([]{{.ResultType}}, error) {
+func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context, db pgxkit.Executor{{.ParameterDeclarations}}) ([]{{.ResultType}}, error) {
 	query := `{{.SQL}}`
 
-	rows, err := ExecuteQuery(ctx, r.db, "{{.QueryName}}", "{{.ResultType}}", query{{.ParameterArgs}})
+	rows, err := ExecuteReadQuery(ctx, db, "{{.QueryName}}", "{{.ResultType}}", query{{.ParameterArgs}})
 	if err != nil {
 		return nil, err
 	}

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nhalm/pgxkit"
+	"github.com/nhalm/pgxkit/v2"
 )
 
 func TestMain(m *testing.M) {

@@ -1,8 +1,8 @@
 // {{.FunctionName}} executes the {{.QueryName}} query and returns multiple results
-func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterDeclarations}}) ([]{{.ResultType}}, error) {
+func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context, db pgxkit.Executor{{.ParameterDeclarations}}) ([]{{.ResultType}}, error) {
 	query := `{{.SQL}}`
 
-	rows, err := ExecuteQuery(ctx, r.db, "{{.QueryName}}", "{{.ResultType}}", query{{.ParameterArgs}})
+	rows, err := ExecuteReadQuery(ctx, db, "{{.QueryName}}", "{{.ResultType}}", query{{.ParameterArgs}})
 	if err != nil {
 		return nil, err
 	}
@@ -24,7 +24,7 @@ func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context{{.ParameterD
 {{if .OrderByColumns}}
 // {{.FunctionName}}Paginated executes the {{.QueryName}} query with cursor-based pagination
 // Sort order: {{range $index, $col := .OrderByColumns}}{{if $index}}, {{end}}{{$col.Name}} {{$col.Direction}}{{end}}
-func (r *{{.RepositoryName}}) {{.FunctionName}}Paginated(ctx context.Context{{.ParameterDeclarations}}, params PaginationParams) (*PaginationResult[{{.ResultType}}], error) {
+func (r *{{.RepositoryName}}) {{.FunctionName}}Paginated(ctx context.Context, db pgxkit.Executor{{.ParameterDeclarations}}, params PaginationParams) (*PaginationResult[{{.ResultType}}], error) {
 	// Validate pagination parameters
 	if err := validatePaginationParams(params); err != nil {
 		return nil, err
@@ -112,7 +112,7 @@ func (r *{{.RepositoryName}}) {{.FunctionName}}Paginated(ctx context.Context{{.P
 	args = append(args, int32(limit+1)) // +1 to check if there are more results
 
 	// Execute query
-	rows, err := ExecuteQuery(ctx, r.db, "{{.QueryName}}_paginated", "{{.ResultType}}", paginatedQuery, args...)
+	rows, err := ExecuteReadQuery(ctx, db, "{{.QueryName}}_paginated", "{{.ResultType}}", paginatedQuery, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +201,7 @@ func (r *{{.RepositoryName}}) {{.FunctionName}}Paginated(ctx context.Context{{.P
 {{else}}
 // {{.FunctionName}}Paginated executes the {{.QueryName}} query with cursor-based pagination
 // Note: No ORDER BY specified in query, pagination uses database default ordering
-func (r *{{.RepositoryName}}) {{.FunctionName}}Paginated(ctx context.Context{{.ParameterDeclarations}}, params PaginationParams) (*PaginationResult[{{.ResultType}}], error) {
+func (r *{{.RepositoryName}}) {{.FunctionName}}Paginated(ctx context.Context, db pgxkit.Executor{{.ParameterDeclarations}}, params PaginationParams) (*PaginationResult[{{.ResultType}}], error) {
 	// Validate pagination parameters
 	if err := validatePaginationParams(params); err != nil {
 		return nil, err
@@ -234,7 +234,7 @@ func (r *{{.RepositoryName}}) {{.FunctionName}}Paginated(ctx context.Context{{.P
 	args = append(args, int32(limit+1)) // +1 to check if there are more results
 
 	// Execute query
-	rows, err := ExecuteQuery(ctx, r.db, "{{.QueryName}}_paginated", "{{.ResultType}}", paginatedQuery, args...)
+	rows, err := ExecuteReadQuery(ctx, db, "{{.QueryName}}_paginated", "{{.ResultType}}", paginatedQuery, args...)
 	if err != nil {
 		return nil, err
 	}

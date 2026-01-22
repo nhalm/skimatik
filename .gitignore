@@ -82,4 +82,11 @@ ehthumbs.db
 Thumbs.db
 
 # macOS Finder temporary files (inode-numbered duplicates)
-.!*
+.!*PRD.json
+RALPH_STATUS.json
+ralph.log
+archive/
+PROMPT.md
+TASKS.md
+PROGRESS.md
+PRD.json

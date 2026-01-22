@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/nhalm/pgxkit v1.2.0
+	github.com/nhalm/pgxkit/v2 v2.0.0
 	github.com/pganalyze/pg_query_go/v6 v6.1.0
 	github.com/wasilibs/go-pgquery v0.0.0-20250409022910-10ac41983c07
 	golang.org/x/tools v0.40.0

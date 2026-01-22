@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/nhalm/pgxkit/v2"
 	"github.com/nhalm/skimatik/example-app/domain"
 	"github.com/nhalm/skimatik/example-app/repository/generated"
 )
@@ -12,21 +13,23 @@ import (
 // PostRepository represents a custom repository that embeds the generated queries
 // This demonstrates the recommended pattern for extending generated functionality
 type PostRepository struct {
+	db *pgxkit.DB
 	// Embed the generated queries for basic operations
 	*generated.PostsQueries
 }
 
-// NewPostRepository creates a new post repository with the generated queries
-func NewPostRepository(queries *generated.PostsQueries) *PostRepository {
+// NewPostRepository creates a new post repository with the database connection
+func NewPostRepository(db *pgxkit.DB) *PostRepository {
 	return &PostRepository{
-		PostsQueries: queries,
+		db:           db,
+		PostsQueries: generated.NewPostsQueries(),
 	}
 }
 
 // Implement service.PostRepository interface methods with domain type conversion
 
 func (r *PostRepository) GetPublishedPosts(ctx context.Context, limit int) ([]domain.PostSummary, error) {
-	results, err := r.PostsQueries.GetPublishedPosts(ctx, limit)
+	results, err := r.PostsQueries.GetPublishedPosts(ctx, r.db, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get published posts: %w", err)
 	}
@@ -54,7 +57,7 @@ func (r *PostRepository) GetPublishedPosts(ctx context.Context, limit int) ([]do
 }
 
 func (r *PostRepository) GetPostWithAuthor(ctx context.Context, postID uuid.UUID) (*domain.PostDetail, error) {
-	result, err := r.PostsQueries.GetPostWithAuthor(ctx, postID)
+	result, err := r.PostsQueries.GetPostWithAuthor(ctx, r.db, postID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get post with author: %w", err)
 	}
@@ -81,7 +84,7 @@ func (r *PostRepository) GetPostWithAuthor(ctx context.Context, postID uuid.UUID
 }
 
 func (r *PostRepository) GetUserPosts(ctx context.Context, userID uuid.UUID) ([]domain.PostSummary, error) {
-	results, err := r.PostsQueries.GetUserPosts(ctx, userID)
+	results, err := r.PostsQueries.GetUserPosts(ctx, r.db, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user posts: %w", err)
 	}
@@ -110,7 +113,7 @@ func (r *PostRepository) GetUserPosts(ctx context.Context, userID uuid.UUID) ([]
 
 func (r *PostRepository) GetPostsWithStats(ctx context.Context, limit int) ([]domain.PostWithStats, error) {
 	// Use GetPostsWithCommentCount as the equivalent for "stats"
-	results, err := r.PostsQueries.GetPostsWithCommentCount(ctx, limit)
+	results, err := r.PostsQueries.GetPostsWithCommentCount(ctx, r.db, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get posts with stats: %w", err)
 	}
@@ -131,7 +134,7 @@ func (r *PostRepository) GetPostsWithStats(ctx context.Context, limit int) ([]do
 }
 
 func (r *PostRepository) PublishPost(ctx context.Context, postID uuid.UUID) error {
-	err := r.PostsQueries.PublishPost(ctx, postID)
+	err := r.PostsQueries.PublishPost(ctx, r.db, postID)
 	if err != nil {
 		return fmt.Errorf("failed to publish post: %w", err)
 	}

@@ -58,7 +58,7 @@ func (cg *CodeGenerator) generateTableCode(table Table) (string, error) {
 	coreImports := []string{
 		"context",
 		"fmt",
-		"github.com/nhalm/pgxkit",
+		"github.com/nhalm/pgxkit/v2",
 		"github.com/google/uuid",
 	}
 
@@ -670,7 +670,7 @@ func (cg *CodeGenerator) generateQueryCode(sourceFile string, queries []Query) (
 	// Add standard imports
 	standardImports := []string{
 		"context",
-		"github.com/nhalm/pgxkit",
+		"github.com/nhalm/pgxkit/v2",
 		"github.com/google/uuid",
 	}
 

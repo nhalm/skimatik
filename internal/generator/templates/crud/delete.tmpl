@@ -1,8 +1,8 @@
 // Delete removes a {{.StructName}} by ID
-func (r *{{.RepositoryName}}) Delete(ctx context.Context, id {{.IDType}}) error {
+func (r *{{.RepositoryName}}) Delete(ctx context.Context, db pgxkit.Executor, id {{.IDType}}) error {
 	query := `DELETE FROM {{.TableName}} WHERE {{.IDColumn}} = $1`
-	
-	rowsAffected, err := ExecuteNonQueryWithRowsAffected(ctx, r.db, "delete", "{{.StructName}}", query, id)
+
+	rowsAffected, err := ExecuteNonQueryWithRowsAffected(ctx, db, "delete", "{{.StructName}}", query, id)
 	if err != nil {
 		return err
 	}
