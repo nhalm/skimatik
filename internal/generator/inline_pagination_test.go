@@ -60,7 +60,7 @@ func TestInlinePagination_TemplateGeneration(t *testing.T) {
 	}
 
 	expectedListComponents := []string{
-		"func (r *UsersRepository) ListPaginated(ctx context.Context, params PaginationParams) (*PaginationResult[Users], error)",
+		"func (r *UsersRepository) ListPaginated(ctx context.Context, db pgxkit.Executor, params PaginationParams) (*PaginationResult[Users], error)",
 		"validatePaginationParams(params)",
 		"decodeJSONCursor",
 		"encodeJSONCursor",

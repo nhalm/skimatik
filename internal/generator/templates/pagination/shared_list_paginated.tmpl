@@ -1,5 +1,5 @@
 // ListPaginated retrieves {{.StructName}}s with cursor-based pagination
-func (r *{{.RepositoryName}}) ListPaginated(ctx context.Context, params PaginationParams) (*PaginationResult[{{.StructName}}], error) {
+func (r *{{.RepositoryName}}) ListPaginated(ctx context.Context, db pgxkit.Executor, params PaginationParams) (*PaginationResult[{{.StructName}}], error) {
 	// Validate parameters
 	if err := validatePaginationParams(params); err != nil {
 		return nil, err
@@ -73,7 +73,7 @@ func (r *{{.RepositoryName}}) ListPaginated(ctx context.Context, params Paginati
 	`, orderBy, direction, "{{.IDColumnType}}", orderBy, orderDirection)
 
 	// Execute query with limit + 1 to check if there are more items
-	rows, err := ExecuteQuery(ctx, r.db, "list_paginated", "{{.StructName}}", query, cursor, int32(limit+1))
+	rows, err := ExecuteReadQuery(ctx, db, "list_paginated", "{{.StructName}}", query, cursor, int32(limit+1))
 	if err != nil {
 		return nil, fmt.Errorf("pagination query failed: %w", err)
 	}
