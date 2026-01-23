@@ -199,7 +199,7 @@ skimatik --config=skimatik.yaml
 **Fix**: Generated code automatically wraps these as `ErrAlreadyExists`:
 
 ```go
-user, err := repo.Create(ctx, params)
+user, err := repo.Create(ctx, db, params)
 if err != nil {
     if IsAlreadyExists(err) {
         // Handle duplicate
@@ -216,7 +216,7 @@ if err != nil {
 **Fix**: Generated code wraps these as `ErrInvalidReference`. Use the helper function:
 
 ```go
-post, err := repo.Create(ctx, params)
+post, err := repo.Create(ctx, db, params)
 if err != nil {
     if IsInvalidReference(err) {
         // Handle invalid foreign key

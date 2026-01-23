@@ -260,12 +260,13 @@ ORDER BY published_at DESC
 This generates TWO functions:
 
 ```go
-// 1. Regular function - returns all results using your ORDER BY
-func (r *PostsQueries) GetPublishedPosts(ctx context.Context) ([]GetPublishedPostsResult, error)
+// 1. Regular function - returns all results using your ORDER BY (db parameter required)
+func (r *PostsQueries) GetPublishedPosts(ctx context.Context, db pgxkit.Executor) ([]GetPublishedPostsResult, error)
 
-// 2. Paginated function - uses ORDER BY direction from your SQL
+// 2. Paginated function - uses ORDER BY direction from your SQL (db parameter required)
 func (r *PostsQueries) GetPublishedPostsPaginated(
     ctx context.Context,
+    db pgxkit.Executor,
     params PaginationParams,     // Supports NextCursor and BeforeCursor
 ) (*PaginationResult[GetPublishedPostsResult], error)
 ```
@@ -282,9 +283,10 @@ func (r *PostsQueries) GetPublishedPostsPaginated(
 
 **Usage Example:**
 ```go
-// First page
+// First page (pass db)
 result, err := queries.GetPublishedPostsPaginated(
     ctx,
+    db,
     repositories.PaginationParams{
         Limit: 20,
     },
@@ -294,6 +296,7 @@ result, err := queries.GetPublishedPostsPaginated(
 if result.HasMore {
     nextResult, err := queries.GetPublishedPostsPaginated(
         ctx,
+        db,
         repositories.PaginationParams{
             Limit:      20,
             NextCursor: result.NextCursor,
@@ -305,6 +308,7 @@ if result.HasMore {
 if result.HasPrevious {
     prevResult, err := queries.GetPublishedPostsPaginated(
         ctx,
+        db,
         repositories.PaginationParams{
             Limit:        20,
             BeforeCursor: result.BeforeCursor,

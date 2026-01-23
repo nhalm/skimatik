@@ -147,8 +147,8 @@ package main
 import (
     "context"
     "log"
-    
-    "github.com/nhalm/pgxkit"
+
+    "github.com/nhalm/pgxkit/v2"
     "your-project/repositories"
 )
 
@@ -160,41 +160,43 @@ func main() {
         log.Fatal(err)
     }
     defer db.Shutdown(context.Background())
-    
-    // Create repository (pass nil for default UUID v7 generator)
-    userRepo := repositories.NewUsersRepository(db, nil)
 
-    // Create user
-    user, err := userRepo.Create(ctx, repositories.CreateUsersParams{
+    ctx := context.Background()
+
+    // Create repository (pass nil for default UUID v7 generator)
+    userRepo := repositories.NewUsersRepository(nil)
+
+    // Create user (pass db to method)
+    user, err := userRepo.Create(ctx, db, repositories.CreateUsersParams{
         Name:  "John Doe",
         Email: "john@example.com",
     })
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // Get user by ID
-    fetchedUser, err := userRepo.Get(ctx, user.Id)
+    fetchedUser, err := userRepo.Get(ctx, db, user.Id)
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // List all users
-    users, err := userRepo.List(ctx)
+    users, err := userRepo.List(ctx, db)
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // Update user
-    updatedUser, err := userRepo.Update(ctx, user.Id, repositories.UpdateUsersParams{
+    updatedUser, err := userRepo.Update(ctx, db, user.Id, repositories.UpdateUsersParams{
         Name: "Jane Doe",
     })
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // Delete user
-    err = userRepo.Delete(ctx, user.Id)
+    err = userRepo.Delete(ctx, db, user.Id)
     if err != nil {
         log.Fatal(err)
     }
@@ -209,7 +211,7 @@ Table-based repositories include automatic bidirectional cursor-based pagination
 
 ```go
 // List first page (10 items)
-result, err := userRepo.ListPaginated(ctx, repositories.PaginationParams{
+result, err := userRepo.ListPaginated(ctx, db, repositories.PaginationParams{
     Limit:   10,
     OrderBy: "created_at",  // Sort by any supported column
 })
@@ -223,7 +225,7 @@ fmt.Printf("Has previous: %v\n", result.HasPrevious)
 
 // Navigate forward (next page)
 if result.HasMore {
-    nextResult, err := userRepo.ListPaginated(ctx, repositories.PaginationParams{
+    nextResult, err := userRepo.ListPaginated(ctx, db, repositories.PaginationParams{
         Limit:      10,
         OrderBy:    "created_at",
         NextCursor: result.NextCursor,  // Forward pagination
@@ -235,7 +237,7 @@ if result.HasMore {
 
 // Navigate backward (previous page)
 if result.HasPrevious {
-    prevResult, err := userRepo.ListPaginated(ctx, repositories.PaginationParams{
+    prevResult, err := userRepo.ListPaginated(ctx, db, repositories.PaginationParams{
         Limit:        10,
         OrderBy:      "created_at",
         BeforeCursor: result.BeforeCursor,  // Backward pagination
@@ -270,11 +272,12 @@ This generates TWO functions:
 
 ```go
 // Regular function - returns all results using your ORDER BY
-posts, err := postQueries.GetPublishedPosts(ctx)
+posts, err := postQueries.GetPublishedPosts(ctx, db)
 
 // Paginated function - uses ORDER BY direction from your SQL
 result, err := postQueries.GetPublishedPostsPaginated(
     ctx,
+    db,
     repositories.PaginationParams{
         Limit: 20,
         // NextCursor: result.NextCursor,  // for next page
@@ -294,6 +297,7 @@ result, err := postQueries.GetPublishedPostsPaginated(
 // Get first page
 result, err := postQueries.GetPublishedPostsPaginated(
     ctx,
+    db,
     repositories.PaginationParams{
         Limit: 10,
     },
@@ -303,6 +307,7 @@ result, err := postQueries.GetPublishedPostsPaginated(
 if result.HasMore {
     nextPage, err := postQueries.GetPublishedPostsPaginated(
         ctx,
+        db,
         repositories.PaginationParams{
             Limit:      10,
             NextCursor: result.NextCursor,
@@ -314,6 +319,7 @@ if result.HasMore {
 if result.HasPrevious {
     prevPage, err := postQueries.GetPublishedPostsPaginated(
         ctx,
+        db,
         repositories.PaginationParams{
             Limit:        10,
             BeforeCursor: result.BeforeCursor,
@@ -358,7 +364,7 @@ ORDER BY created_at ASC
 ```go
 import "your-project/repositories"
 
-user, err := userRepo.Get(ctx, userID)
+user, err := userRepo.Get(ctx, db, userID)
 if err != nil {
     if repositories.IsNotFound(err) {
         // Handle not found
@@ -386,43 +392,33 @@ if err != nil {
 // Define your domain interface
 type UserManager interface {
     CreateUser(ctx context.Context, params repositories.CreateUsersParams) (*repositories.Users, error)
-    GetActiveUsers(ctx context.Context) ([]repositories.Users, error)
+    GetActiveUsers(ctx context.Context, limit int) ([]repositories.Users, error)
 }
 
-// Implement by embedding generated repository
+// Implement by embedding generated repository and queries
 type UserService struct {
-    *repositories.UsersRepository // Embed for CRUD operations
-    db *pgxkit.DB                 // Explicit db field for custom operations
+    db *pgxkit.DB                   // Store db to pass to generated methods
+    *repositories.UsersRepository   // Embed for CRUD operations
+    *repositories.UsersQueries      // Embed for custom SQL queries
 }
 
-func NewUserService(db *pgxkit.DB) UserManager {
+func NewUserService(db *pgxkit.DB) *UserService {
     return &UserService{
-        UsersRepository: repositories.NewUsersRepository(db, nil),
-        db:             db,
+        db:              db,
+        UsersRepository: repositories.NewUsersRepository(nil),  // nil = default UUID v7
+        UsersQueries:    repositories.NewUsersQueries(),
     }
 }
 
-// Add custom business logic using shared utilities
-func (s *UserService) GetActiveUsers(ctx context.Context) ([]repositories.Users, error) {
-    query := `SELECT id, name, email, created_at FROM users WHERE is_active = true`
-    
-    rows, err := repositories.ExecuteQuery(ctx, s.db, "get_active_users", "Users", query)
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
-    
-    var users []repositories.Users
-    for rows.Next() {
-        var user repositories.Users
-        err := rows.Scan(&user.Id, &user.Name, &user.Email, &user.CreatedAt)
-        if err != nil {
-            return nil, repositories.HandleDatabaseError("scan", "Users", err)
-        }
-        users = append(users, user)
-    }
-    
-    return users, repositories.HandleRowsResult("Users", rows)
+// Delegate to generated CRUD methods, passing db
+func (s *UserService) CreateUser(ctx context.Context, params repositories.CreateUsersParams) (*repositories.Users, error) {
+    return s.UsersRepository.Create(ctx, s.db, params)
+}
+
+// Use generated custom queries from .sql files
+func (s *UserService) GetActiveUsers(ctx context.Context, limit int) ([]repositories.Users, error) {
+    // Assumes GetActiveUsers query is defined in a .sql file
+    return s.UsersQueries.GetActiveUsers(ctx, s.db, limit)
 }
 ```
 

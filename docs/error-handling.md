@@ -26,11 +26,11 @@ import (
     "github.com/google/uuid"
 )
 
-// Generated usage in Get operations
-func (r *UsersRepository) Get(ctx context.Context, id uuid.UUID) (*Users, error) {
+// Generated usage in Get operations (db parameter required)
+func (r *UsersRepository) Get(ctx context.Context, db pgxkit.Executor, id uuid.UUID) (*Users, error) {
     query := `SELECT id, name, email, created_at FROM users WHERE id = $1`
 
-    row := ExecuteQueryRow(ctx, r.db, "get", "Users", query, id)
+    row := ExecuteQueryRow(ctx, db, "get", "Users", query, id)
     var user Users
     err := row.Scan(&user.Id, &user.Name, &user.Email, &user.CreatedAt)
     if err := HandleQueryRowError("get", "Users", err); err != nil {
@@ -39,8 +39,8 @@ func (r *UsersRepository) Get(ctx context.Context, id uuid.UUID) (*Users, error)
     return &user, nil
 }
 
-// Usage in application code
-user, err := userRepo.Get(ctx, userID)
+// Usage in application code (pass db)
+user, err := userRepo.Get(ctx, db, userID)
 if err != nil {
     if IsNotFound(err) {
         return nil, fmt.Errorf("user not found")
@@ -53,11 +53,11 @@ if err != nil {
 Used when attempting to create a resource that already exists. The error handling automatically detects PostgreSQL unique constraint violations (error code 23505) and converts them to `ErrAlreadyExists`.
 
 ```go
-// Generated usage in Create operations
-func (r *UsersRepository) Create(ctx context.Context, params CreateUsersParams) (*Users, error) {
+// Generated usage in Create operations (db parameter required)
+func (r *UsersRepository) Create(ctx context.Context, db pgxkit.Executor, params CreateUsersParams) (*Users, error) {
     query := `INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id, name, email, created_at`
 
-    row := ExecuteQueryRow(ctx, r.db, "create", "Users", query, params.Name, params.Email)
+    row := ExecuteQueryRow(ctx, db, "create", "Users", query, params.Name, params.Email)
     var user Users
     err := row.Scan(&user.Id, &user.Name, &user.Email, &user.CreatedAt)
     if err := HandleQueryRowError("create", "Users", err); err != nil {
@@ -66,8 +66,8 @@ func (r *UsersRepository) Create(ctx context.Context, params CreateUsersParams) 
     return &user, nil
 }
 
-// Usage in application code
-user, err := userRepo.Create(ctx, params)
+// Usage in application code (pass db)
+user, err := userRepo.Create(ctx, db, params)
 if err != nil {
     if IsAlreadyExists(err) {
         return nil, fmt.Errorf("user with email %s already exists", params.Email)
@@ -80,11 +80,11 @@ if err != nil {
 Used when a foreign key constraint is violated. The error handling automatically detects PostgreSQL foreign key violations (error code 23503) and converts them to `ErrInvalidReference`.
 
 ```go
-// Generated usage when referencing non-existent foreign key
-func (r *PostsRepository) Create(ctx context.Context, params CreatePostsParams) (*Posts, error) {
+// Generated usage when referencing non-existent foreign key (db parameter required)
+func (r *PostsRepository) Create(ctx context.Context, db pgxkit.Executor, params CreatePostsParams) (*Posts, error) {
     query := `INSERT INTO posts (title, user_id) VALUES ($1, $2) RETURNING id, title, user_id, created_at`
 
-    row := ExecuteQueryRow(ctx, r.db, "create", "Posts", query, params.Title, params.UserID)
+    row := ExecuteQueryRow(ctx, db, "create", "Posts", query, params.Title, params.UserID)
     var post Posts
     err := row.Scan(&post.Id, &post.Title, &post.UserID, &post.CreatedAt)
     if err := HandleQueryRowError("create", "Posts", err); err != nil {
@@ -93,8 +93,8 @@ func (r *PostsRepository) Create(ctx context.Context, params CreatePostsParams) 
     return &post, nil
 }
 
-// Usage in application code
-post, err := postRepo.Create(ctx, params)
+// Usage in application code (pass db)
+post, err := postRepo.Create(ctx, db, params)
 if err != nil {
     if IsInvalidReference(err) {
         return nil, fmt.Errorf("user %s does not exist", params.UserID)
@@ -108,10 +108,11 @@ Used when database constraints are violated. The error handling automatically de
 
 ```go
 // Database-level validation (PostgreSQL CHECK constraints, NOT NULL)
-func (r *UsersRepository) Create(ctx context.Context, params CreateUsersParams) (*Users, error) {
+// db parameter required for all methods
+func (r *UsersRepository) Create(ctx context.Context, db pgxkit.Executor, params CreateUsersParams) (*Users, error) {
     query := `INSERT INTO users (name, email, age) VALUES ($1, $2, $3) RETURNING id, name, email, age, created_at`
 
-    row := ExecuteQueryRow(ctx, r.db, "create", "Users", query, params.Name, params.Email, params.Age)
+    row := ExecuteQueryRow(ctx, db, "create", "Users", query, params.Name, params.Email, params.Age)
     var user Users
     err := row.Scan(&user.Id, &user.Name, &user.Email, &user.Age, &user.CreatedAt)
     // HandleQueryRowError automatically detects constraint violations
@@ -121,8 +122,8 @@ func (r *UsersRepository) Create(ctx context.Context, params CreateUsersParams) 
     return &user, nil
 }
 
-// Usage in application code
-user, err := userRepo.Create(ctx, params)
+// Usage in application code (pass db)
+user, err := userRepo.Create(ctx, db, params)
 if err != nil {
     if IsValidationError(err) {
         return nil, fmt.Errorf("validation failed: %w", err)
@@ -140,7 +141,7 @@ func (s *UserService) CreateUser(ctx context.Context, params CreateUsersParams) 
         return nil, fmt.Errorf("invalid email format: %s", params.Email)
     }
 
-    return s.usersRepo.Create(ctx, params)
+    return s.usersRepo.Create(ctx, s.db, params)
 }
 ```
 
@@ -148,11 +149,11 @@ func (s *UserService) CreateUser(ctx context.Context, params CreateUsersParams) 
 Used for general database operation failures. All database errors are automatically wrapped in a `DatabaseError` struct that provides structured error information including operation, entity, and error type.
 
 ```go
-// Generated usage for connection and query errors
-func (r *UsersRepository) List(ctx context.Context) ([]Users, error) {
+// Generated usage for connection and query errors (db parameter required)
+func (r *UsersRepository) List(ctx context.Context, db pgxkit.Executor) ([]Users, error) {
     query := `SELECT id, name, email, created_at FROM users ORDER BY created_at DESC`
 
-    rows, err := ExecuteQuery(ctx, r.db, "list", "Users", query)
+    rows, err := ExecuteQuery(ctx, db, "list", "Users", query)
     if err != nil {
         // ExecuteQuery uses HandleDatabaseError for connection/query issues
         return nil, err
@@ -237,7 +238,7 @@ import (
 )
 
 func (s *UserService) GetUser(ctx context.Context, id uuid.UUID) (*User, error) {
-    user, err := s.userRepo.Get(ctx, id)
+    user, err := s.userRepo.Get(ctx, s.db, id)
     if err != nil {
         if IsNotFound(err) {
             return nil, fmt.Errorf("user %s not found", id)
@@ -253,7 +254,7 @@ func (s *UserService) GetUser(ctx context.Context, id uuid.UUID) (*User, error) 
 ```go
 func (s *UserService) CreateUserWithProfile(ctx context.Context, userData CreateUsersParams, profileData string) (*User, error) {
     return pgxkit.Retry(ctx, func(ctx context.Context) (*User, error) {
-        user, err := s.userRepo.Create(ctx, userData)
+        user, err := s.userRepo.Create(ctx, s.db, userData)
         if err != nil {
             if IsAlreadyExists(err) {
                 return nil, fmt.Errorf("user with email %s already exists", userData.Email)
@@ -264,7 +265,7 @@ func (s *UserService) CreateUserWithProfile(ctx context.Context, userData Create
             return nil, fmt.Errorf("failed to create user: %w", err)
         }
 
-        _, err = s.profileRepo.Create(ctx, CreateProfileParams{
+        _, err = s.profileRepo.Create(ctx, s.db, CreateProfileParams{
             UserID: user.Id,
             Bio:    profileData,
         })
@@ -390,9 +391,9 @@ func (s *UserService) logError(operation string, err error, context map[string]i
     logger.WithFields(logData).Log(logData["severity"], "Database operation failed")
 }
 
-// Usage in service methods
+// Usage in service methods (pass db to repository methods)
 func (s *UserService) GetUser(ctx context.Context, id uuid.UUID) (*User, error) {
-    user, err := s.userRepo.Get(ctx, id)
+    user, err := s.userRepo.Get(ctx, s.db, id)
     if err != nil {
         s.logError("get_user", err, map[string]interface{}{
             "user_id": id,
@@ -444,9 +445,13 @@ func (m *ErrorMetrics) RecordError(operation string, err error) {
 The generated `*WithRetry` methods use `pgxkit.Retry` which automatically handles transient errors (connection issues, deadlocks, serialization failures) with exponential backoff and jitter.
 
 ```go
-func (r *UsersRepository) CreateWithRetry(ctx context.Context, params CreateUsersParams) (*Users, error) {
+func (r *UsersRepository) CreateWithRetry(ctx context.Context, db pgxkit.Executor, params CreateUsersParams) (*Users, error) {
+    pgdb, ok := db.(*pgxkit.DB)
+    if !ok {
+        return r.Create(ctx, db, params)
+    }
     return pgxkit.Retry(ctx, func(ctx context.Context) (*Users, error) {
-        return r.Create(ctx, params)
+        return r.Create(ctx, pgdb, params)
     })
 }
 ```
@@ -459,7 +464,7 @@ Use `pgxkit.RetryOption` functions to customize retry behavior:
 // Custom retry for critical operations
 func (s *UserService) CreateCriticalUser(ctx context.Context, params CreateUsersParams) (*User, error) {
     return pgxkit.Retry(ctx, func(ctx context.Context) (*User, error) {
-        user, err := s.userRepo.Create(ctx, params)
+        user, err := s.userRepo.Create(ctx, s.db, params)
         if err != nil {
             s.logError("create_critical_user_attempt", err, map[string]interface{}{
                 "user_email": params.Email,

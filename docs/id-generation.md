@@ -37,7 +37,7 @@ Generated repositories automatically use a UUID v7 generator by default:
 
 ```go
 import (
-    "github.com/nhalm/pgxkit"
+    "github.com/nhalm/pgxkit/v2"
     "your-project/repositories"
 )
 
@@ -45,11 +45,14 @@ func main() {
     db := pgxkit.NewDB()
     defer db.Close()
 
+    ctx := context.Background()
+
     // UUID v7 generator is automatically set (pass nil)
-    userRepo := repositories.NewUsersRepository(db, nil)
+    userRepo := repositories.NewUsersRepository(nil)
 
     // IDs are automatically generated using UUID v7
-    user, err := userRepo.Create(ctx, repositories.CreateUsersParams{
+    // Pass db to the method
+    user, err := userRepo.Create(ctx, db, repositories.CreateUsersParams{
         Name:  "Jane Doe",
         Email: "jane@example.com",
     })
@@ -81,9 +84,12 @@ If you need random UUIDs instead of time-ordered, pass a custom generator to the
 import "github.com/google/uuid"
 
 // Pass UUID v4 generator to constructor
-userRepo := repositories.NewUsersRepository(db, func() uuid.UUID {
+userRepo := repositories.NewUsersRepository(func() uuid.UUID {
     return uuid.New() // UUID v4
 })
+
+// Pass db to methods
+user, err := userRepo.Create(ctx, db, params)
 ```
 
 ### Deterministic IDs for Testing
@@ -95,9 +101,10 @@ func TestUserCreation(t *testing.T) {
     testID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
     // Pass deterministic generator to constructor
-    userRepo := repositories.NewUsersRepository(db, func() uuid.UUID { return testID })
+    userRepo := repositories.NewUsersRepository(func() uuid.UUID { return testID })
 
-    user, err := userRepo.Create(ctx, repositories.CreateUsersParams{
+    // Pass db to method
+    user, err := userRepo.Create(ctx, db, repositories.CreateUsersParams{
         Name:  "Test User",
         Email: "test@example.com",
     })
@@ -116,13 +123,14 @@ func TestMultipleUsers(t *testing.T) {
     counter := 0
 
     // Pass sequential generator to constructor
-    userRepo := repositories.NewUsersRepository(db, func() uuid.UUID {
+    userRepo := repositories.NewUsersRepository(func() uuid.UUID {
         counter++
         return uuid.MustParse(fmt.Sprintf("00000000-0000-0000-0000-%012d", counter))
     })
 
-    user1, _ := userRepo.Create(ctx, CreateUsersParams{Name: "User 1", Email: "user1@example.com"})
-    user2, _ := userRepo.Create(ctx, CreateUsersParams{Name: "User 2", Email: "user2@example.com"})
+    // Pass db to methods
+    user1, _ := userRepo.Create(ctx, db, CreateUsersParams{Name: "User 1", Email: "user1@example.com"})
+    user2, _ := userRepo.Create(ctx, db, CreateUsersParams{Name: "User 2", Email: "user2@example.com"})
 
     // user1.Id = 00000000-0000-0000-0000-000000000001
     // user2.Id = 00000000-0000-0000-0000-000000000002
@@ -141,11 +149,14 @@ ULIDs are similar to UUID v7 but with better readability:
 import "github.com/oklog/ulid/v2"
 
 // Pass ULID generator to constructor
-userRepo := repositories.NewUsersRepository(db, func() uuid.UUID {
+userRepo := repositories.NewUsersRepository(func() uuid.UUID {
     entropy := ulid.DefaultEntropy()
     id := ulid.MustNew(ulid.Timestamp(time.Now()), entropy)
     return uuid.UUID(id)
 })
+
+// Pass db to methods
+user, err := userRepo.Create(ctx, db, params)
 ```
 
 ### KSUID (K-Sortable Unique Identifier)
@@ -156,12 +167,15 @@ KSUIDs are time-ordered and URL-safe:
 import "github.com/segmentio/ksuid"
 
 // Pass KSUID generator to constructor
-userRepo := repositories.NewUsersRepository(db, func() uuid.UUID {
+userRepo := repositories.NewUsersRepository(func() uuid.UUID {
     id := ksuid.New()
     var uuidBytes [16]byte
     copy(uuidBytes[:], id.Bytes())
     return uuid.UUID(uuidBytes)
 })
+
+// Pass db to methods
+user, err := userRepo.Create(ctx, db, params)
 ```
 
 ### Snowflake IDs (Twitter's Distributed ID)
@@ -175,12 +189,15 @@ import "github.com/bwmarrin/snowflake"
 node, _ := snowflake.NewNode(1)
 
 // Pass Snowflake generator to constructor
-userRepo := repositories.NewUsersRepository(db, func() uuid.UUID {
+userRepo := repositories.NewUsersRepository(func() uuid.UUID {
     id := node.Generate().Int64()
     var uuidBytes [16]byte
     binary.BigEndian.PutUint64(uuidBytes[8:], uint64(id))
     return uuid.UUID(uuidBytes)
 })
+
+// Pass db to methods
+user, err := userRepo.Create(ctx, db, params)
 ```
 
 ## Migration from Database-Generated IDs
@@ -214,7 +231,10 @@ Update all repository instantiation to use the new signature:
 userRepo := &UserRepository{db: db}
 
 // After (pass nil for default UUID v7 generator)
-userRepo := repositories.NewUsersRepository(db, nil)
+userRepo := repositories.NewUsersRepository(nil)
+
+// Pass db to methods
+user, err := userRepo.Create(ctx, db, params)
 ```
 
 ### Step 3: Regenerate Code
@@ -235,7 +255,10 @@ Unless you have specific requirements, use the default UUID v7 generator:
 
 ```go
 // Pass nil to use default UUID v7 generator
-userRepo := repositories.NewUsersRepository(db, nil)
+userRepo := repositories.NewUsersRepository(nil)
+
+// Pass db to methods
+user, err := userRepo.Create(ctx, db, params)
 ```
 
 ### 2. Use Deterministic Generators for Tests
@@ -244,11 +267,10 @@ Tests become more predictable and easier to debug:
 
 ```go
 func setupTestRepo(t *testing.T) *repositories.UsersRepository {
-    db := setupTestDB(t)
     testID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
     // Pass deterministic generator to constructor
-    return repositories.NewUsersRepository(db, func() uuid.UUID { return testID })
+    return repositories.NewUsersRepository(func() uuid.UUID { return testID })
 }
 ```
 
@@ -258,6 +280,7 @@ Within a service, use the same ID generation strategy:
 
 ```go
 type Service struct {
+    db        *pgxkit.DB
     userRepo  *repositories.UsersRepository
     orderRepo *repositories.OrdersRepository
 }
@@ -265,9 +288,15 @@ type Service struct {
 func NewService(db *pgxkit.DB) *Service {
     // Both repos use default UUID v7 (pass nil)
     return &Service{
-        userRepo:  repositories.NewUsersRepository(db, nil),
-        orderRepo: repositories.NewOrdersRepository(db, nil),
+        db:        db,
+        userRepo:  repositories.NewUsersRepository(nil),
+        orderRepo: repositories.NewOrdersRepository(nil),
     }
+}
+
+// Pass db to methods when calling
+func (s *Service) CreateUser(ctx context.Context, params repositories.CreateUsersParams) (*repositories.Users, error) {
+    return s.userRepo.Create(ctx, s.db, params)
 }
 ```
 
@@ -277,7 +306,7 @@ If using non-default generators, document why:
 
 ```go
 // Using UUID v4 instead of v7 to prevent ID prediction in public APIs
-userRepo := repositories.NewUsersRepository(db, func() uuid.UUID {
+userRepo := repositories.NewUsersRepository(func() uuid.UUID {
     return uuid.New() // UUID v4
 })
 ```
@@ -288,25 +317,28 @@ All generated repositories follow this pattern:
 
 ```go
 type <Table>Repository struct {
-    db             *pgxkit.DB
     generateIdFunc func() uuid.UUID // Private field for ID generation
 }
 
-func New<Table>Repository(db *pgxkit.DB, idGen func() uuid.UUID) *<Table>Repository {
+func New<Table>Repository(idGen func() uuid.UUID) *<Table>Repository {
     if idGen == nil {
         idGen = UUIDv7  // UUID v7 by default
     }
     return &<Table>Repository{
-        db:             db,
         generateIdFunc: idGen,
     }
+}
+
+// All methods require db pgxkit.Executor as parameter
+func (r *<Table>Repository) Create(ctx context.Context, db pgxkit.Executor, params Create<Table>Params) (*<Table>, error) {
+    // ...
 }
 ```
 
 Where:
-- `db`: Database connection (required parameter)
 - `idGen`: Optional ID generator function parameter (pass nil for default UUID v7)
 - `generateIdFunc`: Private field for ID generation (set from constructor parameter)
+- `db`: Passed to each method call as `pgxkit.Executor` (supports transactions)
 
 ## Troubleshooting
 
@@ -318,12 +350,15 @@ Where:
 
 ```go
 // Correct - default generator is set automatically when passing nil
-userRepo := repositories.NewUsersRepository(db, nil)
+userRepo := repositories.NewUsersRepository(nil)
 
 // Custom generator passed to constructor
-userRepo := repositories.NewUsersRepository(db, func() uuid.UUID {
+userRepo := repositories.NewUsersRepository(func() uuid.UUID {
     return uuid.New()
 })
+
+// Remember to pass db to methods
+user, err := userRepo.Create(ctx, db, params)
 ```
 
 ### ID Collision in Tests
@@ -335,12 +370,12 @@ userRepo := repositories.NewUsersRepository(db, func() uuid.UUID {
 ```go
 func TestA(t *testing.T) {
     id := uuid.MustParse("00000000-0000-0000-0000-000000000001")
-    userRepo := repositories.NewUsersRepository(db, func() uuid.UUID { return id })
+    userRepo := repositories.NewUsersRepository(func() uuid.UUID { return id })
 }
 
 func TestB(t *testing.T) {
     id := uuid.MustParse("00000000-0000-0000-0000-000000000002")
-    userRepo := repositories.NewUsersRepository(db, func() uuid.UUID { return id })
+    userRepo := repositories.NewUsersRepository(func() uuid.UUID { return id })
 }
 ```
 

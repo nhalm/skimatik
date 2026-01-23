@@ -89,26 +89,25 @@ curl http://localhost:8080/health
 ```go
 // Generated repository with shared utilities
 type UsersRepository struct {
-    db             *pgxkit.DB
     generateIdFunc func() uuid.UUID
 }
 
-func NewUsersRepository(db *pgxkit.DB, idGen func() uuid.UUID) *UsersRepository {
+func NewUsersRepository(idGen func() uuid.UUID) *UsersRepository {
     if idGen == nil {
         idGen = UUIDv7
     }
     return &UsersRepository{
-        db:             db,
         generateIdFunc: idGen,
     }
 }
 
-func (r *UsersRepository) Create(ctx context.Context, params CreateUsersParams) (*Users, error) {
+// All methods require db pgxkit.Executor as parameter
+func (r *UsersRepository) Create(ctx context.Context, db pgxkit.Executor, params CreateUsersParams) (*Users, error) {
     id := r.generateIdFunc()
     query := `INSERT INTO users (id, name, email) VALUES ($1, $2, $3) RETURNING ...`
 
     var user Users
-    row := ExecuteQueryRow(ctx, r.db, "create", "Users", query, id, params.Name, params.Email)
+    row := ExecuteQueryRow(ctx, db, "create", "Users", query, id, params.Name, params.Email)
     err := row.Scan(&user.Id, &user.Name, &user.Email, &user.CreatedAt)
     if err := HandleQueryRowError("create", "Users", err); err != nil {
         return nil, err
@@ -122,19 +121,28 @@ func (r *UsersRepository) Create(ctx context.Context, params CreateUsersParams) 
 ```go
 // Custom repository embeds generated repository
 type UserRepository struct {
+    db *pgxkit.DB         // Store db to pass to generated methods
     *UsersRepository      // Generated CRUD methods
     *UsersQueries         // Generated custom queries
 }
 
 func NewUserRepository(db *pgxkit.DB) *UserRepository {
     return &UserRepository{
-        UsersRepository: NewUsersRepository(db, nil),
-        UsersQueries:    NewUsersQueries(db),
+        db:              db,
+        UsersRepository: NewUsersRepository(nil),  // nil = default UUID v7
+        UsersQueries:    NewUsersQueries(),
     }
 }
 
-// Generated query methods already available via embedding
-// Custom business logic can be added as needed
+// Delegate to generated methods, passing db
+func (r *UserRepository) Create(ctx context.Context, params CreateUsersParams) (*Users, error) {
+    return r.UsersRepository.Create(ctx, r.db, params)
+}
+
+// Generated query methods also need db passed
+func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]Users, error) {
+    return r.UsersQueries.GetActiveUsers(ctx, r.db, limit)
+}
 ```
 
 ### Retry Operations
@@ -142,35 +150,56 @@ func NewUserRepository(db *pgxkit.DB) *UserRepository {
 // All CRUD operations have retry variants that handle transient errors
 // (connection issues, deadlocks, serialization failures)
 // Uses pgxkit.Retry for exponential backoff with jitter
+// Note: Retry methods also require db parameter
 
-func (r *UsersRepository) CreateWithRetry(ctx context.Context, params CreateUsersParams) (*Users, error) {
+func (r *UsersRepository) CreateWithRetry(ctx context.Context, db pgxkit.Executor, params CreateUsersParams) (*Users, error) {
+    pgdb, ok := db.(*pgxkit.DB)
+    if !ok {
+        return r.Create(ctx, db, params)
+    }
     return pgxkit.Retry(ctx, func(ctx context.Context) (*Users, error) {
-        return r.Create(ctx, params)
+        return r.Create(ctx, pgdb, params)
     })
 }
 
-func (r *UsersRepository) GetWithRetry(ctx context.Context, id uuid.UUID) (*Users, error) {
+func (r *UsersRepository) GetWithRetry(ctx context.Context, db pgxkit.Executor, id uuid.UUID) (*Users, error) {
+    pgdb, ok := db.(*pgxkit.DB)
+    if !ok {
+        return r.Get(ctx, db, id)
+    }
     return pgxkit.Retry(ctx, func(ctx context.Context) (*Users, error) {
-        return r.Get(ctx, id)
+        return r.Get(ctx, pgdb, id)
     })
 }
 
-func (r *UsersRepository) UpdateWithRetry(ctx context.Context, id uuid.UUID, params UpdateUsersParams) (*Users, error) {
+func (r *UsersRepository) UpdateWithRetry(ctx context.Context, db pgxkit.Executor, id uuid.UUID, params UpdateUsersParams) (*Users, error) {
+    pgdb, ok := db.(*pgxkit.DB)
+    if !ok {
+        return r.Update(ctx, db, id, params)
+    }
     return pgxkit.Retry(ctx, func(ctx context.Context) (*Users, error) {
-        return r.Update(ctx, id, params)
+        return r.Update(ctx, pgdb, id, params)
     })
 }
 
-func (r *UsersRepository) DeleteWithRetry(ctx context.Context, id uuid.UUID) error {
+func (r *UsersRepository) DeleteWithRetry(ctx context.Context, db pgxkit.Executor, id uuid.UUID) error {
+    pgdb, ok := db.(*pgxkit.DB)
+    if !ok {
+        return r.Delete(ctx, db, id)
+    }
     _, err := pgxkit.Retry(ctx, func(ctx context.Context) (struct{}, error) {
-        return struct{}{}, r.Delete(ctx, id)
+        return struct{}{}, r.Delete(ctx, pgdb, id)
     })
     return err
 }
 
-func (r *UsersRepository) ListWithRetry(ctx context.Context) ([]Users, error) {
+func (r *UsersRepository) ListWithRetry(ctx context.Context, db pgxkit.Executor) ([]Users, error) {
+    pgdb, ok := db.(*pgxkit.DB)
+    if !ok {
+        return r.List(ctx, db)
+    }
     return pgxkit.Retry(ctx, func(ctx context.Context) ([]Users, error) {
-        return r.List(ctx)
+        return r.List(ctx, pgdb)
     })
 }
 ```
@@ -234,24 +263,27 @@ func (s *APIServer) handleListUsers(w http.ResponseWriter, r *http.Request) {
 ### 1. **Direct Repository Usage**
 ```go
 // UUID v7 generator set automatically (pass nil)
-userRepo := repositories.NewUsersRepository(conn, nil)
-user, err := userRepo.Create(ctx, params)
+userRepo := repositories.NewUsersRepository(nil)
+// Pass db to methods
+user, err := userRepo.Create(ctx, db, params)
 ```
 
 ### 2. **Repository Implementation with Embedding**
 ```go
 type UserRepository struct {
+    db *pgxkit.DB                  // Store db to pass to methods
     *repositories.UsersRepository  // Embed for CRUD
 }
 
 func NewUserRepository(db *pgxkit.DB) *UserRepository {
     return &UserRepository{
-        UsersRepository: repositories.NewUsersRepository(db, nil),
+        db:              db,
+        UsersRepository: repositories.NewUsersRepository(nil),
     }
 }
 
-func (r *UserRepository) CustomMethod() {
-    // Add business logic using shared utilities
+func (r *UserRepository) Create(ctx context.Context, params repositories.CreateUsersParams) (*repositories.Users, error) {
+    return r.UsersRepository.Create(ctx, r.db, params)
 }
 ```
 
@@ -311,20 +343,23 @@ type UserManager interface {
 // Repository layer embeds generated repositories and queries
 // Converts generated types to domain types
 type UserRepository struct {
+    db *pgxkit.DB               // Store db to pass to generated methods
     *generated.UsersRepository  // Generated CRUD methods
     *generated.UsersQueries     // Generated custom query methods
 }
 
 func NewUserRepository(db *pgxkit.DB) *UserRepository {
     return &UserRepository{
-        UsersRepository: generated.NewUsersRepository(db, nil),
-        UsersQueries:    generated.NewUsersQueries(db),
+        db:              db,
+        UsersRepository: generated.NewUsersRepository(nil),  // nil = default UUID v7
+        UsersQueries:    generated.NewUsersQueries(),
     }
 }
 
 // Example domain conversion method
 func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]domain.UserSummary, error) {
-    results, err := r.UsersQueries.GetActiveUsers(ctx, limit)
+    // Pass r.db to generated query
+    results, err := r.UsersQueries.GetActiveUsers(ctx, r.db, limit)
     if err != nil {
         return nil, fmt.Errorf("failed to get active users: %w", err)
     }
@@ -436,23 +471,23 @@ ORDER BY published_at DESC
 
 **Generated Function Signatures:**
 ```go
-// Regular function - returns all results
-func (r *PostsQueries) GetPublishedPosts(ctx context.Context) ([]GetPublishedPostsResult, error)
+// Regular function - returns all results (requires db parameter)
+func (r *PostsQueries) GetPublishedPosts(ctx context.Context, db pgxkit.Executor) ([]GetPublishedPostsResult, error)
 
-// Paginated function - cursor-based pagination
-func (r *PostsQueries) GetPublishedPostsPaginated(ctx context.Context, params PaginationParams) (*PaginationResult[GetPublishedPostsResult], error)
+// Paginated function - cursor-based pagination (requires db parameter)
+func (r *PostsQueries) GetPublishedPostsPaginated(ctx context.Context, db pgxkit.Executor, params PaginationParams) (*PaginationResult[GetPublishedPostsResult], error)
 ```
 
 **Usage:**
 ```go
-// Get first page
-result, err := postQueries.GetPublishedPostsPaginated(ctx, generated.PaginationParams{
+// Get first page (pass db)
+result, err := postQueries.GetPublishedPostsPaginated(ctx, db, generated.PaginationParams{
     Limit: 20,
 })
 
 // Get next page
 if result.HasMore {
-    nextPage, err := postQueries.GetPublishedPostsPaginated(ctx, generated.PaginationParams{
+    nextPage, err := postQueries.GetPublishedPostsPaginated(ctx, db, generated.PaginationParams{
         Limit:      20,
         NextCursor: result.NextCursor,
     })
@@ -473,25 +508,25 @@ ORDER BY published_at DESC
 
 **Generated Function Signatures:**
 ```go
-// Regular function - filter parameter included
-func (r *PostsQueries) GetPostsByAuthor(ctx context.Context, authorId uuid.UUID) ([]GetPostsByAuthorResult, error)
+// Regular function - db comes after ctx, then filter parameters
+func (r *PostsQueries) GetPostsByAuthor(ctx context.Context, db pgxkit.Executor, authorId uuid.UUID) ([]GetPostsByAuthorResult, error)
 
-// Paginated function - filter parameters come BEFORE PaginationParams
-func (r *PostsQueries) GetPostsByAuthorPaginated(ctx context.Context, authorId uuid.UUID, params PaginationParams) (*PaginationResult[GetPostsByAuthorResult], error)
+// Paginated function - db comes after ctx, filter params, then PaginationParams
+func (r *PostsQueries) GetPostsByAuthorPaginated(ctx context.Context, db pgxkit.Executor, authorId uuid.UUID, params PaginationParams) (*PaginationResult[GetPostsByAuthorResult], error)
 ```
 
 **Usage:**
 ```go
 authorID := uuid.MustParse("...")
 
-// Get first page of posts by author
-result, err := postQueries.GetPostsByAuthorPaginated(ctx, authorID, generated.PaginationParams{
+// Get first page of posts by author (pass db)
+result, err := postQueries.GetPostsByAuthorPaginated(ctx, db, authorID, generated.PaginationParams{
     Limit: 10,
 })
 
 // Get next page (same author filter)
 if result.HasMore {
-    nextPage, err := postQueries.GetPostsByAuthorPaginated(ctx, authorID, generated.PaginationParams{
+    nextPage, err := postQueries.GetPostsByAuthorPaginated(ctx, db, authorID, generated.PaginationParams{
         Limit:      10,
         NextCursor: result.NextCursor,
     })
@@ -544,14 +579,14 @@ type PaginationParams struct {
 
 ```go
 // Get page 2, then navigate backward to page 1
-page2, _ := postQueries.GetPublishedPostsPaginated(ctx, generated.PaginationParams{
+page2, _ := postQueries.GetPublishedPostsPaginated(ctx, db, generated.PaginationParams{
     Limit:      10,
     NextCursor: page1.NextCursor,
 })
 
 // Go back to page 1
 if page2.HasPrevious {
-    page1Again, _ := postQueries.GetPublishedPostsPaginated(ctx, generated.PaginationParams{
+    page1Again, _ := postQueries.GetPublishedPostsPaginated(ctx, db, generated.PaginationParams{
         Limit:        10,
         BeforeCursor: page2.BeforeCursor,
     })

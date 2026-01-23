@@ -92,7 +92,7 @@ import (
     "time"
 
     "github.com/google/uuid"
-    "github.com/nhalm/pgxkit"
+    "github.com/nhalm/pgxkit/v2"
 )
 
 type Users struct {
@@ -105,21 +105,21 @@ type Users struct {
 func (u Users) GetID() uuid.UUID { return u.Id }
 
 type UsersRepository struct {
-    db             *pgxkit.DB
     generateIdFunc func() uuid.UUID
 }
 
-func NewUsersRepository(db *pgxkit.DB, idGen func() uuid.UUID) *UsersRepository {
+// Constructor takes only idGen (pass nil for default UUID v7)
+func NewUsersRepository(idGen func() uuid.UUID) *UsersRepository {
     if idGen == nil {
         idGen = UUIDv7
     }
     return &UsersRepository{
-        db:             db,
         generateIdFunc: idGen,
     }
 }
 
-func (r *UsersRepository) Create(ctx context.Context, params CreateUsersParams) (*Users, error) {
+// All methods require db pgxkit.Executor as parameter
+func (r *UsersRepository) Create(ctx context.Context, db pgxkit.Executor, params CreateUsersParams) (*Users, error) {
     // Generated CRUD operations with shared utilities
 }
 ```

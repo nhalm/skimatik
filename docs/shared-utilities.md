@@ -34,13 +34,14 @@ These are **internal helpers** used by generated code. You don't typically call 
 
 ```go
 // From users_generated.go
-func (r *UsersRepository) Create(ctx context.Context, params CreateUsersParams) (*Users, error) {
+// All methods require db pgxkit.Executor as parameter
+func (r *UsersRepository) Create(ctx context.Context, db pgxkit.Executor, params CreateUsersParams) (*Users, error) {
     id := r.generateIdFunc()
     query := `INSERT INTO users (id, name, email, bio) VALUES ($1, $2, $3, $4) RETURNING ...`
 
     var u Users
-    // Uses ExecuteQueryRow utility
-    row := ExecuteQueryRow(ctx, r.db, "create", "Users", query, id, params.Name, params.Email, params.Bio)
+    // Uses ExecuteQueryRow utility with db parameter
+    row := ExecuteQueryRow(ctx, db, "create", "Users", query, id, params.Name, params.Email, params.Bio)
     err := row.Scan(&u.Id, &u.Name, &u.Email, &u.Bio, &u.IsActive, &u.CreatedAt, &u.UpdatedAt)
 
     // Uses HandleQueryRowError utility
@@ -50,11 +51,11 @@ func (r *UsersRepository) Create(ctx context.Context, params CreateUsersParams) 
     return &u, nil
 }
 
-func (r *UsersRepository) List(ctx context.Context) ([]Users, error) {
+func (r *UsersRepository) List(ctx context.Context, db pgxkit.Executor) ([]Users, error) {
     query := `SELECT id, name, email FROM users ORDER BY id ASC`
 
-    // Uses ExecuteQuery utility
-    rows, err := ExecuteQuery(ctx, r.db, "list", "Users", query)
+    // Uses ExecuteQuery utility with db parameter
+    rows, err := ExecuteQuery(ctx, db, "list", "Users", query)
     if err != nil {
         return nil, err
     }
@@ -79,12 +80,13 @@ func (r *UsersRepository) List(ctx context.Context) ([]Users, error) {
 ```go
 // From users_queries_generated.go
 // Note: Example shows all fields for accuracy. Real queries may select fewer columns.
-func (r *UsersQueries) GetUserByEmail(ctx context.Context, email string) (*GetUserByEmailResult, error) {
+// All query methods require db pgxkit.Executor as parameter
+func (r *UsersQueries) GetUserByEmail(ctx context.Context, db pgxkit.Executor, email string) (*GetUserByEmailResult, error) {
     query := `SELECT id, name, email, bio, is_active, created_at, updated_at
 FROM users WHERE email = $1 AND is_active = true`
 
     var result GetUserByEmailResult
-    row := ExecuteQueryRow(ctx, r.db, "GetUserByEmail", "GetUserByEmailResult", query, email)
+    row := ExecuteQueryRow(ctx, db, "GetUserByEmail", "GetUserByEmailResult", query, email)
     err := row.Scan(&result.Id, &result.Name, &result.Email, &result.Bio, &result.IsActive, &result.CreatedAt, &result.UpdatedAt)
 
     if err := HandleQueryRowError("GetUserByEmail", "GetUserByEmailResult", err); err != nil {
@@ -96,28 +98,30 @@ FROM users WHERE email = $1 AND is_active = true`
 
 ## Custom Repositories Using Generated Code
 
-The recommended pattern is to **embed generated types** without adding a separate db field:
+The recommended pattern is to **embed generated types** and store a `db` field to pass to generated methods:
 
 ### Pattern 1: Embed Repository + Queries (Most Common)
 
 ```go
 // example-app/repository/user_repository.go
 type UserRepository struct {
+    db *pgxkit.DB               // Store db to pass to generated methods
     *generated.UsersRepository  // Provides CRUD operations
     *generated.UsersQueries     // Provides custom queries from .sql files
 }
 
 func NewUserRepository(db *pgxkit.DB) *UserRepository {
     return &UserRepository{
-        UsersRepository: generated.NewUsersRepository(db, nil),
-        UsersQueries:    generated.NewUsersQueries(db),
+        db:              db,
+        UsersRepository: generated.NewUsersRepository(nil),  // nil = default UUID v7
+        UsersQueries:    generated.NewUsersQueries(),
     }
 }
 
 // Add business logic methods that delegate to generated code
 func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]domain.UserSummary, error) {
-    // Uses generated query
-    results, err := r.UsersQueries.GetActiveUsers(ctx, limit)
+    // Uses generated query, passing db
+    results, err := r.UsersQueries.GetActiveUsers(ctx, r.db, limit)
     if err != nil {
         return nil, fmt.Errorf("failed to get active users: %w", err)
     }
@@ -140,19 +144,21 @@ func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]domai
 ```go
 // example-app/repository/post_repository.go
 type PostRepository struct {
+    db *pgxkit.DB            // Store db to pass to generated methods
     *generated.PostsQueries  // Only custom queries needed
 }
 
-func NewPostRepository(queries *generated.PostsQueries) *PostRepository {
+func NewPostRepository(db *pgxkit.DB) *PostRepository {
     return &PostRepository{
-        PostsQueries: queries,
+        db:           db,
+        PostsQueries: generated.NewPostsQueries(),
     }
 }
 
 // Add custom business logic using generated queries
 func (r *PostRepository) GetFeaturedPosts(ctx context.Context, limit int) ([]domain.PostSummary, error) {
-    // Use generated query as base
-    posts, err := r.GetPublishedPosts(ctx, limit*2)
+    // Use generated query as base, passing db
+    posts, err := r.GetPublishedPosts(ctx, r.db, limit*2)
     if err != nil {
         return nil, fmt.Errorf("failed to get posts: %w", err)
     }
@@ -176,7 +182,7 @@ func (r *PostRepository) GetFeaturedPosts(ctx context.Context, limit int) ([]dom
 ```go
 func (r *UserRepository) CreateUser(ctx context.Context, name, email string) (*User, error) {
     params := generated.CreateUsersParams{Name: name, Email: email}
-    return r.UsersRepository.Create(ctx, params)
+    return r.UsersRepository.Create(ctx, r.db, params)  // Pass db to method
 }
 ```
 
@@ -200,9 +206,9 @@ SELECT id, name, email FROM users WHERE is_active = true LIMIT $1;
 ```
 
 ```go
-// Use generated query
+// Use generated query, passing db
 func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]User, error) {
-    return r.UsersQueries.GetActiveUsers(ctx, limit)
+    return r.UsersQueries.GetActiveUsers(ctx, r.db, limit)
 }
 ```
 
@@ -216,26 +222,26 @@ func (r *UserRepository) GetActiveUsers(ctx context.Context) ([]User, error) {
 }
 ```
 
-### 3. Embed Generated Types, Don't Add DB Fields
+### 3. Store DB Field to Pass to Generated Methods
 
-**Good - example-app pattern:**
+**v2 API pattern - db field required:**
 ```go
 type UserRepository struct {
+    db *pgxkit.DB               // Required to pass to generated methods
     *generated.UsersRepository
     *generated.UsersQueries
 }
-```
 
-**Acceptable only for edge cases - separate db field:**
-```go
-type UserRepository struct {
-    *generated.UsersRepository
-    *generated.UsersQueries
-    db *pgxkit.DB  // Only if you need raw SQL not in .sql files
+func NewUserRepository(db *pgxkit.DB) *UserRepository {
+    return &UserRepository{
+        db:              db,
+        UsersRepository: generated.NewUsersRepository(nil),
+        UsersQueries:    generated.NewUsersQueries(),
+    }
 }
 ```
 
-The separate db field pattern should be rare. Most custom logic belongs in .sql files or service layer, not as raw SQL in repositories.
+The `db` field is needed because the v2 API passes the executor to each method, enabling transaction support.
 
 ## Benefits of This Approach
 

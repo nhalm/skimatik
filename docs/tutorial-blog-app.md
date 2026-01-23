@@ -130,28 +130,30 @@ import (
     "fmt"
 
     "github.com/google/uuid"
-    "github.com/nhalm/pgxkit"
+    "github.com/nhalm/pgxkit/v2"
     "your-project/domain"
     "your-project/generated"
 )
 
 // Custom repository that embeds generated code
 type UserRepository struct {
+    db *pgxkit.DB               // Store db to pass to generated methods
     *generated.UsersRepository  // Generated CRUD operations
     *generated.UsersQueries     // Generated custom queries
 }
 
 func NewUserRepository(db *pgxkit.DB) *UserRepository {
     return &UserRepository{
-        UsersRepository: generated.NewUsersRepository(db, nil),
-        UsersQueries:    generated.NewUsersQueries(db),
+        db:              db,
+        UsersRepository: generated.NewUsersRepository(nil),  // nil = default UUID v7
+        UsersQueries:    generated.NewUsersQueries(),
     }
 }
 
 // Add custom business logic methods
 func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]domain.UserSummary, error) {
-    // Use generated query and convert to domain types
-    results, err := r.UsersQueries.GetActiveUsers(ctx, fmt.Sprintf("%d", limit))
+    // Use generated query and convert to domain types (pass r.db)
+    results, err := r.UsersQueries.GetActiveUsers(ctx, r.db, limit)
     if err != nil {
         return nil, fmt.Errorf("failed to get active users: %w", err)
     }

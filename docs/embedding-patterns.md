@@ -38,7 +38,7 @@ skimatik generates the foundational data access layer:
 package generated
 
 type Users struct {
-    ID        uuid.UUID `json:"id" db:"id"`
+    Id        uuid.UUID `json:"id" db:"id"`
     Name      string    `json:"name" db:"name"`
     Email     string    `json:"email" db:"email"`
     CreatedAt time.Time `json:"created_at" db:"created_at"`
@@ -50,22 +50,27 @@ type CreateUsersParams struct {
 }
 
 type UsersRepository struct {
-    db *pgxkit.DB
+    generateIdFunc func() uuid.UUID
 }
 
-func NewUsersRepository(db *pgxkit.DB) *UsersRepository {
-    return &UsersRepository{db: db}
+// Constructor takes only idGen (pass nil for default UUID v7)
+func NewUsersRepository(idGen func() uuid.UUID) *UsersRepository {
+    if idGen == nil {
+        idGen = UUIDv7
+    }
+    return &UsersRepository{generateIdFunc: idGen}
 }
 
-func (r *UsersRepository) Create(ctx context.Context, params CreateUsersParams) (*Users, error) {
+// All methods require db pgxkit.Executor as parameter
+func (r *UsersRepository) Create(ctx context.Context, db pgxkit.Executor, params CreateUsersParams) (*Users, error) {
     // Generated CRUD implementation
 }
 
-func (r *UsersRepository) GetByID(ctx context.Context, id uuid.UUID) (*Users, error) {
+func (r *UsersRepository) Get(ctx context.Context, db pgxkit.Executor, id uuid.UUID) (*Users, error) {
     // Generated CRUD implementation
 }
 
-func (r *UsersRepository) List(ctx context.Context) ([]Users, error) {
+func (r *UsersRepository) List(ctx context.Context, db pgxkit.Executor) ([]Users, error) {
     // Generated CRUD implementation
 }
 ```
@@ -96,7 +101,7 @@ import (
     "context"
     "fmt"
     "github.com/google/uuid"
-    "github.com/nhalm/pgxkit"
+    "github.com/nhalm/pgxkit/v2"
     "your-project/repository/generated"
 )
 
@@ -110,14 +115,16 @@ type User struct {
 
 // Implementation embeds both generated repository (CRUD) and queries (custom SQL)
 type UserRepository struct {
+    db *pgxkit.DB  // Store db to pass to generated methods
     *generated.UsersRepository
     *generated.UsersQueries
 }
 
 func NewUserRepository(db *pgxkit.DB) *UserRepository {
     return &UserRepository{
-        UsersRepository: generated.NewUsersRepository(db, nil),
-        UsersQueries:    generated.NewUsersQueries(db),
+        db:              db,
+        UsersRepository: generated.NewUsersRepository(nil),  // nil = default UUID v7
+        UsersQueries:    generated.NewUsersQueries(),
     }
 }
 
@@ -128,7 +135,8 @@ func (r *UserRepository) CreateUser(ctx context.Context, name, email string) (*U
         Email: email,
     }
 
-    user, err := r.UsersRepository.Create(ctx, params)
+    // Pass db to generated method
+    user, err := r.UsersRepository.Create(ctx, r.db, params)
     if err != nil {
         return nil, fmt.Errorf("failed to create user: %w", err)
     }
@@ -143,8 +151,8 @@ func (r *UserRepository) CreateUser(ctx context.Context, name, email string) (*U
 }
 
 func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*User, error) {
-    // Use generated query from .sql files
-    result, err := r.UsersQueries.GetUserByEmail(ctx, email)
+    // Use generated query from .sql files (pass db)
+    result, err := r.UsersQueries.GetUserByEmail(ctx, r.db, email)
     if err != nil {
         return nil, fmt.Errorf("failed to get user by email: %w", err)
     }
@@ -159,26 +167,11 @@ func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*Use
 }
 ```
 
-### Alternative: Adding Separate DB Field for Raw SQL
+### Additional Raw SQL (Rare)
 
-**Only use this pattern if you need raw SQL beyond generated queries:**
+The v2 API pattern already requires storing `db` to pass to generated methods. If you need additional raw SQL beyond generated queries, you can use the same `db` field:
 
 ```go
-// Only add db field if you need custom SQL beyond generated queries
-type UserRepository struct {
-    *generated.UsersRepository
-    *generated.UsersQueries
-    db *pgxkit.DB  // For rare cases of raw SQL
-}
-
-func NewUserRepository(db *pgxkit.DB) *UserRepository {
-    return &UserRepository{
-        UsersRepository: generated.NewUsersRepository(db, nil),
-        UsersQueries:    generated.NewUsersQueries(db),
-        db:              db,  // Store for custom raw queries
-    }
-}
-
 // Example: Complex dynamic query not suitable for .sql files
 func (r *UserRepository) SearchUsersWithDynamicFilters(ctx context.Context, filters map[string]interface{}) ([]*User, error) {
     // Build dynamic SQL based on filters
@@ -260,8 +253,9 @@ func NewUserService(userRepo UserRepository, orderRepo OrderRepository) *UserSer
 // Custom ID Generator Example for Testing
 func NewUserRepositoryWithTestID(db *pgxkit.DB, idGenerator func() uuid.UUID) *UserRepository {
     return &UserRepository{
-        UsersRepository: generated.NewUsersRepository(db, idGenerator),
-        UsersQueries:    generated.NewUsersQueries(db),
+        db:              db,
+        UsersRepository: generated.NewUsersRepository(idGenerator),
+        UsersQueries:    generated.NewUsersQueries(),
     }
 }
 
@@ -493,7 +487,10 @@ Generated repositories accept an optional ID generator function as a constructor
 
 ```go
 // UUID v7 generator is automatically set (pass nil)
-userRepo := generated.NewUsersRepository(db, nil)
+userRepo := generated.NewUsersRepository(nil)
+
+// Methods require db parameter
+user, err := userRepo.Create(ctx, db, params)
 ```
 
 ### Custom ID Generator for Testing
@@ -504,9 +501,10 @@ func TestUserCreation(t *testing.T) {
     testID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
     // Pass deterministic generator to constructor
-    userRepo := generated.NewUsersRepository(db, func() uuid.UUID { return testID })
+    userRepo := generated.NewUsersRepository(func() uuid.UUID { return testID })
 
-    user, err := userRepo.Create(ctx, generated.CreateUsersParams{
+    // Pass db to method
+    user, err := userRepo.Create(ctx, db, generated.CreateUsersParams{
         Name:  "Test User",
         Email: "test@example.com",
     })
@@ -520,6 +518,7 @@ func TestUserCreation(t *testing.T) {
 ```go
 // Repository wrapper with custom ID strategy
 type UserRepository struct {
+    db *pgxkit.DB
     *generated.UsersRepository
     *generated.UsersQueries
 }
@@ -527,16 +526,18 @@ type UserRepository struct {
 func NewUserRepository(db *pgxkit.DB) *UserRepository {
     // Use default UUID v7 (pass nil)
     return &UserRepository{
-        UsersRepository: generated.NewUsersRepository(db, nil),
-        UsersQueries:    generated.NewUsersQueries(db),
+        db:              db,
+        UsersRepository: generated.NewUsersRepository(nil),
+        UsersQueries:    generated.NewUsersQueries(),
     }
 }
 
 func NewUserRepositoryWithCustomID(db *pgxkit.DB, idGen func() uuid.UUID) *UserRepository {
     // Pass custom ID generator to constructor
     return &UserRepository{
-        UsersRepository: generated.NewUsersRepository(db, idGen),
-        UsersQueries:    generated.NewUsersQueries(db),
+        db:              db,
+        UsersRepository: generated.NewUsersRepository(idGen),
+        UsersQueries:    generated.NewUsersQueries(),
     }
 }
 ```
