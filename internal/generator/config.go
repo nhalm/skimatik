@@ -111,7 +111,7 @@ func parseDefaultFunctions(value interface{}) ([]string, error) {
 
 // LoadConfig loads configuration from a YAML file
 func LoadConfig(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- user-supplied config path by design
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
@@ -184,7 +184,7 @@ func (c *Config) Validate() error {
 	}
 
 	// Ensure output directory exists or can be created
-	if err := os.MkdirAll(c.OutputDir, 0755); err != nil {
+	if err := os.MkdirAll(c.OutputDir, 0750); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
