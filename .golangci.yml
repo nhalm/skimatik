@@ -15,6 +15,11 @@ linters:
       blueprint-vet:
         type: module
         description: Blueprint conformance rules (R-1..R-7, R-11, R-12)
+  exclusions:
+    # Lint generated code on equal footing with handwritten code. The example-app
+    # is skimatik's proof that the generator emits clean output — hiding generated
+    # files from analysis would defeat that.
+    generated: disable
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
