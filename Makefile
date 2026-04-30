@@ -14,7 +14,7 @@ MAIN_PATH=./cmd/skimatik
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
-DOCKER_COMPOSE=docker-compose -f build/docker-compose.yml
+DOCKER_COMPOSE=docker compose -f build/docker-compose.yml
 
 TEST_DB_URL=postgres://skimatik:skimatik_test_password@localhost:5432/skimatik_test?sslmode=disable
 
