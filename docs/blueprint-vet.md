@@ -76,4 +76,4 @@ blueprint-vet's analyzers key off path substrings: `/internal/api`, `/internal/m
 
 ## Versions
 
-Pinned to `v0.1.0` in both `Makefile` (`BLUEPRINT_VET_VERSION`) and `.github/workflows/ci.yml`. Bump both together.
+Pinned to `v0.1.1` in both `Makefile` (`BLUEPRINT_VET_VERSION`) and `.github/workflows/ci.yml`. Bump both together.
