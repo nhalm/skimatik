@@ -38,8 +38,8 @@ jobs:
     - name: Verify dependencies
       run: go mod verify
 
-    - name: Run tests
-      run: go test -v -race -parallel=1 ./...
+    - name: Run unit tests
+      run: make test-unit
 
   lint:
     name: Lint
@@ -52,24 +52,13 @@ jobs:
       with:
         go-version: '1.25'
 
-    - name: Install golangci-lint
-      run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
-
-    - name: Build custom-gcl (golangci-lint + blueprint-vet plugin)
-      run: golangci-lint custom
-
-    - name: Run custom-gcl (skimatik)
-      run: ./bin/custom-gcl run --timeout=5m ./...
-
-    - name: Install blueprint-sql-check
-      run: go install github.com/nhalm/blueprint-vet/cmd/blueprint-sql-check@v0.2.0
-
-    - name: blueprint-sql-check (example-app queries)
-      run: blueprint-sql-check example-app/database/queries
-
-    # custom-gcl on example-app runs in the example-app-integration job,
-    # which generates the repository code first. Without that, the package
-    # under example-app/internal/repository/generated/ does not exist.
+    # `make lint` builds ./bin/custom-gcl on first run (golangci-lint +
+    # blueprint-vet plugin via .custom-gcl.yml) and runs every check —
+    # go fmt, the full linter set, and blueprint-sql-check on the SQL
+    # query files. example-app linting runs in the example-app-integration
+    # job, which generates the repository code first.
+    - name: Run make lint
+      run: make lint
 
   security:
     name: Security Scan
@@ -117,17 +106,10 @@ jobs:
       with:
         go-version: '1.25'
 
-    - name: Start database
-      run: docker compose -f build/docker-compose.yml up -d postgres
-
-    - name: Wait for database
-      run: |
-        timeout 30s bash -c 'until docker compose -f build/docker-compose.yml exec -T postgres pg_isready -U skimatik -d skimatik_test; do sleep 1; done'
-
+    # `make test-integration` starts Postgres via docker-compose, waits for it,
+    # and runs the suite with TEST_DATABASE_URL set.
     - name: Run integration tests
-      run: go test -v -tags=integration -parallel=1 ./...
-      env:
-        TEST_DATABASE_URL: postgres://skimatik:skimatik_test_password@localhost:5432/skimatik_test?sslmode=disable
+      run: make test-integration
 
     - name: Stop database
       if: always()
