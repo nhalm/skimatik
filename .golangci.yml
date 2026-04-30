@@ -2,8 +2,12 @@ version: "2"
 linters:
   enable:
     - errcheck
+    - errorlint
+    - gocyclo
     - govet
     - ineffassign
+    - rowserrcheck
+    - sqlclosecheck
     - staticcheck
     - unused
     - misspell
@@ -14,11 +18,22 @@ linters:
       blueprint-vet:
         type: module
         description: Blueprint conformance rules (R-1..R-7, R-11, R-12)
+    rowserrcheck:
+      # Default packages list only covers database/sql; teach the linter about
+      # pgx so it actually fires on the iteration code skimatik generates.
+      packages:
+        - github.com/jackc/pgx/v5
   exclusions:
     # Lint generated code on equal footing with handwritten code. The example-app
     # is skimatik's proof that the generator emits clean output — hiding generated
     # files from analysis would defeat that.
     generated: disable
+    rules:
+      # Cyclomatic complexity isn't a meaningful signal in test fixtures —
+      # table-driven tests are *supposed* to enumerate many branches.
+      - path: '_test\.go$'
+        linters:
+          - gocyclo
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
