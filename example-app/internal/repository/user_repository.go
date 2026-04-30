@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/nhalm/pgxkit/v2"
 	"github.com/nhalm/skimatik/v2/example-app/domain"
-	"github.com/nhalm/skimatik/v2/example-app/repository/generated"
+	"github.com/nhalm/skimatik/v2/example-app/internal/repository/generated"
 )
 
 // UserRepository represents a custom repository that embeds the generated queries
@@ -32,7 +32,7 @@ func NewUserRepository(db *pgxkit.DB) *UserRepository {
 // Implement service.UserRepository interface methods with domain type conversion
 
 func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]domain.UserSummary, error) {
-	results, err := r.UsersQueries.GetActiveUsers(ctx, r.db, limit)
+	results, err := r.UsersQueries.GetActiveUsers(ctx, executorFromContext(ctx, r.db), limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active users: %w", err)
 	}
@@ -51,7 +51,7 @@ func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]domai
 }
 
 func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*domain.UserDetail, error) {
-	result, err := r.UsersQueries.GetUserByEmail(ctx, r.db, email)
+	result, err := r.UsersQueries.GetUserByEmail(ctx, executorFromContext(ctx, r.db), email)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user by email: %w", err)
 	}
@@ -74,7 +74,7 @@ func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*dom
 }
 
 func (r *UserRepository) SearchUsers(ctx context.Context, query string) ([]domain.UserSummary, error) {
-	results, err := r.UsersQueries.SearchUsers(ctx, r.db, "%"+query+"%", 50)
+	results, err := r.UsersQueries.SearchUsers(ctx, executorFromContext(ctx, r.db), "%"+query+"%", 50)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search users: %w", err)
 	}
@@ -93,7 +93,7 @@ func (r *UserRepository) SearchUsers(ctx context.Context, query string) ([]domai
 }
 
 func (r *UserRepository) GetUserStats(ctx context.Context, userID uuid.UUID) (*domain.UserStats, error) {
-	result, err := r.UsersQueries.GetUserStats(ctx, r.db, userID)
+	result, err := r.UsersQueries.GetUserStats(ctx, executorFromContext(ctx, r.db), userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user stats: %w", err)
 	}
@@ -109,7 +109,7 @@ func (r *UserRepository) GetUserStats(ctx context.Context, userID uuid.UUID) (*d
 }
 
 func (r *UserRepository) DeactivateUser(ctx context.Context, userID uuid.UUID) error {
-	err := r.UsersQueries.DeactivateUser(ctx, r.db, userID)
+	err := r.UsersQueries.DeactivateUser(ctx, executorFromContext(ctx, r.db), userID)
 	if err != nil {
 		return fmt.Errorf("failed to deactivate user: %w", err)
 	}
@@ -119,7 +119,7 @@ func (r *UserRepository) DeactivateUser(ctx context.Context, userID uuid.UUID) e
 
 func (r *UserRepository) GetUser(ctx context.Context, userID uuid.UUID) (*domain.UserDetail, error) {
 	// Use the generated Get method from UsersRepository
-	user, err := r.Get(ctx, r.db, userID)
+	user, err := r.Get(ctx, executorFromContext(ctx, r.db), userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}

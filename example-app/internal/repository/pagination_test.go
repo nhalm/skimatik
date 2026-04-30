@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nhalm/pgxkit/v2"
-	"github.com/nhalm/skimatik/v2/example-app/repository/generated"
+	"github.com/nhalm/skimatik/v2/example-app/internal/repository/generated"
 )
 
 func getTestDB(t *testing.T) *pgxkit.DB {

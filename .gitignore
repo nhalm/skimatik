@@ -41,9 +41,9 @@ database_operations.go
 retry_operations.go
 errors.go
 
-# Exception: Allow generated files in example-app (removed - now ignored for cleaner PRs)
-# example-app/repository/generated/ is ignored to reduce noise in PRs
-# CI validates generation via make example-app-test
+# skimatik-generated example-app code is ignored to reduce noise in PRs.
+# CI regenerates and validates it via make test-example-app (which also runs blueprint-vet).
+example-app/internal/repository/generated/
 example-app/repository/generated/
 
 # Coverage files
