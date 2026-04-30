@@ -6,8 +6,8 @@
 
 `make lint` runs:
 
-- `blueprint-vet -nofmtprint=false ./...` against the **skimatik root module** (the generator itself).
-- `blueprint-vet -nofmtprint=false ./...` against the **example-app module** (consumer + generated code).
+- `blueprint-vet ./...` against the **skimatik root module** (the generator itself).
+- `blueprint-vet ./...` against the **example-app module** (consumer + generated code).
 - `blueprint-sql-check example-app/database/queries` against the SQL query annotation files.
 
 Same three steps run in `.github/workflows/ci.yml`'s lint job.
@@ -23,11 +23,7 @@ Same three steps run in `.github/workflows/ci.yml`'s lint job.
 
 R-6 (`idtypeuuid`) is satisfied automatically because skimatik uses `uuid.UUID` for ID columns.
 
-## Why `-nofmtprint=false`
-
-R-8 (`nofmtprint`) bans the entire `fmt.Print*/Sprint*/Fprint*` family on the assumption the call is a runtime log that should go through canonlog. skimatik is a code generator: `fmt.Fprintf(&code, ...)` is how the generator writes Go source, and generated cursor helpers use `fmt.Sprintf("%v", value)` for value formatting. None of that is logging, so the rule does not apply. CI and `make lint` keep R-8 disabled for both modules.
-
-If you adopt skimatik in a service that genuinely uses canonlog, leave R-8 on for your own packages — only the generator and generated code need the exemption.
+R-8 (`nofmtprint`) runs unmodified. The generator assembles source files via `text/template` (see `internal/generator/templates/shared/file.tmpl`) and any user-facing logging happens in `cmd/skimatik/main.go`, which R-8 exempts.
 
 ## The wrapper executor pattern
 

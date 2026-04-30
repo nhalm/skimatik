@@ -36,6 +36,7 @@ const (
 	TemplateRepositoryRetry  = "templates/repository/retry_methods.tmpl"
 
 	// Shared templates
+	TemplateFile               = "templates/shared/file.tmpl"
 	TemplateStruct             = "templates/shared/struct.tmpl"
 	TemplateHeader             = "templates/shared/header.tmpl"
 	TemplateErrorHandling      = "templates/shared/error_handling.tmpl"

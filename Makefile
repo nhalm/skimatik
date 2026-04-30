@@ -50,7 +50,7 @@ test-example-app: build install-blueprint-vet
 	@echo "Running example-app tests..."
 	@cd example-app && $(MAKE) test
 	@echo "Running blueprint-vet on generated example-app code..."
-	@cd example-app && blueprint-vet -nofmtprint=false ./...
+	@cd example-app && blueprint-vet ./...
 	@echo "✅ Example app tests completed"
 
 .PHONY: test-all
@@ -63,10 +63,10 @@ lint: install-blueprint-vet
 	go fmt ./...
 	$(GOLINT) run ./...
 	@echo "Running blueprint-vet (skimatik)..."
-	@blueprint-vet -nofmtprint=false ./...
+	@blueprint-vet ./...
 	@if [ -d example-app/internal/repository/generated ] && [ -n "$$(ls -A example-app/internal/repository/generated 2>/dev/null)" ]; then \
 		echo "Running blueprint-vet (example-app)..."; \
-		cd example-app && blueprint-vet -nofmtprint=false ./...; \
+		cd example-app && blueprint-vet ./...; \
 	else \
 		echo "Skipping blueprint-vet (example-app): generated code not present — run 'make test-example-app' to validate"; \
 	fi
@@ -75,9 +75,7 @@ lint: install-blueprint-vet
 	@echo "✅ Linting completed"
 
 # Install blueprint-vet binaries if not already on PATH (or out of date).
-# Pinned to BLUEPRINT_VET_VERSION; nofmtprint is disabled because skimatik is a
-# code generator — fmt.Sprintf/Fprintf are how the generator builds source code,
-# not runtime logging. See docs/blueprint-vet.md.
+# Pinned to BLUEPRINT_VET_VERSION.
 .PHONY: install-blueprint-vet
 install-blueprint-vet:
 	@command -v blueprint-vet >/dev/null 2>&1 || go install github.com/nhalm/blueprint-vet/cmd/blueprint-vet@$(BLUEPRINT_VET_VERSION)

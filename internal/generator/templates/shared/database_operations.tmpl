@@ -2,12 +2,6 @@
 // These functions eliminate duplication across repositories and provide consistent patterns
 // Available for both generated repositories and custom implementer extensions
 
-import (
-	"context"
-	"github.com/jackc/pgx/v5"
-	"github.com/nhalm/pgxkit/v2"
-)
-
 // ExecuteQueryRow executes a single-row query and returns the row for scanning
 // This eliminates duplication across Create, Get, Update, and One query operations
 func ExecuteQueryRow(ctx context.Context, db pgxkit.Executor, operation, entity, query string, args ...interface{}) pgx.Row {

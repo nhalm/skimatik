@@ -26,16 +26,17 @@ func New(config *Config, version string) *Generator {
 	}
 }
 
-// Generate runs the complete generation process
-func (g *Generator) Generate(ctx context.Context) error {
+// Generate runs the complete generation process and returns the list of
+// file paths written. The caller is responsible for any user-facing logging.
+func (g *Generator) Generate(ctx context.Context) ([]string, error) {
 	// Validate configuration
 	if err := g.config.Validate(); err != nil {
-		return fmt.Errorf("configuration validation failed: %w", err)
+		return nil, fmt.Errorf("configuration validation failed: %w", err)
 	}
 
 	// Connect to database
 	if err := g.connect(ctx); err != nil {
-		return fmt.Errorf("database connection failed: %w", err)
+		return nil, fmt.Errorf("database connection failed: %w", err)
 	}
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -57,23 +58,23 @@ func (g *Generator) Generate(ctx context.Context) error {
 	if g.config.Tables {
 		// Generate shared files first
 		if err := g.generateSharedPaginationTypes(); err != nil {
-			return fmt.Errorf("shared pagination types generation failed: %w", err)
+			return nil, fmt.Errorf("shared pagination types generation failed: %w", err)
 		}
 
 		if err := g.generateSharedErrors(); err != nil {
-			return fmt.Errorf("shared error handling generation failed: %w", err)
+			return nil, fmt.Errorf("shared error handling generation failed: %w", err)
 		}
 
 		if err := g.generateSharedDatabaseOperations(); err != nil {
-			return fmt.Errorf("shared database operations generation failed: %w", err)
+			return nil, fmt.Errorf("shared database operations generation failed: %w", err)
 		}
 
 		if err := g.generateSharedIDGenerators(); err != nil {
-			return fmt.Errorf("shared ID generators generation failed: %w", err)
+			return nil, fmt.Errorf("shared ID generators generation failed: %w", err)
 		}
 
 		if err := g.generateTables(ctx); err != nil {
-			return fmt.Errorf("table generation failed: %w", err)
+			return nil, fmt.Errorf("table generation failed: %w", err)
 		}
 	}
 
@@ -82,20 +83,20 @@ func (g *Generator) Generate(ctx context.Context) error {
 		// Ensure shared files exist for queries even if tables are disabled
 		if !g.config.Tables {
 			if err := g.generateSharedPaginationTypes(); err != nil {
-				return fmt.Errorf("shared pagination types generation failed: %w", err)
+				return nil, fmt.Errorf("shared pagination types generation failed: %w", err)
 			}
 
 			if err := g.generateSharedErrors(); err != nil {
-				return fmt.Errorf("shared error handling generation failed: %w", err)
+				return nil, fmt.Errorf("shared error handling generation failed: %w", err)
 			}
 
 			if err := g.generateSharedDatabaseOperations(); err != nil {
-				return fmt.Errorf("shared database operations generation failed: %w", err)
+				return nil, fmt.Errorf("shared database operations generation failed: %w", err)
 			}
 		}
 
 		if err := g.generateQueries(ctx); err != nil {
-			return fmt.Errorf("query generation failed: %w", err)
+			return nil, fmt.Errorf("query generation failed: %w", err)
 		}
 	}
 
@@ -103,7 +104,7 @@ func (g *Generator) Generate(ctx context.Context) error {
 		slog.Info("Successfully generated code", "output_dir", g.config.OutputDir)
 	}
 
-	return nil
+	return g.codegen.GeneratedFiles(), nil
 }
 
 // connect establishes a connection to the PostgreSQL database

@@ -64,7 +64,7 @@ jobs:
         go install github.com/nhalm/blueprint-vet/cmd/blueprint-sql-check@v0.1.2
 
     - name: blueprint-vet (skimatik)
-      run: blueprint-vet -nofmtprint=false ./...
+      run: blueprint-vet ./...
 
     - name: blueprint-sql-check (example-app queries)
       run: blueprint-sql-check example-app/database/queries
