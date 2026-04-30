@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -74,7 +75,7 @@ func (qp *QueryParser) findSQLFiles() ([]string, error) {
 
 // parseFile parses a single SQL file and extracts queries with annotations
 func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
-	file, err := os.Open(filename)
+	file, err := os.Open(filename) // #nosec G304 -- user-supplied query file path by design
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
@@ -307,8 +308,10 @@ func (qp *QueryParser) parseParameterAnnotation(line string) *ParameterAnnotatio
 		return nil
 	}
 
-	position := 0
-	fmt.Sscanf(matches[1], "%d", &position)
+	position, err := strconv.Atoi(matches[1])
+	if err != nil {
+		return nil
+	}
 	paramName := strings.TrimSpace(matches[2])
 	goType := strings.TrimSpace(matches[3])
 

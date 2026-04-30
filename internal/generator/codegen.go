@@ -558,7 +558,7 @@ func (cg *CodeGenerator) writeCodeToFile(filename, code string) error {
 	}
 
 	// Write to file
-	if err := os.WriteFile(filename, formatted, 0644); err != nil {
+	if err := os.WriteFile(filename, formatted, 0644); err != nil { // #nosec G306 -- generated source is intentionally world-readable for editors/CI/containers
 		return fmt.Errorf("failed to write file %s: %w", filename, err)
 	}
 
