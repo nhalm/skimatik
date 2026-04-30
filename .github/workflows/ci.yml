@@ -60,8 +60,8 @@ jobs:
 
     - name: Install blueprint-vet
       run: |
-        go install github.com/nhalm/blueprint-vet/cmd/blueprint-vet@v0.1.1
-        go install github.com/nhalm/blueprint-vet/cmd/blueprint-sql-check@v0.1.1
+        go install github.com/nhalm/blueprint-vet/cmd/blueprint-vet@v0.1.2
+        go install github.com/nhalm/blueprint-vet/cmd/blueprint-sql-check@v0.1.2
 
     - name: blueprint-vet (skimatik)
       run: blueprint-vet -nofmtprint=false ./...
