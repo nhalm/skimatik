@@ -75,8 +75,7 @@ jobs:
       run: go install github.com/securego/gosec/v2/cmd/gosec@latest
 
     - name: Run Gosec Security Scanner
-      run: gosec -exclude=G115 ./...
-      continue-on-error: true
+      run: gosec ./...
 
   build:
     name: Build

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -47,8 +46,7 @@ func (h *UserHandler) GetUserByEmail(w http.ResponseWriter, r *http.Request) {
 		LastLoginAt: domainUser.LastLoginAt,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(apiUser)
+	writeJSON(w, http.StatusOK,apiUser)
 }
 
 // GetActiveUsers handles GET /api/users?limit=10
@@ -79,8 +77,7 @@ func (h *UserHandler) GetActiveUsers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK,map[string]interface{}{
 		"users": apiUsers,
 		"count": len(apiUsers),
 	})
@@ -113,8 +110,7 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		LastLoginAt: domainUser.LastLoginAt,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(apiUser)
+	writeJSON(w, http.StatusOK,apiUser)
 }
 
 // GetUserStats handles GET /api/users/{id}/stats
@@ -140,8 +136,7 @@ func (h *UserHandler) GetUserStats(w http.ResponseWriter, r *http.Request) {
 		LastActivity: domainStats.LastActivity,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(apiStats)
+	writeJSON(w, http.StatusOK,apiStats)
 }
 
 // SearchUsers handles GET /api/users/search?q=query
@@ -169,8 +164,7 @@ func (h *UserHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK,map[string]interface{}{
 		"users": apiUsers,
 		"query": query,
 		"count": len(apiUsers),
@@ -192,8 +186,7 @@ func (h *UserHandler) DeactivateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	writeJSON(w, http.StatusOK,map[string]string{
 		"message": "User deactivated successfully",
 	})
 }

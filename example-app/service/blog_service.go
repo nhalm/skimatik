@@ -52,7 +52,7 @@ func (s *BlogService) CreatePostWithInitialComment(
 	if err != nil {
 		return nil, nil, fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	post, err := s.postsRepo.Create(ctx, tx, generated.CreatePostsParams{
 		Title:    title,
@@ -92,7 +92,7 @@ func (s *BlogService) TransferPostOwnership(
 	if err != nil {
 		return nil, fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	fromUser, err := s.usersRepo.Get(ctx, tx, fromUserID)
 	if err != nil {
@@ -150,7 +150,7 @@ func (s *BlogService) DeleteUserWithContent(
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	_, err = s.usersRepo.Get(ctx, tx, userID)
 	if err != nil {
