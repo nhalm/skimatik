@@ -3,7 +3,7 @@ database:
   schema: "public"
 
 output:
-  directory: "./repository/generated"
+  directory: "./internal/repository/generated"
   package: "generated"
 
 # Generate all functions by default

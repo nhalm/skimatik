@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/nhalm/pgxkit/v2"
-	"github.com/nhalm/skimatik/v2/example-app/repository/generated"
+	"github.com/nhalm/skimatik/v2/example-app/internal/repository/generated"
 )
 
 // BlogService demonstrates transactional operations using the per-method executor pattern.

@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/nhalm/pgxkit/v2"
 	"github.com/nhalm/skimatik/v2/example-app/domain"
-	"github.com/nhalm/skimatik/v2/example-app/repository/generated"
+	"github.com/nhalm/skimatik/v2/example-app/internal/repository/generated"
 )
 
 // PostRepository represents a custom repository that embeds the generated queries
@@ -29,7 +29,7 @@ func NewPostRepository(db *pgxkit.DB) *PostRepository {
 // Implement service.PostRepository interface methods with domain type conversion
 
 func (r *PostRepository) GetPublishedPosts(ctx context.Context, limit int) ([]domain.PostSummary, error) {
-	results, err := r.PostsQueries.GetPublishedPosts(ctx, r.db, limit)
+	results, err := r.PostsQueries.GetPublishedPosts(ctx, executorFromContext(ctx, r.db), limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get published posts: %w", err)
 	}
@@ -57,7 +57,7 @@ func (r *PostRepository) GetPublishedPosts(ctx context.Context, limit int) ([]do
 }
 
 func (r *PostRepository) GetPostWithAuthor(ctx context.Context, postID uuid.UUID) (*domain.PostDetail, error) {
-	result, err := r.PostsQueries.GetPostWithAuthor(ctx, r.db, postID)
+	result, err := r.PostsQueries.GetPostWithAuthor(ctx, executorFromContext(ctx, r.db), postID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get post with author: %w", err)
 	}
@@ -84,7 +84,7 @@ func (r *PostRepository) GetPostWithAuthor(ctx context.Context, postID uuid.UUID
 }
 
 func (r *PostRepository) GetUserPosts(ctx context.Context, userID uuid.UUID) ([]domain.PostSummary, error) {
-	results, err := r.PostsQueries.GetUserPosts(ctx, r.db, userID)
+	results, err := r.PostsQueries.GetUserPosts(ctx, executorFromContext(ctx, r.db), userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user posts: %w", err)
 	}
@@ -113,7 +113,7 @@ func (r *PostRepository) GetUserPosts(ctx context.Context, userID uuid.UUID) ([]
 
 func (r *PostRepository) GetPostsWithStats(ctx context.Context, limit int) ([]domain.PostWithStats, error) {
 	// Use GetPostsWithCommentCount as the equivalent for "stats"
-	results, err := r.PostsQueries.GetPostsWithCommentCount(ctx, r.db, limit)
+	results, err := r.PostsQueries.GetPostsWithCommentCount(ctx, executorFromContext(ctx, r.db), limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get posts with stats: %w", err)
 	}
@@ -134,7 +134,7 @@ func (r *PostRepository) GetPostsWithStats(ctx context.Context, limit int) ([]do
 }
 
 func (r *PostRepository) PublishPost(ctx context.Context, postID uuid.UUID) error {
-	err := r.PostsQueries.PublishPost(ctx, r.db, postID)
+	err := r.PostsQueries.PublishPost(ctx, executorFromContext(ctx, r.db), postID)
 	if err != nil {
 		return fmt.Errorf("failed to publish post: %w", err)
 	}

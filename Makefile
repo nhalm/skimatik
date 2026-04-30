@@ -5,6 +5,7 @@ GOBUILD=$(GOCMD) build
 GOTEST=$(GOCMD) test
 GOMOD=$(GOCMD) mod
 GOLINT=golangci-lint
+BLUEPRINT_VET_VERSION=v0.1.1
 
 BINARY_NAME=skimatik
 BINARY_PATH=./bin/$(BINARY_NAME)
@@ -45,9 +46,11 @@ test-integration:
 	@echo "✅ Integration tests completed"
 
 .PHONY: test-example-app
-test-example-app: build
+test-example-app: build install-blueprint-vet
 	@echo "Running example-app tests..."
 	@cd example-app && $(MAKE) test
+	@echo "Running blueprint-vet on generated example-app code..."
+	@cd example-app && blueprint-vet -nofmtprint=false ./...
 	@echo "✅ Example app tests completed"
 
 .PHONY: test-all
@@ -55,11 +58,30 @@ test-all: test-unit test-integration test-example-app
 	@echo "✅ All tests completed"
 
 .PHONY: lint
-lint:
+lint: install-blueprint-vet
 	@echo "Running linter..."
 	go fmt ./...
 	$(GOLINT) run ./...
+	@echo "Running blueprint-vet (skimatik)..."
+	@blueprint-vet -nofmtprint=false ./...
+	@if [ -d example-app/internal/repository/generated ] && [ -n "$$(ls -A example-app/internal/repository/generated 2>/dev/null)" ]; then \
+		echo "Running blueprint-vet (example-app)..."; \
+		cd example-app && blueprint-vet -nofmtprint=false ./...; \
+	else \
+		echo "Skipping blueprint-vet (example-app): generated code not present — run 'make test-example-app' to validate"; \
+	fi
+	@echo "Running blueprint-sql-check (example-app queries)..."
+	@blueprint-sql-check example-app/database/queries
 	@echo "✅ Linting completed"
+
+# Install blueprint-vet binaries if not already on PATH (or out of date).
+# Pinned to BLUEPRINT_VET_VERSION; nofmtprint is disabled because skimatik is a
+# code generator — fmt.Sprintf/Fprintf are how the generator builds source code,
+# not runtime logging. See docs/blueprint-vet.md.
+.PHONY: install-blueprint-vet
+install-blueprint-vet:
+	@command -v blueprint-vet >/dev/null 2>&1 || go install github.com/nhalm/blueprint-vet/cmd/blueprint-vet@$(BLUEPRINT_VET_VERSION)
+	@command -v blueprint-sql-check >/dev/null 2>&1 || go install github.com/nhalm/blueprint-vet/cmd/blueprint-sql-check@$(BLUEPRINT_VET_VERSION)
 
 .PHONY: clean
 clean:

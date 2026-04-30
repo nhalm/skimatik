@@ -58,6 +58,21 @@ jobs:
         version: latest
         args: --timeout=5m
 
+    - name: Install blueprint-vet
+      run: |
+        go install github.com/nhalm/blueprint-vet/cmd/blueprint-vet@v0.1.1
+        go install github.com/nhalm/blueprint-vet/cmd/blueprint-sql-check@v0.1.1
+
+    - name: blueprint-vet (skimatik)
+      run: blueprint-vet -nofmtprint=false ./...
+
+    - name: blueprint-sql-check (example-app queries)
+      run: blueprint-sql-check example-app/database/queries
+
+    # blueprint-vet on example-app runs in the example-app-integration job,
+    # which generates the repository code first. Without that, the package
+    # under example-app/internal/repository/generated/ does not exist.
+
   security:
     name: Security Scan
     runs-on: ubuntu-latest

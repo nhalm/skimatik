@@ -15,6 +15,7 @@
 - **[Embedding Patterns](embedding-patterns)** - Repository composition
 - **[Shared Utilities](shared-utilities)** - Database operations
 - **[Error Handling](error-handling)** - Error management
+- **[blueprint-vet Integration](blueprint-vet)** - Conformance rules for generated code
 
 ### External Links
 - **[GitHub Repository](https://github.com/nhalm/skimatik)**
