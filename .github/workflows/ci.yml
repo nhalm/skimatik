@@ -52,24 +52,22 @@ jobs:
       with:
         go-version: '1.25'
 
-    - name: golangci-lint
-      uses: golangci/golangci-lint-action@v9
-      with:
-        version: latest
-        args: --timeout=5m
+    - name: Install golangci-lint
+      run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
 
-    - name: Install blueprint-vet
-      run: |
-        go install github.com/nhalm/blueprint-vet/cmd/blueprint-vet@v0.1.2
-        go install github.com/nhalm/blueprint-vet/cmd/blueprint-sql-check@v0.1.2
+    - name: Build custom-gcl (golangci-lint + blueprint-vet plugin)
+      run: golangci-lint custom
 
-    - name: blueprint-vet (skimatik)
-      run: blueprint-vet ./...
+    - name: Run custom-gcl (skimatik)
+      run: ./bin/custom-gcl run --timeout=5m ./...
+
+    - name: Install blueprint-sql-check
+      run: go install github.com/nhalm/blueprint-vet/cmd/blueprint-sql-check@v0.2.0
 
     - name: blueprint-sql-check (example-app queries)
       run: blueprint-sql-check example-app/database/queries
 
-    # blueprint-vet on example-app runs in the example-app-integration job,
+    # custom-gcl on example-app runs in the example-app-integration job,
     # which generates the repository code first. Without that, the package
     # under example-app/internal/repository/generated/ does not exist.
 

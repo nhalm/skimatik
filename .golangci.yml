@@ -9,6 +9,12 @@ linters:
     - unused
     - misspell
     - unconvert
+    - blueprint-vet
+  settings:
+    custom:
+      blueprint-vet:
+        type: module
+        description: Blueprint conformance rules (R-1..R-7, R-11, R-12)
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0

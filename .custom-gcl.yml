@@ -1,0 +1,7 @@
+version: v2.11.4
+name: custom-gcl
+destination: ./bin
+plugins:
+  - module: github.com/nhalm/blueprint-vet
+    import: github.com/nhalm/blueprint-vet/plugin
+    version: v0.2.0

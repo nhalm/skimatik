@@ -4,8 +4,9 @@ GOCMD=go
 GOBUILD=$(GOCMD) build
 GOTEST=$(GOCMD) test
 GOMOD=$(GOCMD) mod
-GOLINT=golangci-lint
-BLUEPRINT_VET_VERSION=v0.1.2
+GOLANGCI_LINT_VERSION=v2.11.4
+BLUEPRINT_VET_VERSION=v0.2.0
+CUSTOM_GCL=./bin/custom-gcl
 
 BINARY_NAME=skimatik
 BINARY_PATH=./bin/$(BINARY_NAME)
@@ -46,11 +47,11 @@ test-integration:
 	@echo "✅ Integration tests completed"
 
 .PHONY: test-example-app
-test-example-app: build install-blueprint-vet
+test-example-app: build $(CUSTOM_GCL)
 	@echo "Running example-app tests..."
 	@cd example-app && $(MAKE) test
-	@echo "Running blueprint-vet on generated example-app code..."
-	@cd example-app && blueprint-vet ./...
+	@echo "Linting generated example-app code..."
+	@cd example-app && ../$(CUSTOM_GCL) run ./...
 	@echo "✅ Example app tests completed"
 
 .PHONY: test-all
@@ -58,27 +59,33 @@ test-all: test-unit test-integration test-example-app
 	@echo "✅ All tests completed"
 
 .PHONY: lint
-lint: install-blueprint-vet
+lint: $(CUSTOM_GCL) install-blueprint-sql-check
 	@echo "Running linter..."
 	go fmt ./...
-	$(GOLINT) run ./...
-	@echo "Running blueprint-vet (skimatik)..."
-	@blueprint-vet ./...
+	@$(CUSTOM_GCL) run ./...
 	@if [ -d example-app/internal/repository/generated ] && [ -n "$$(ls -A example-app/internal/repository/generated 2>/dev/null)" ]; then \
-		echo "Running blueprint-vet (example-app)..."; \
-		cd example-app && blueprint-vet ./...; \
+		echo "Linting example-app..."; \
+		cd example-app && ../$(CUSTOM_GCL) run ./...; \
 	else \
-		echo "Skipping blueprint-vet (example-app): generated code not present — run 'make test-example-app' to validate"; \
+		echo "Skipping example-app lint: generated code not present — run 'make test-example-app' to validate"; \
 	fi
 	@echo "Running blueprint-sql-check (example-app queries)..."
 	@blueprint-sql-check example-app/database/queries
 	@echo "✅ Linting completed"
 
-# Install blueprint-vet binaries if not already on PATH (or out of date).
-# Pinned to BLUEPRINT_VET_VERSION.
-.PHONY: install-blueprint-vet
-install-blueprint-vet:
-	@command -v blueprint-vet >/dev/null 2>&1 || go install github.com/nhalm/blueprint-vet/cmd/blueprint-vet@$(BLUEPRINT_VET_VERSION)
+# Build the custom golangci-lint binary that bundles blueprint-vet's analyzers
+# (configured by .custom-gcl.yml). The binary lands at ./bin/custom-gcl and
+# replaces both `golangci-lint run` and the standalone `blueprint-vet` invocation.
+$(CUSTOM_GCL): .custom-gcl.yml install-golangci-lint
+	@echo "Building custom-gcl from .custom-gcl.yml..."
+	@golangci-lint custom
+
+.PHONY: install-golangci-lint
+install-golangci-lint:
+	@command -v golangci-lint >/dev/null 2>&1 || go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+
+.PHONY: install-blueprint-sql-check
+install-blueprint-sql-check:
 	@command -v blueprint-sql-check >/dev/null 2>&1 || go install github.com/nhalm/blueprint-vet/cmd/blueprint-sql-check@$(BLUEPRINT_VET_VERSION)
 
 .PHONY: clean
