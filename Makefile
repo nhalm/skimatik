@@ -16,10 +16,27 @@ COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 DOCKER_COMPOSE=docker compose -f build/docker-compose.yml
 
-TEST_DB_URL=postgres://skimatik:skimatik_test_password@localhost:5432/skimatik_test?sslmode=disable
+TEST_DB_URL=postgres://skimatik:skimatik_test_password@localhost:15432/skimatik_test?sslmode=disable
 
 .PHONY: default
 default: help
+
+# Bootstrap dev tools and activate Git hooks. Mirrors go-blueprint's
+# setup / install-tools split, but folds `lefthook install` into setup
+# because skimatik's setup has no other manual follow-up steps — there's
+# no codegen step, no .env to fill in, so a one-shot bootstrap is
+# friendlier than splitting it across two commands. golangci-lint and
+# blueprint-sql-check stay out of install-tools because `make lint`
+# bootstraps them on demand via the .custom-gcl.yml file dep.
+.PHONY: setup
+setup: install-tools
+	@lefthook install
+	@echo "✅ Setup complete"
+
+.PHONY: install-tools
+install-tools:
+	@go install github.com/evilmartians/lefthook@latest
+	@echo "✅ Dev tools installed"
 
 .PHONY: build
 build:
@@ -40,7 +57,7 @@ test-integration:
 	@echo "Starting database..."
 	@$(DOCKER_COMPOSE) up -d postgres
 	@echo "Waiting for database..."
-	@bash -c 'for i in {1..30}; do if pg_isready -h localhost -p 5432 -U skimatik -d skimatik_test >/dev/null 2>&1; then break; fi; sleep 1; done'
+	@bash -c 'for i in {1..30}; do if pg_isready -h localhost -p 15432 -U skimatik -d skimatik_test >/dev/null 2>&1; then break; fi; sleep 1; done'
 	@echo "Running integration tests..."
 	@$(GOMOD) tidy
 	TEST_DATABASE_URL=$(TEST_DB_URL) $(GOTEST) -v -race -parallel=1 -timeout 60s ./...
@@ -97,6 +114,10 @@ help:
 	@echo "skimatik - Database-first code generator for PostgreSQL"
 	@echo ""
 	@echo "Usage: make <target>"
+	@echo ""
+	@echo "First time:"
+	@echo "  setup              Install dev tools and activate Git hooks (lefthook + lefthook install)"
+	@echo "  install-tools      Install dev tools only (no hook activation)"
 	@echo ""
 	@echo "Daily workflow:"
 	@echo "  build              Compile the skimatik binary"

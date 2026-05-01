@@ -26,7 +26,7 @@ func TestSystem_EndToEnd(t *testing.T) {
 
 	// Configure for end-to-end generation
 	config := &Config{
-		DSN:         "postgres://skimatik:skimatik_test_password@localhost:5432/skimatik_test",
+		DSN:         "postgres://skimatik:skimatik_test_password@localhost:15432/skimatik_test",
 		Schema:      "public",
 		OutputDir:   tempDir,
 		PackageName: "testgen",
@@ -107,7 +107,7 @@ UPDATE users SET is_active = false WHERE id = $1;
 
 	// Configure for query-only generation (tables disabled)
 	config := &Config{
-		DSN:         "postgres://skimatik:skimatik_test_password@localhost:5432/skimatik_test",
+		DSN:         "postgres://skimatik:skimatik_test_password@localhost:15432/skimatik_test",
 		Schema:      "public",
 		OutputDir:   tempDir,
 		PackageName: "testgen",
@@ -181,7 +181,7 @@ func TestSystem_RealWorldScenarios(t *testing.T) {
 			tempDir := t.TempDir()
 
 			config := &Config{
-				DSN:         "postgres://skimatik:skimatik_test_password@localhost:5432/skimatik_test",
+				DSN:         "postgres://skimatik:skimatik_test_password@localhost:15432/skimatik_test",
 				Schema:      "public",
 				OutputDir:   tempDir,
 				PackageName: "testgen",
