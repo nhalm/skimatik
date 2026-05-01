@@ -52,9 +52,7 @@ func (qa *QueryAnalyzer) AnalyzeQuery(ctx context.Context, query *Query) error {
 	}
 
 	// Infer parameter names and track table/column associations (doesn't require database connection)
-	if err := qa.inferParameterNames(query); err != nil {
-		return fmt.Errorf("failed to infer parameter names: %w", err)
-	}
+	qa.inferParameterNames(query)
 
 	// If query is empty, no further analysis needed
 	if strings.TrimSpace(query.SQL) == "" {
@@ -84,9 +82,7 @@ func (qa *QueryAnalyzer) AnalyzeQuery(ctx context.Context, query *Query) error {
 	}
 
 	// Infer parameter nullability from schema for parameters with known table/column
-	if err := qa.inferParameterNullability(ctx, query); err != nil {
-		return fmt.Errorf("failed to infer parameter nullability: %w", err)
-	}
+	qa.inferParameterNullability(ctx, query)
 
 	// Validate query syntax by attempting to prepare it
 	if err := qa.validateQuerySyntax(ctx, query); err != nil {
@@ -268,17 +264,19 @@ func (qa *QueryAnalyzer) extractParametersRegex(query *Query) error {
 	return nil
 }
 
-// inferParameterNames infers semantic parameter names from SQL context using the SQL parser
-func (qa *QueryAnalyzer) inferParameterNames(query *Query) error {
+// inferParameterNames infers semantic parameter names from SQL context using the SQL parser.
+// SQL parser failures are tolerated — parameters keep their default "paramN" names — so the
+// function never returns an error.
+func (qa *QueryAnalyzer) inferParameterNames(query *Query) {
 	if len(query.Parameters) == 0 {
-		return nil
+		return
 	}
 
 	// Parse the SQL to get parameter context
 	queryInfo, err := qa.sqlParser.Parse(query.SQL)
 	if err != nil {
 		// If parsing fails, leave parameter names as default "paramN"
-		return nil
+		return
 	}
 
 	// Create maps to track inferred data by parameter index
@@ -288,38 +286,75 @@ func (qa *QueryAnalyzer) inferParameterNames(query *Query) error {
 
 	// Extract information from parsed parameters
 	for _, paramInfo := range queryInfo.Parameters {
-		pos := paramInfo.Position
-
-		// Infer parameter name based on context
-		if paramInfo.IsInLimit {
-			inferredNames[pos] = "limit"
-		} else if paramInfo.IsInOffset {
-			inferredNames[pos] = "offset"
-		} else if paramInfo.ColumnName != "" {
-			// Check if this is a LIKE operator with search term
-			if paramInfo.Operator == "~~" || paramInfo.Operator == "~~*" ||
-				strings.ToUpper(paramInfo.Operator) == "LIKE" ||
-				strings.ToUpper(paramInfo.Operator) == "ILIKE" {
-				// For LIKE patterns, use "search" prefix with column name to avoid collisions
-				if _, exists := inferredNames[pos]; !exists {
-					inferredNames[pos] = "search" + toPascalCase(paramInfo.ColumnName)
-				}
-			} else {
-				// Use column name converted to camelCase
-				inferredNames[pos] = toCamelCase(paramInfo.ColumnName)
-			}
-
-			// Track column name for nullability lookup
-			inferredColumns[pos] = paramInfo.ColumnName
-
-			// Track table name if available
-			if paramInfo.TableName != "" {
-				inferredTables[pos] = paramInfo.TableName
-			}
-		}
+		qa.collectParameterInference(paramInfo, inferredNames, inferredColumns, inferredTables)
 	}
 
 	// Apply inferred names and table/column associations to parameters
+	qa.applyInferredParameterInfo(query, inferredNames, inferredColumns, inferredTables)
+}
+
+// collectParameterInference inspects a single ParameterInfo and records the
+// inferred name / column / table for its position in the supplied maps.
+func (qa *QueryAnalyzer) collectParameterInference(
+	paramInfo ParameterInfo,
+	inferredNames, inferredColumns, inferredTables map[int]string,
+) {
+	pos := paramInfo.Position
+
+	switch {
+	case paramInfo.IsInLimit:
+		inferredNames[pos] = "limit"
+	case paramInfo.IsInOffset:
+		inferredNames[pos] = "offset"
+	case paramInfo.ColumnName != "":
+		qa.recordColumnParameter(paramInfo, inferredNames, inferredColumns, inferredTables)
+	}
+}
+
+// recordColumnParameter records inferred name/table/column for a parameter
+// that references a column. The naming rule depends on the operator (LIKE
+// patterns get a "search" prefix to avoid collisions with equality params).
+func (qa *QueryAnalyzer) recordColumnParameter(
+	paramInfo ParameterInfo,
+	inferredNames, inferredColumns, inferredTables map[int]string,
+) {
+	pos := paramInfo.Position
+
+	if isLikeOperator(paramInfo.Operator) {
+		// For LIKE patterns, use "search" prefix with column name to avoid collisions
+		if _, exists := inferredNames[pos]; !exists {
+			inferredNames[pos] = "search" + toPascalCase(paramInfo.ColumnName)
+		}
+	} else {
+		// Use column name converted to camelCase
+		inferredNames[pos] = toCamelCase(paramInfo.ColumnName)
+	}
+
+	// Track column name for nullability lookup
+	inferredColumns[pos] = paramInfo.ColumnName
+
+	// Track table name if available
+	if paramInfo.TableName != "" {
+		inferredTables[pos] = paramInfo.TableName
+	}
+}
+
+// isLikeOperator reports whether op is one of the LIKE / ILIKE operators.
+// Both the textual ("LIKE", "ILIKE") and parser-internal ("~~", "~~*") forms
+// are recognized.
+func isLikeOperator(op string) bool {
+	if op == "~~" || op == "~~*" {
+		return true
+	}
+	return strings.EqualFold(op, "LIKE") || strings.EqualFold(op, "ILIKE")
+}
+
+// applyInferredParameterInfo writes inferred names, columns and tables onto
+// query.Parameters, keying by Parameter.Index.
+func (qa *QueryAnalyzer) applyInferredParameterInfo(
+	query *Query,
+	inferredNames, inferredColumns, inferredTables map[int]string,
+) {
 	for i := range query.Parameters {
 		paramIndex := query.Parameters[i].Index
 		if name, exists := inferredNames[paramIndex]; exists {
@@ -332,8 +367,6 @@ func (qa *QueryAnalyzer) inferParameterNames(query *Query) error {
 			query.Parameters[i].TableName = table
 		}
 	}
-
-	return nil
 }
 
 // toCamelCase converts a snake_case or regular identifier to camelCase
@@ -352,15 +385,18 @@ func toCamelCase(s string) string {
 	// First part is lowercase, rest are Title case
 	result := strings.ToLower(parts[0])
 	for i := 1; i < len(parts); i++ {
-		if len(parts[i]) > 0 {
+		if parts[i] != "" {
 			result += strings.ToUpper(parts[i][:1]) + parts[i][1:]
 		}
 	}
 	return result
 }
 
-// inferParameterNullability looks up column nullability from the database schema
-func (qa *QueryAnalyzer) inferParameterNullability(ctx context.Context, query *Query) error {
+// inferParameterNullability looks up column nullability from the database schema.
+// Failures to look up an individual column are tolerated (the parameter may be
+// an alias or an expression with no schema column) — the function never returns
+// an error.
+func (qa *QueryAnalyzer) inferParameterNullability(ctx context.Context, query *Query) {
 	for i := range query.Parameters {
 		param := &query.Parameters[i]
 
@@ -390,8 +426,6 @@ func (qa *QueryAnalyzer) inferParameterNullability(ctx context.Context, query *Q
 			param.GoType = makePointerType(param.GoType)
 		}
 	}
-
-	return nil
 }
 
 // makePointerType converts a Go type to its pointer equivalent
@@ -410,50 +444,79 @@ func (qa *QueryAnalyzer) removeQuotedContent(sql string) string {
 	inDoubleQuote := false
 
 	for i := 0; i < len(result); i++ {
-		if result[i] == '\'' && (i == 0 || result[i-1] != '\\') {
-			if inSingleQuote {
-				// Check for escaped quote ''
-				if i+1 < len(result) && result[i+1] == '\'' {
-					result[i] = ' '
-					result[i+1] = ' '
-					i++
-				} else {
-					inSingleQuote = false
-				}
-			} else if !inDoubleQuote {
-				inSingleQuote = true
-			}
-			if inSingleQuote || (!inSingleQuote && i > 0) {
-				result[i] = ' '
-			}
-		} else if result[i] == '"' && (i == 0 || result[i-1] != '\\') {
-			if inDoubleQuote {
-				// Check for escaped quote ""
-				if i+1 < len(result) && result[i+1] == '"' {
-					result[i] = ' '
-					result[i+1] = ' '
-					i++
-				} else {
-					inDoubleQuote = false
-				}
-			} else if !inSingleQuote {
-				inDoubleQuote = true
-			}
-			if inDoubleQuote || (!inDoubleQuote && i > 0) {
-				result[i] = ' '
-			}
-		} else if inSingleQuote || inDoubleQuote {
+		switch {
+		case result[i] == '\'' && (i == 0 || result[i-1] != '\\'):
+			i = qa.handleSingleQuote(result, i, &inSingleQuote, inDoubleQuote)
+		case result[i] == '"' && (i == 0 || result[i-1] != '\\'):
+			i = qa.handleDoubleQuote(result, i, &inDoubleQuote, inSingleQuote)
+		case inSingleQuote || inDoubleQuote:
 			result[i] = ' '
-		} else if result[i] == '-' && i+1 < len(result) && result[i+1] == '-' {
-			// Remove single-line comments
-			for i < len(result) && result[i] != '\n' && result[i] != '\r' {
-				result[i] = ' '
-				i++
-			}
+		case result[i] == '-' && i+1 < len(result) && result[i+1] == '-':
+			i = qa.blankLineComment(result, i)
 		}
 	}
 
 	return string(result)
+}
+
+// handleSingleQuote processes a single-quote character at position i in result.
+// It updates *inSingleQuote, optionally consumes a paired escape quote, blanks
+// the appropriate position, and returns the (possibly advanced) index.
+//
+// The blanking rule preserves the original behavior:
+//   - When entering a string (inSingleQuote becomes true), the quote is blanked.
+//   - When leaving a string (inSingleQuote becomes false), the quote is only
+//     blanked if i > 0. (The original code always set the closing quote to a
+//     space when i > 0; when i == 0 nothing is blanked because there's no
+//     string content to remove.)
+func (qa *QueryAnalyzer) handleSingleQuote(result []rune, i int, inSingleQuote *bool, inDoubleQuote bool) int {
+	if *inSingleQuote {
+		// Check for escaped quote ''
+		if i+1 < len(result) && result[i+1] == '\'' {
+			result[i] = ' '
+			result[i+1] = ' '
+			i++
+		} else {
+			*inSingleQuote = false
+		}
+	} else if !inDoubleQuote {
+		*inSingleQuote = true
+	}
+	if *inSingleQuote || (!*inSingleQuote && i > 0) {
+		result[i] = ' '
+	}
+	return i
+}
+
+// handleDoubleQuote is the double-quote analogue of handleSingleQuote.
+func (qa *QueryAnalyzer) handleDoubleQuote(result []rune, i int, inDoubleQuote *bool, inSingleQuote bool) int {
+	if *inDoubleQuote {
+		// Check for escaped quote ""
+		if i+1 < len(result) && result[i+1] == '"' {
+			result[i] = ' '
+			result[i+1] = ' '
+			i++
+		} else {
+			*inDoubleQuote = false
+		}
+	} else if !inSingleQuote {
+		*inDoubleQuote = true
+	}
+	if *inDoubleQuote || (!*inDoubleQuote && i > 0) {
+		result[i] = ' '
+	}
+	return i
+}
+
+// blankLineComment blanks out a `-- ...` single-line SQL comment starting at
+// index i. It returns the index of the line terminator (or len(result)-1 if
+// there isn't one); the caller's loop will advance past it on the next iteration.
+func (qa *QueryAnalyzer) blankLineComment(result []rune, i int) int {
+	for i < len(result) && result[i] != '\n' && result[i] != '\r' {
+		result[i] = ' '
+		i++
+	}
+	return i
 }
 
 // isSelectQuery checks if the query type requires column analysis
@@ -468,83 +531,6 @@ func (qa *QueryAnalyzer) analyzeSelectQuery(ctx context.Context, query *Query) e
 	return qa.analyzeQueryColumns(ctx, query)
 }
 
-// replaceParametersForExplain replaces parameter placeholders with dummy values for EXPLAIN
-func (qa *QueryAnalyzer) replaceParametersForExplain(sql string, parameters []Parameter) string {
-	result := sql
-
-	// Replace parameters in reverse order to avoid issues with $1 vs $10
-	for i := len(parameters); i >= 1; i-- {
-		placeholder := fmt.Sprintf("$%d", i)
-		dummyValue := qa.getDummyValueForParameter()
-
-		// Use a more sophisticated replacement that avoids string literals
-		// For now, we'll use a simple approach but this could be enhanced
-		result = qa.replaceParameterOutsideQuotes(result, placeholder, dummyValue)
-	}
-	return result
-}
-
-// replaceParameterOutsideQuotes replaces parameter only when it's not inside quotes
-func (qa *QueryAnalyzer) replaceParameterOutsideQuotes(sql, placeholder, replacement string) string {
-	result := []rune(sql)
-	searchRunes := []rune(placeholder)
-	inSingleQuote := false
-	inDoubleQuote := false
-
-	for i := 0; i < len(result); i++ {
-		if result[i] == '\'' && (i == 0 || result[i-1] != '\\') {
-			if inSingleQuote {
-				if i+1 < len(result) && result[i+1] == '\'' {
-					i++
-				} else {
-					inSingleQuote = false
-				}
-			} else if !inDoubleQuote {
-				inSingleQuote = true
-			}
-		} else if result[i] == '"' && (i == 0 || result[i-1] != '\\') {
-			if inDoubleQuote {
-				if i+1 < len(result) && result[i+1] == '"' {
-					i++
-				} else {
-					inDoubleQuote = false
-				}
-			} else if !inSingleQuote {
-				inDoubleQuote = true
-			}
-		} else if !inSingleQuote && !inDoubleQuote {
-			// Check if we're at the placeholder position
-			match := true
-			if i+len(searchRunes) <= len(result) {
-				for j := 0; j < len(searchRunes); j++ {
-					if result[i+j] != searchRunes[j] {
-						match = false
-						break
-					}
-				}
-				if match {
-					// Replace the placeholder
-					replRunes := []rune(replacement)
-					newResult := make([]rune, 0, len(result)-len(searchRunes)+len(replRunes))
-					newResult = append(newResult, result[:i]...)
-					newResult = append(newResult, replRunes...)
-					newResult = append(newResult, result[i+len(searchRunes):]...)
-					result = newResult
-					i += len(replRunes) - 1
-				}
-			}
-		}
-	}
-
-	return string(result)
-}
-
-// getDummyValueForParameter returns a dummy value for a parameter
-func (qa *QueryAnalyzer) getDummyValueForParameter() string {
-	// Use NULL which works with all types and avoids type conversion issues
-	return "NULL"
-}
-
 // analyzeQueryColumns analyzes the columns returned by a SELECT query
 func (qa *QueryAnalyzer) analyzeQueryColumns(ctx context.Context, query *Query) error {
 	// Remove trailing semicolon if present
@@ -552,7 +538,7 @@ func (qa *QueryAnalyzer) analyzeQueryColumns(ctx context.Context, query *Query) 
 	sql = strings.TrimSuffix(sql, ";")
 
 	// Prepare dummy parameter values for execution
-	var paramValues []interface{}
+	paramValues := make([]any, 0, len(query.Parameters))
 	for range query.Parameters {
 		paramValues = append(paramValues, nil) // Use nil for all parameters
 	}
@@ -613,90 +599,131 @@ func (qa *QueryAnalyzer) analyzeQueryColumns(ctx context.Context, query *Query) 
 func (qa *QueryAnalyzer) isColumnNullable(ctx context.Context, field pgconn.FieldDescription, sql string) (bool, error) {
 	// If TableOID and TableAttributeNumber are both non-zero, this is a table column
 	if field.TableOID != 0 && field.TableAttributeNumber != 0 {
-		// Query pg_attribute to check if column is NOT NULL
-		var notNull bool
-		err := qa.db.QueryRow(ctx, `
-			SELECT attnotnull
-			FROM pg_attribute
-			WHERE attrelid = $1 AND attnum = $2
-		`, field.TableOID, field.TableAttributeNumber).Scan(&notNull)
+		return qa.isTableColumnNullable(ctx, field, sql)
+	}
+	return qa.isComputedColumnNullable(field, sql)
+}
 
-		if err != nil {
-			return true, fmt.Errorf("failed to query pg_attribute: %w", err)
-		}
-
-		// Get the table name from OID to check JOIN rules
-		var tableName string
-		err = qa.db.QueryRow(ctx, `
-			SELECT relname FROM pg_class WHERE oid = $1
-		`, field.TableOID).Scan(&tableName)
-		if err != nil {
-			return true, fmt.Errorf("failed to query pg_class: %w", err)
-		}
-
-		// Check if this table is on the nullable side of an outer join
-		isNullableFromJoin := qa.isTableNullableFromJoin(tableName, sql)
-		if isNullableFromJoin {
-			return true, nil // Outer join makes column nullable
-		}
-
-		return !notNull, nil
+// isTableColumnNullable determines whether a column backed by a real table
+// (FieldDescription.TableOID and TableAttributeNumber are both non-zero)
+// is nullable. It consults pg_attribute for the NOT NULL constraint and then
+// checks whether an outer JOIN promotes the column to nullable.
+func (qa *QueryAnalyzer) isTableColumnNullable(ctx context.Context, field pgconn.FieldDescription, sql string) (bool, error) {
+	// Query pg_attribute to check if column is NOT NULL
+	var notNull bool
+	err := qa.db.QueryRow(ctx, `
+		SELECT attnotnull
+		FROM pg_attribute
+		WHERE attrelid = $1 AND attnum = $2
+	`, field.TableOID, field.TableAttributeNumber).Scan(&notNull)
+	if err != nil {
+		return true, fmt.Errorf("failed to query pg_attribute: %w", err)
 	}
 
-	// Computed column (TableOID == 0 or TableAttributeNumber == 0)
-	// Parse SQL to check expression type
+	// Get the table name from OID to check JOIN rules
+	var tableName string
+	err = qa.db.QueryRow(ctx, `
+		SELECT relname FROM pg_class WHERE oid = $1
+	`, field.TableOID).Scan(&tableName)
+	if err != nil {
+		return true, fmt.Errorf("failed to query pg_class: %w", err)
+	}
+
+	// Check if this table is on the nullable side of an outer join
+	if qa.isTableNullableFromJoin(tableName, sql) {
+		return true, nil // Outer join makes column nullable
+	}
+
+	return !notNull, nil
+}
+
+// isComputedColumnNullable determines whether a computed column (one whose
+// FieldDescription has no TableOID/TableAttributeNumber) is nullable. It
+// inspects the parsed SELECT for non-null-guaranteeing expressions
+// (COUNT, ranking functions, COALESCE/CASE with non-null literals) and
+// recursively checks subqueries and CTEs.
+func (qa *QueryAnalyzer) isComputedColumnNullable(field pgconn.FieldDescription, sql string) (bool, error) {
 	queryInfo, err := qa.sqlParser.Parse(sql)
 	if err != nil {
 		// If parsing fails, default to nullable
 		return true, nil
 	}
 
-	// Find the target matching this column name
+	// Find the target matching this column name in the top-level SELECT list.
 	for _, target := range queryInfo.SelectTargets {
-		if strings.EqualFold(target.Alias, field.Name) {
-			// Check various expression types that guarantee non-null
-			if target.IsCount {
-				return false, nil // COUNT never returns NULL
-			}
-			if target.IsRowNumber || target.IsRank || target.IsDenseRank {
-				return false, nil // Window ranking functions never return NULL
-			}
-			if target.IsCoalesce && target.HasNonNullLiteral {
-				return false, nil // COALESCE with non-null literal guarantees non-null
-			}
-			if target.IsCaseWithElse && target.HasNonNullLiteral {
-				return false, nil // CASE with non-null ELSE literal guarantees non-null
-			}
+		if !strings.EqualFold(target.Alias, field.Name) {
+			continue
+		}
+		if guaranteedNonNull(target) {
+			return false, nil
 		}
 	}
 
 	// Check if this column comes from a subquery or CTE
 	columnName := field.Name
 
-	// Check all subqueries for a matching column
-	for _, table := range queryInfo.Tables {
-		if table.IsSubquery && table.SubqueryInfo != nil {
-			if nullable, found := qa.checkTargetNullability(table.SubqueryInfo.SelectTargets, columnName); found {
-				return nullable, nil
-			}
-		}
+	if nullable, found := qa.findColumnInSubqueries(queryInfo.Tables, columnName); found {
+		return nullable, nil
 	}
 
-	// Check all CTEs for a matching column
-	for _, cte := range queryInfo.CTEs {
-		if cte.Query != nil {
-			if nullable, found := qa.checkTargetNullability(cte.Query.SelectTargets, columnName); found {
-				return nullable, nil
-			}
-		}
+	if nullable, found := qa.findColumnInCTEs(queryInfo.CTEs, columnName); found {
+		return nullable, nil
 	}
 
 	// Other computed columns default to nullable
 	return true, nil
 }
 
+// guaranteedNonNull reports whether a SelectTarget's expression form
+// guarantees a non-null result.
+func guaranteedNonNull(target SelectTarget) bool {
+	if target.IsCount {
+		return true // COUNT never returns NULL
+	}
+	if target.IsRowNumber || target.IsRank || target.IsDenseRank {
+		return true // Window ranking functions never return NULL
+	}
+	if target.IsCoalesce && target.HasNonNullLiteral {
+		return true // COALESCE with non-null literal guarantees non-null
+	}
+	if target.IsCaseWithElse && target.HasNonNullLiteral {
+		return true // CASE with non-null ELSE literal guarantees non-null
+	}
+	return false
+}
+
+// findColumnInSubqueries searches subquery tables for a SelectTarget matching
+// columnName. It returns (nullable, true) on the first match, or (_, false)
+// when none of the subqueries expose that column.
+func (qa *QueryAnalyzer) findColumnInSubqueries(tables []TableRef, columnName string) (nullable, found bool) {
+	for _, table := range tables {
+		if !table.IsSubquery || table.SubqueryInfo == nil {
+			continue
+		}
+		if n, ok := qa.checkTargetNullability(table.SubqueryInfo.SelectTargets, columnName); ok {
+			return n, true
+		}
+	}
+	return true, false
+}
+
+// findColumnInCTEs searches CTE definitions for a SelectTarget matching
+// columnName. It returns (nullable, true) on the first match, or (_, false)
+// when none of the CTEs expose that column.
+func (qa *QueryAnalyzer) findColumnInCTEs(ctes []CTEInfo, columnName string) (nullable, found bool) {
+	for _, cte := range ctes {
+		if cte.Query == nil {
+			continue
+		}
+		if n, ok := qa.checkTargetNullability(cte.Query.SelectTargets, columnName); ok {
+			return n, true
+		}
+	}
+	return true, false
+}
+
 // checkTargetNullability checks if a SelectTarget guarantees non-null based on expression type
-func (qa *QueryAnalyzer) checkTargetNullability(targets []SelectTarget, columnName string) (nullable bool, found bool) {
+func (qa *QueryAnalyzer) checkTargetNullability(targets []SelectTarget, columnName string) (nullable, found bool) {
 	for _, target := range targets {
 		if strings.EqualFold(target.Alias, columnName) {
 			if target.IsCount || target.IsRowNumber || target.IsRank || target.IsDenseRank {
@@ -719,48 +746,73 @@ func (qa *QueryAnalyzer) isTableNullableFromJoin(tableName, sql string) bool {
 		return false
 	}
 
-	// Build a map of table names to their aliases
-	tableAliases := make(map[string]string) // maps table name -> alias
-	for _, table := range queryInfo.Tables {
-		if table.Alias != "" {
-			tableAliases[table.Name] = table.Alias
-		}
-	}
+	// JOINs use aliases, so resolve the table's alias (if any) up front.
+	tableIdentifier := resolveTableAlias(queryInfo.Tables, tableName)
 
-	// Check each JOIN to see if this table is on the nullable side
-	// JOINs use aliases, so we need to check if the alias matches
-	tableIdentifier := tableName
-	if alias, hasAlias := tableAliases[tableName]; hasAlias {
-		tableIdentifier = alias
-	}
-
+	// Check each JOIN to see if this table is on the nullable side.
 	for _, join := range queryInfo.Joins {
-		switch join.Type {
-		case JoinTypeLeft:
-			// Right table becomes nullable in LEFT JOIN
-			if join.RightTable == tableIdentifier || join.RightTable == tableName {
-				return true
-			}
-		case JoinTypeRight:
-			// Left table becomes nullable in RIGHT JOIN
-			if join.LeftTable == tableIdentifier || join.LeftTable == tableName {
-				return true
-			}
-		case JoinTypeFull:
-			// Both tables become nullable in FULL OUTER JOIN
-			if join.LeftTable == tableIdentifier || join.LeftTable == tableName ||
-				join.RightTable == tableIdentifier || join.RightTable == tableName {
-				return true
-			}
+		if joinMakesTableNullable(join, tableName, tableIdentifier) {
+			return true
 		}
 	}
 
 	return false
 }
 
+// resolveTableAlias returns the alias used for tableName in the given table
+// list, or tableName itself when no alias is defined. JOIN clauses reference
+// the alias when present, so this is what we compare against join.LeftTable /
+// join.RightTable.
+func resolveTableAlias(tables []TableRef, tableName string) string {
+	for _, table := range tables {
+		if table.Name == tableName && table.Alias != "" {
+			return table.Alias
+		}
+	}
+	return tableName
+}
+
+// joinMakesTableNullable reports whether the given join promotes the named
+// table (matched by either alias or raw name) to nullable. The rules:
+//   - LEFT JOIN: right table becomes nullable.
+//   - RIGHT JOIN: left table becomes nullable.
+//   - FULL OUTER JOIN: both tables become nullable.
+//   - INNER JOIN: neither table becomes nullable.
+func joinMakesTableNullable(join JoinInfo, tableName, tableIdentifier string) bool {
+	matchesLeft := join.LeftTable == tableIdentifier || join.LeftTable == tableName
+	matchesRight := join.RightTable == tableIdentifier || join.RightTable == tableName
+
+	switch join.Type {
+	case JoinTypeLeft:
+		return matchesRight
+	case JoinTypeRight:
+		return matchesLeft
+	case JoinTypeFull:
+		return matchesLeft || matchesRight
+	}
+	return false
+}
+
 // mapOIDToTypeName maps PostgreSQL OID to type name
 // Handles both base types and array types, returning the base type name
 func (qa *QueryAnalyzer) mapOIDToTypeName(oid uint32) string {
+	if name := mapNumericOID(oid); name != "" {
+		return name
+	}
+	if name := mapStringOID(oid); name != "" {
+		return name
+	}
+	if name := mapTimeOID(oid); name != "" {
+		return name
+	}
+	if name := mapMiscOID(oid); name != "" {
+		return name
+	}
+	return "unknown"
+}
+
+// mapNumericOID maps numeric / boolean / bytea PostgreSQL OIDs to type names.
+func mapNumericOID(oid uint32) string {
 	switch oid {
 	case 16, 1000: // boolean, boolean[]
 		return "boolean"
@@ -772,33 +824,53 @@ func (qa *QueryAnalyzer) mapOIDToTypeName(oid uint32) string {
 		return "integer"
 	case 20, 1016: // bigint, bigint[]
 		return "bigint"
+	case 700, 1021: // real, real[]
+		return "real"
+	case 701, 1022: // double precision, double precision[]
+		return "double precision"
+	case 1700, 1231: // numeric, numeric[]
+		return "numeric"
+	}
+	return ""
+}
+
+// mapStringOID maps string-like PostgreSQL OIDs to type names.
+func mapStringOID(oid uint32) string {
+	switch oid {
 	case 25, 1009: // text, text[]
 		return "text"
 	case 1042, 1014: // char, char[]
 		return "char"
 	case 1043, 1015: // varchar, varchar[]
 		return "varchar"
-	case 700, 1021: // real, real[]
-		return "real"
-	case 701, 1022: // double precision, double precision[]
-		return "double precision"
+	}
+	return ""
+}
+
+// mapTimeOID maps date/time PostgreSQL OIDs to type names.
+func mapTimeOID(oid uint32) string {
+	switch oid {
 	case 1082, 1182: // date, date[]
 		return "date"
 	case 1114, 1183: // timestamp, timestamp[]
 		return "timestamp"
 	case 1184, 1185: // timestamptz, timestamptz[]
 		return "timestamptz"
-	case 1700, 1231: // numeric, numeric[]
-		return "numeric"
+	}
+	return ""
+}
+
+// mapMiscOID maps miscellaneous PostgreSQL OIDs (uuid, json, jsonb) to type names.
+func mapMiscOID(oid uint32) string {
+	switch oid {
 	case 2950, 2951: // uuid, uuid[]
 		return "uuid"
 	case 114, 199: // json, json[]
 		return "json"
 	case 3802, 3807: // jsonb, jsonb[]
 		return "jsonb"
-	default:
-		return "unknown"
 	}
+	return ""
 }
 
 // isArrayOID checks if a PostgreSQL OID represents an array type
@@ -855,41 +927,24 @@ func (qa *QueryAnalyzer) inferParameterTypesFromPrepare(ctx context.Context, que
 
 	// Update parameter types based on the prepared statement
 	for i, paramOID := range stmt.ParamOIDs {
-		if i < len(query.Parameters) {
-			pgType := qa.mapOIDToTypeName(paramOID)
-			goType, err := qa.typeMapper.MapType(pgType, false, false)
-			if err != nil {
-				return fmt.Errorf("failed to map parameter type: %w", err)
-			}
-
-			// Use int instead of int64 for limit/offset parameters (Go idiomatic)
-			paramName := query.Parameters[i].Name
-			if (paramName == "limit" || paramName == "offset") && goType == "int64" {
-				goType = "int"
-			}
-
-			query.Parameters[i].Type = pgType
-			query.Parameters[i].GoType = goType
+		if i >= len(query.Parameters) {
+			continue
 		}
+		pgType := qa.mapOIDToTypeName(paramOID)
+		goType, err := qa.typeMapper.MapType(pgType, false, false)
+		if err != nil {
+			return fmt.Errorf("failed to map parameter type: %w", err)
+		}
+
+		// Use int instead of int64 for limit/offset parameters (Go idiomatic)
+		paramName := query.Parameters[i].Name
+		if (paramName == "limit" || paramName == "offset") && goType == "int64" {
+			goType = "int"
+		}
+
+		query.Parameters[i].Type = pgType
+		query.Parameters[i].GoType = goType
 	}
 
-	return nil
-}
-
-// InferParameterTypes attempts to infer parameter types from query context.
-// This is a placeholder for more advanced type inference that could analyze
-// query semantics to determine parameter types without database introspection.
-func (qa *QueryAnalyzer) InferParameterTypes(ctx context.Context, query *Query) error {
-	// This is a more advanced feature that could analyze the query context
-	// to infer parameter types based on how they're used
-	// For now, we'll keep the basic implementation from extractParameters
-	return nil
-}
-
-// ValidateQueryExecution validates that a query can be executed successfully.
-// This could be used in testing to ensure queries work with sample data.
-func (qa *QueryAnalyzer) ValidateQueryExecution(ctx context.Context, query *Query) error {
-	// This could be used to validate that the query executes without errors
-	// using test data or in a test transaction
 	return nil
 }

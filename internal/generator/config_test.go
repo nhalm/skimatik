@@ -9,7 +9,7 @@ import (
 func TestParseDefaultFunctions(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    interface{}
+		input    any
 		expected []string
 		wantErr  bool
 	}{
@@ -33,19 +33,19 @@ func TestParseDefaultFunctions(t *testing.T) {
 		},
 		{
 			name:     "array of strings",
-			input:    []interface{}{"create", "get", "update"},
+			input:    []any{"create", "get", "update"},
 			expected: []string{"create", "get", "update"},
 			wantErr:  false,
 		},
 		{
 			name:     "empty array",
-			input:    []interface{}{},
+			input:    []any{},
 			expected: []string{},
 			wantErr:  false,
 		},
 		{
 			name:     "array with non-string",
-			input:    []interface{}{"create", 123},
+			input:    []any{"create", 123},
 			expected: nil,
 			wantErr:  true,
 		},
@@ -225,7 +225,7 @@ tables:
 			tempDir := t.TempDir()
 			configPath := filepath.Join(tempDir, "config.yaml")
 
-			err := os.WriteFile(configPath, []byte(tt.yamlContent), 0644)
+			err := os.WriteFile(configPath, []byte(tt.yamlContent), 0o644)
 			if err != nil {
 				t.Fatalf("Failed to write test config file: %v", err)
 			}
@@ -308,7 +308,7 @@ tables:
 			tempDir := t.TempDir()
 			configPath := filepath.Join(tempDir, "config.yaml")
 
-			err := os.WriteFile(configPath, []byte(tt.yamlContent), 0644)
+			err := os.WriteFile(configPath, []byte(tt.yamlContent), 0o644)
 			if err != nil {
 				t.Fatalf("Failed to write test config file: %v", err)
 			}

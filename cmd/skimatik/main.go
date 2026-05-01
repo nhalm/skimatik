@@ -1,3 +1,6 @@
+// Package main is the skimatik CLI entry point. It loads configuration,
+// connects to PostgreSQL, and drives the generator package to emit
+// type-safe Go repositories from SQL files and table introspection.
 package main
 
 import (

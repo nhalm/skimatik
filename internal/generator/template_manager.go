@@ -46,7 +46,7 @@ func (tm *TemplateManager) LoadTemplate(name string) (*template.Template, error)
 }
 
 // ExecuteTemplate executes a template with given data
-func (tm *TemplateManager) ExecuteTemplate(name string, data interface{}) (string, error) {
+func (tm *TemplateManager) ExecuteTemplate(name string, data any) (string, error) {
 	tmpl, err := tm.LoadTemplate(name)
 	if err != nil {
 		return "", err

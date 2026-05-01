@@ -1,3 +1,5 @@
+// Package service contains the example-app's business-logic layer and the
+// consumer-owned repository interfaces it depends on.
 package service
 
 import (

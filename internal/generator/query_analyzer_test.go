@@ -504,82 +504,6 @@ func TestQueryAnalyzer_OIDMapping_Synchronization(t *testing.T) {
 	}
 }
 
-func TestQueryAnalyzer_ReplaceParametersForExplain(t *testing.T) {
-	tests := []struct {
-		name     string
-		sql      string
-		expected string
-	}{
-		{
-			name:     "no parameters",
-			sql:      "SELECT id FROM users",
-			expected: "SELECT id FROM users",
-		},
-		{
-			name:     "single parameter",
-			sql:      "SELECT id FROM users WHERE id = $1",
-			expected: "SELECT id FROM users WHERE id = NULL",
-		},
-		{
-			name:     "multiple parameters",
-			sql:      "SELECT id FROM users WHERE name = $1 AND age > $2",
-			expected: "SELECT id FROM users WHERE name = NULL AND age > NULL",
-		},
-		{
-			name:     "duplicate parameters",
-			sql:      "SELECT id FROM users WHERE status = $1 OR backup_status = $1",
-			expected: "SELECT id FROM users WHERE status = NULL OR backup_status = NULL",
-		},
-		{
-			name:     "parameters in string literals ignored",
-			sql:      "SELECT '$1' as literal, id FROM users WHERE id = $1",
-			expected: "SELECT '$1' as literal, id FROM users WHERE id = NULL",
-		},
-	}
-
-	analyzer := NewQueryAnalyzer(nil, "public")
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create dummy parameters for the test
-			var params []Parameter
-			if strings.Contains(tt.sql, "$1") {
-				params = append(params, Parameter{Index: 1})
-			}
-			if strings.Contains(tt.sql, "$2") {
-				params = append(params, Parameter{Index: 2})
-			}
-			result := analyzer.replaceParametersForExplain(tt.sql, params)
-			if result != tt.expected {
-				t.Errorf("replaceParametersForExplain(%q) = %q, want %q", tt.sql, result, tt.expected)
-			}
-		})
-	}
-}
-
-func TestQueryAnalyzer_GetDummyValueForParameter(t *testing.T) {
-	tests := []struct {
-		name     string
-		index    int
-		expected string
-	}{
-		{"first parameter", 1, "NULL"},
-		{"second parameter", 2, "NULL"},
-		{"tenth parameter", 10, "NULL"},
-	}
-
-	analyzer := NewQueryAnalyzer(nil, "public")
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := analyzer.getDummyValueForParameter()
-			if result != tt.expected {
-				t.Errorf("getDummyValueForParameter(%d) = %v, want %v", tt.index, result, tt.expected)
-			}
-		})
-	}
-}
-
 func TestQueryAnalyzer_AnalyzeQuery_ParameterExtraction(t *testing.T) {
 	analyzer := NewQueryAnalyzer(nil, "public") // No database needed for parameter extraction only
 
@@ -750,10 +674,7 @@ func TestQueryAnalyzer_InferParameterNames(t *testing.T) {
 			}
 
 			// Then infer names
-			err = analyzer.inferParameterNames(&query)
-			if err != nil {
-				t.Fatalf("inferParameterNames failed: %v", err)
-			}
+			analyzer.inferParameterNames(&query)
 
 			// Verify names
 			for _, param := range query.Parameters {
@@ -878,10 +799,7 @@ func TestQueryAnalyzer_TableColumnTracking(t *testing.T) {
 				t.Fatalf("extractParameters failed: %v", err)
 			}
 
-			err = analyzer.inferParameterNames(&query)
-			if err != nil {
-				t.Fatalf("inferParameterNames failed: %v", err)
-			}
+			analyzer.inferParameterNames(&query)
 
 			// Verify table/column tracking
 			for _, param := range query.Parameters {
@@ -1044,19 +962,20 @@ func TestQueryAnalyzer_ApplyResultAnnotations(t *testing.T) {
 					for _, annotation := range tt.query.ResultAnnotations {
 						found := false
 						for _, col := range query.Columns {
-							if col.Name == annotation.ColumnName {
-								found = true
-								if col.GoType != annotation.GoType {
-									t.Errorf("Column %s: expected GoType %q, got %q",
-										col.Name, annotation.GoType, col.GoType)
-								}
-								expectedNullable := strings.HasPrefix(annotation.GoType, "*")
-								if col.IsNullable != expectedNullable {
-									t.Errorf("Column %s: expected IsNullable %v, got %v",
-										col.Name, expectedNullable, col.IsNullable)
-								}
-								break
+							if col.Name != annotation.ColumnName {
+								continue
 							}
+							found = true
+							if col.GoType != annotation.GoType {
+								t.Errorf("Column %s: expected GoType %q, got %q",
+									col.Name, annotation.GoType, col.GoType)
+							}
+							expectedNullable := strings.HasPrefix(annotation.GoType, "*")
+							if col.IsNullable != expectedNullable {
+								t.Errorf("Column %s: expected IsNullable %v, got %v",
+									col.Name, expectedNullable, col.IsNullable)
+							}
+							break
 						}
 						if !found && !tt.expectError {
 							t.Errorf("Annotation for column %s was not applied", annotation.ColumnName)

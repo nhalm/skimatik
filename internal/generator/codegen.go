@@ -1,3 +1,6 @@
+// Package generator implements skimatik's database-first code generation:
+// PostgreSQL schema introspection, SQL file parsing, query analysis, and
+// emission of type-safe Go repositories with cursor-based pagination.
 package generator
 
 import (
@@ -148,20 +151,21 @@ func (cg *CodeGenerator) combineImports(lists ...[]string) []string {
 
 // getQueryImports returns the imports needed for all queries
 func (cg *CodeGenerator) getQueryImports(queries []Query) []string {
-	imports := make(map[string]bool)
+	importSet := make(map[string]bool)
 
 	hasPaginatedQueries := false
-	for _, query := range queries {
+	for i := range queries {
+		query := &queries[i]
 		// Get imports for result columns
 		queryImports := cg.typeMapper.GetRequiredImports(query.Columns)
 		for _, imp := range queryImports {
-			imports[imp] = true
+			importSet[imp] = true
 		}
 
 		// Get imports for parameters
 		paramImports := cg.typeMapper.GetRequiredImports(convertParametersToColumns(query.Parameters))
 		for _, imp := range paramImports {
-			imports[imp] = true
+			importSet[imp] = true
 		}
 
 		// Check if query uses OrderByColumns (for pagination)
@@ -172,12 +176,12 @@ func (cg *CodeGenerator) getQueryImports(queries []Query) []string {
 
 	// Add reflect package if any query uses OrderByColumns
 	if hasPaginatedQueries {
-		imports["reflect"] = true
+		importSet["reflect"] = true
 	}
 
 	// Convert map to slice
-	var result []string
-	for imp := range imports {
+	result := make([]string, 0, len(importSet))
+	for imp := range importSet {
 		result = append(result, imp)
 	}
 
@@ -186,7 +190,7 @@ func (cg *CodeGenerator) getQueryImports(queries []Query) []string {
 
 // convertParametersToColumns converts parameters to columns for import calculation
 func convertParametersToColumns(params []Parameter) []Column {
-	var columns []Column
+	columns := make([]Column, 0, len(params))
 	for _, param := range params {
 		columns = append(columns, Column{
 			Name:   param.Name,
@@ -202,10 +206,7 @@ func (cg *CodeGenerator) generateEnhancedFeatures(table Table) (string, error) {
 	var code strings.Builder
 
 	// Prepare template data
-	data, err := cg.prepareCRUDTemplateData(table)
-	if err != nil {
-		return "", fmt.Errorf("failed to prepare template data: %w", err)
-	}
+	data := cg.prepareCRUDTemplateData(table)
 
 	// Generate retry methods
 	retryCode, err := cg.templateMgr.ExecuteTemplate(TemplateRepositoryRetry, data)
@@ -289,10 +290,7 @@ func (cg *CodeGenerator) generateCRUDOperations(table Table) (string, error) {
 	var code strings.Builder
 
 	// Generate template data
-	data, err := cg.prepareCRUDTemplateData(table)
-	if err != nil {
-		return "", fmt.Errorf("failed to prepare template data: %w", err)
-	}
+	data := cg.prepareCRUDTemplateData(table)
 
 	// Get the functions to generate for this table
 	functions := cg.config.GetTableFunctions(table.Name)
@@ -350,8 +348,10 @@ func (cg *CodeGenerator) generateCRUDOperations(table Table) (string, error) {
 	return code.String(), nil
 }
 
-// prepareCRUDTemplateData prepares the data structure for CRUD templates
-func (cg *CodeGenerator) prepareCRUDTemplateData(table Table) (map[string]interface{}, error) {
+// prepareCRUDTemplateData prepares the data structure for CRUD templates.
+// All inputs come from already-validated schema introspection, so no error
+// path is required.
+func (cg *CodeGenerator) prepareCRUDTemplateData(table Table) map[string]any {
 	structName := table.GoStructName()
 	repositoryName := structName + "Repository"
 	receiverName := strings.ToLower(structName[:1])
@@ -416,7 +416,7 @@ func (cg *CodeGenerator) prepareCRUDTemplateData(table Table) (map[string]interf
 	updateArgs = append(updateArgs, "id")
 	idParamIndex := updateParamIndex
 
-	return map[string]interface{}{
+	return map[string]any{
 		"StructName":         structName,
 		"RepositoryName":     repositoryName,
 		"ReceiverName":       receiverName,
@@ -434,7 +434,7 @@ func (cg *CodeGenerator) prepareCRUDTemplateData(table Table) (map[string]interf
 		"InsertArgs":         strings.Join(insertArgs, ", "),
 		"UpdateColumns":      strings.Join(updateAssignments, ", "),
 		"UpdateArgs":         strings.Join(updateArgs, ", "),
-	}, nil
+	}
 }
 
 // GenerateSharedPaginationTypes generates the shared pagination types file
@@ -568,7 +568,7 @@ func (cg *CodeGenerator) writeCodeToFile(filename, code string) error {
 	}
 
 	// Write to file
-	if err := os.WriteFile(filename, formatted, 0644); err != nil { // #nosec G306 -- generated source is intentionally world-readable for editors/CI/containers
+	if err := os.WriteFile(filename, formatted, 0o644); err != nil { // #nosec G306 -- generated source is intentionally world-readable for editors/CI/containers
 		return fmt.Errorf("failed to write file %s: %w", filename, err)
 	}
 
@@ -592,47 +592,6 @@ func (cg *CodeGenerator) GenerateQueries(queries []Query) error {
 	}
 
 	return nil
-}
-
-// containsOrderBy checks if SQL contains an ORDER BY clause (case-insensitive)
-func containsOrderBy(sql string) bool {
-	// Normalize to lowercase for case-insensitive comparison
-	sqlLower := strings.ToLower(sql)
-
-	// Remove string literals to avoid false positives
-	sqlLower = removeStringLiterals(sqlLower)
-
-	// Look for ORDER BY clause
-	return strings.Contains(sqlLower, "order by")
-}
-
-// removeStringLiterals removes string literals from SQL to avoid false ORDER BY detection
-func removeStringLiterals(sql string) string {
-	result := []rune(sql)
-	inSingleQuote := false
-
-	for i := 0; i < len(result); i++ {
-		if result[i] == '\'' {
-			if inSingleQuote {
-				// Check for escaped quote ''
-				if i+1 < len(result) && result[i+1] == '\'' {
-					result[i] = ' '
-					result[i+1] = ' '
-					i++
-				} else {
-					inSingleQuote = false
-					result[i] = ' '
-				}
-			} else {
-				inSingleQuote = true
-				result[i] = ' '
-			}
-		} else if inSingleQuote {
-			result[i] = ' '
-		}
-	}
-
-	return string(result)
 }
 
 // groupQueriesByFile groups queries by their source file
@@ -683,8 +642,8 @@ func (cg *CodeGenerator) generateQueryCode(sourceFile string, queries []Query) (
 
 	// Check if any queries are paginated
 	hasPaginatedQueries := false
-	for _, query := range queries {
-		if query.Type == QueryTypePaginated {
+	for i := range queries {
+		if queries[i].Type == QueryTypePaginated {
 			hasPaginatedQueries = true
 			break
 		}
@@ -702,11 +661,12 @@ func (cg *CodeGenerator) generateQueryCode(sourceFile string, queries []Query) (
 
 	// Generate result structs for queries that need them
 	structsGenerated := make(map[string]bool)
-	for _, query := range queries {
-		if cg.needsResultStruct(query) {
-			structName := cg.getQueryResultStructName(query)
+	for i := range queries {
+		query := &queries[i]
+		if cg.needsResultStruct(*query) {
+			structName := cg.getQueryResultStructName(*query)
 			if !structsGenerated[structName] {
-				structCode, err := cg.generateQueryResultStruct(query)
+				structCode, err := cg.generateQueryResultStruct(*query)
 				if err != nil {
 					return "", fmt.Errorf("failed to generate result struct for query %s: %w", query.Name, err)
 				}
@@ -728,12 +688,13 @@ func (cg *CodeGenerator) generateQueryCode(sourceFile string, queries []Query) (
 	body.WriteString("\n\n")
 
 	// Generate functions for each query
-	for i, query := range queries {
+	for i := range queries {
+		query := &queries[i]
 		if i > 0 {
 			body.WriteString("\n\n")
 		}
 
-		functionCode, err := cg.generateQueryFunction(query)
+		functionCode, err := cg.generateQueryFunction(*query)
 		if err != nil {
 			return "", fmt.Errorf("failed to generate function for query %s: %w", query.Name, err)
 		}
@@ -849,75 +810,79 @@ func (cg *CodeGenerator) generateQueryFunction(query Query) (string, error) {
 
 // generateOneQueryFunction generates a function that returns a single row
 func (cg *CodeGenerator) generateOneQueryFunction(query Query) (string, error) {
-	data, err := cg.prepareQueryTemplateData(query)
-	if err != nil {
-		return "", err
-	}
-
-	// Execute template using template manager
+	data := cg.prepareQueryTemplateData(query)
 	return cg.templateMgr.ExecuteTemplate(TemplateQueryOne, data)
 }
 
 // generateManyQueryFunction generates a function that returns multiple rows
 func (cg *CodeGenerator) generateManyQueryFunction(query Query) (string, error) {
-	data, err := cg.prepareQueryTemplateData(query)
-	if err != nil {
-		return "", err
-	}
-
-	// Execute template using template manager
+	data := cg.prepareQueryTemplateData(query)
 	return cg.templateMgr.ExecuteTemplate(TemplateQueryMany, data)
 }
 
 // generateExecQueryFunction generates a function that executes without returning rows
 func (cg *CodeGenerator) generateExecQueryFunction(query Query) (string, error) {
-	data, err := cg.prepareQueryTemplateData(query)
-	if err != nil {
-		return "", err
-	}
-
-	// Execute template using template manager
+	data := cg.prepareQueryTemplateData(query)
 	return cg.templateMgr.ExecuteTemplate(TemplateQueryExec, data)
 }
 
 // generatePaginatedQueryFunction generates a function that returns paginated results
 func (cg *CodeGenerator) generatePaginatedQueryFunction(query Query) (string, error) {
-	data, err := cg.prepareQueryTemplateData(query)
-	if err != nil {
-		return "", err
-	}
-
-	// Execute template using template manager
+	data := cg.prepareQueryTemplateData(query)
 	return cg.templateMgr.ExecuteTemplate(TemplateQueryPaginated, data)
 }
 
-// prepareQueryTemplateData prepares common template data for query functions
-func (cg *CodeGenerator) prepareQueryTemplateData(query Query) (map[string]interface{}, error) {
+// prepareQueryTemplateData prepares common template data for query functions.
+// All inputs come from already-validated query analysis, so no error path
+// is required.
+func (cg *CodeGenerator) prepareQueryTemplateData(query Query) map[string]any {
 	// Extract base name from source file for repository name
 	parts := strings.Split(query.SourceFile, "/")
 	filename := parts[len(parts)-1]
 	baseName := strings.TrimSuffix(filename, ".sql")
 	repositoryName := toPascalCase(baseName) + "Queries"
 
-	// Build parameter declarations and arguments
-	var paramDeclarations []string
+	// Build parameter declarations and arguments. Consecutive parameters that
+	// share the same Go type are combined into a single declaration (e.g.
+	// "a, b int" instead of "a int, b int") to satisfy the gocritic
+	// paramTypeCombine check.
+	type paramInfo struct {
+		Name   string
+		GoType string
+	}
+	var params []paramInfo
 	var paramArgs []string
 
 	if len(query.ParameterAnnotations) > 0 {
 		for _, annotation := range query.ParameterAnnotations {
 			paramName := toCamelCase(annotation.Name)
-			paramDeclarations = append(paramDeclarations, fmt.Sprintf("%s %s", paramName, annotation.GoType))
+			params = append(params, paramInfo{Name: paramName, GoType: annotation.GoType})
 			paramArgs = append(paramArgs, paramName)
 		}
 	} else {
 		for _, param := range query.Parameters {
-			paramDeclarations = append(paramDeclarations, fmt.Sprintf("%s %s", param.Name, param.GoType))
+			params = append(params, paramInfo{Name: param.Name, GoType: param.GoType})
 			paramArgs = append(paramArgs, param.Name)
 		}
 	}
 
+	var paramDeclarations []string
+	for i := 0; i < len(params); {
+		j := i + 1
+		for j < len(params) && params[j].GoType == params[i].GoType {
+			j++
+		}
+		// params[i:j] all share the same type
+		names := make([]string, 0, j-i)
+		for k := i; k < j; k++ {
+			names = append(names, params[k].Name)
+		}
+		paramDeclarations = append(paramDeclarations, fmt.Sprintf("%s %s", strings.Join(names, ", "), params[i].GoType))
+		i = j
+	}
+
 	// Build scan arguments for result columns
-	var scanArgs []string
+	scanArgs := make([]string, 0, len(query.Columns))
 	for _, col := range query.Columns {
 		scanArgs = append(scanArgs, "&result."+col.GoFieldName())
 	}
@@ -941,7 +906,7 @@ func (cg *CodeGenerator) prepareQueryTemplateData(query Query) (map[string]inter
 		paramArgStr = ", " + paramArgsOnly
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"FunctionName":          query.GoFunctionName(),
 		"QueryName":             query.Name,
 		"RepositoryName":        repositoryName,
@@ -952,5 +917,5 @@ func (cg *CodeGenerator) prepareQueryTemplateData(query Query) (map[string]inter
 		"ParameterArgsOnly":     paramArgsOnly,
 		"ScanArgs":              strings.Join(scanArgs, ", "),
 		"OrderByColumns":        query.OrderByColumns,
-	}, nil
+	}
 }

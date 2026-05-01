@@ -20,7 +20,7 @@ func TestResultTypes_AvgAggregate(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -33,7 +33,7 @@ SELECT
 FROM posts
 WHERE user_id = $1;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestResultTypes_MinMaxAggregates(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -114,7 +114,7 @@ SELECT
 FROM comments
 WHERE post_id = $1;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "comments.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "comments.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestResultTypes_GroupByWithMixedAggregates(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -209,7 +209,7 @@ FROM posts
 GROUP BY user_id
 ORDER BY post_count DESC;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -309,7 +309,7 @@ func TestResultTypes_AggregateWithHaving(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -325,7 +325,7 @@ GROUP BY user_id
 HAVING COUNT(*) > $1 AND AVG(like_count) > $2
 ORDER BY post_count DESC;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -392,7 +392,7 @@ func TestResultTypes_ComplexAggregateExpressions(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -407,7 +407,7 @@ SELECT
 FROM posts
 WHERE status = $1;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -496,7 +496,7 @@ func TestResultTypes_CoalesceExpression(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -511,7 +511,7 @@ SELECT
 FROM users
 WHERE id = $1;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "users.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "users.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -578,7 +578,7 @@ func TestResultTypes_CaseExpressionNullable(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -598,7 +598,7 @@ SELECT
 FROM posts
 WHERE id = $1;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -654,7 +654,7 @@ func TestResultTypes_CaseExpressionWithElse(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -676,7 +676,7 @@ SELECT
 FROM posts
 WHERE id = $1;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -732,7 +732,7 @@ func TestResultTypes_ArithmeticExpressions(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -751,7 +751,7 @@ SELECT
 FROM posts
 WHERE id = $1;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -818,7 +818,7 @@ func TestResultTypes_StringConcatenation(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -834,7 +834,7 @@ SELECT
 FROM users
 WHERE id = $1;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "users.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "users.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -902,7 +902,7 @@ func TestResultTypes_InnerJoin(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -919,7 +919,7 @@ FROM posts p
 INNER JOIN users u ON p.user_id = u.id
 WHERE p.status = 'published';`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -1008,7 +1008,7 @@ func TestResultTypes_LeftJoin(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -1024,7 +1024,7 @@ SELECT
 FROM users u
 LEFT JOIN posts p ON u.id = p.user_id;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "users.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "users.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -1124,7 +1124,7 @@ func TestResultTypes_MultiTableJoin(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -1143,7 +1143,7 @@ INNER JOIN users u ON p.user_id = u.id
 LEFT JOIN comments c ON p.id = c.post_id
 WHERE p.status = 'published';`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "complex.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "complex.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -1232,7 +1232,7 @@ func TestResultTypes_JoinMixedNullability(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -1249,7 +1249,7 @@ FROM categories c
 LEFT JOIN post_categories pc ON c.id = pc.category_id
 LEFT JOIN posts p ON pc.post_id = p.id;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "tags.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "tags.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -1359,7 +1359,7 @@ func TestResultTypes_WindowFunction_RowNumber(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -1373,7 +1373,7 @@ SELECT
 FROM posts
 WHERE user_id = $1;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -1440,7 +1440,7 @@ func TestResultTypes_WindowFunction_RankDenseRank(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -1455,7 +1455,7 @@ SELECT
 FROM posts
 WHERE status = 'published';`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -1511,7 +1511,7 @@ func TestResultTypes_WindowFunction_LagLead(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -1529,7 +1529,7 @@ FROM posts
 WHERE status = 'published'
 ORDER BY published_at;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -1607,7 +1607,7 @@ func TestResultTypes_WindowFunction_Aggregates(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -1624,7 +1624,7 @@ SELECT
 FROM posts
 WHERE status = 'published';`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -1693,7 +1693,7 @@ func TestResultTypes_WindowFunction_MixedColumns(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -1714,7 +1714,7 @@ INNER JOIN users u ON p.user_id = u.id
 WHERE p.status = 'published'
 ORDER BY p.user_id, p.view_count DESC;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -1826,7 +1826,7 @@ func TestResultTypes_SimpleCTE(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -1840,7 +1840,7 @@ WITH active_users AS (
 SELECT id, name, email, metadata
 FROM active_users;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "users.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "users.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -1908,7 +1908,7 @@ func TestResultTypes_SubqueryInFrom(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -1930,7 +1930,7 @@ INNER JOIN (
     GROUP BY user_id
 ) post_stats ON u.id = post_stats.user_id;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "users.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "users.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -1997,7 +1997,7 @@ func TestResultTypes_MultipleCTEs(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -2043,7 +2043,7 @@ FROM post_data pd
 INNER JOIN author_data ad ON ad.id = pd.author_id
 LEFT JOIN comment_stats cs ON cs.post_id = pd.id;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -2140,7 +2140,7 @@ func TestResultTypes_CTEWithJoins(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -2171,7 +2171,7 @@ FROM user_posts up
 LEFT JOIN comments c ON c.post_id = up.id
 ORDER BY up.id, c.created_at;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -2234,11 +2234,11 @@ ORDER BY up.id, c.created_at;`
 		t.Errorf("Expected author_name to be NOT NULL (from INNER JOIN in CTE)")
 	}
 
-	commentIdCol := findColumn(query.Columns, "comment_id")
-	if commentIdCol == nil {
+	commentIDCol := findColumn(query.Columns, "comment_id")
+	if commentIDCol == nil {
 		t.Fatal("comment_id column not found")
 	}
-	if !commentIdCol.IsNullable {
+	if !commentIDCol.IsNullable {
 		t.Errorf("Expected comment_id to be nullable (from LEFT JOIN)")
 	}
 
@@ -2270,7 +2270,7 @@ func TestResultTypes_AnnotationOverridesAutoDetection(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -2283,7 +2283,7 @@ SELECT
 FROM posts
 WHERE user_id = $1;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "payments.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "payments.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -2343,7 +2343,7 @@ func TestResultTypes_MixAnnotatedAndUnannotated(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -2354,7 +2354,7 @@ SELECT status, published_at
 FROM posts
 WHERE user_id = $1;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -2414,7 +2414,7 @@ func TestResultTypes_AnnotationNonExistentColumn(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -2425,7 +2425,7 @@ SELECT id, name
 FROM users
 WHERE id = $1;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "users.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "users.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}
@@ -2464,7 +2464,7 @@ func TestResultTypes_IntegerTypesUseInt(t *testing.T) {
 
 	tempDir := t.TempDir()
 	sqlDir := filepath.Join(tempDir, "queries")
-	err := os.MkdirAll(sqlDir, 0755)
+	err := os.MkdirAll(sqlDir, 0o755)
 	if err != nil {
 		t.Fatalf("Failed to create SQL directory: %v", err)
 	}
@@ -2474,7 +2474,7 @@ func TestResultTypes_IntegerTypesUseInt(t *testing.T) {
 	querySQL := `-- name: GetPostCounts :one
 SELECT view_count, like_count FROM posts WHERE id = $1;`
 
-	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0644)
+	err = os.WriteFile(filepath.Join(sqlDir, "posts.sql"), []byte(querySQL), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test query: %v", err)
 	}

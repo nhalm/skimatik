@@ -3,7 +3,6 @@ package generator
 import (
 	"reflect"
 	"sort"
-	"strings"
 	"testing"
 )
 
@@ -467,62 +466,6 @@ func TestTypeMapper_MapTableColumns_WithError(t *testing.T) {
 	err := tm.MapTableColumns(&table)
 	if err == nil {
 		t.Error("MapTableColumns() should return error for unsupported type")
-	}
-}
-
-func TestTypeMapper_ValidateUUIDPrimaryKey(t *testing.T) {
-	tm := NewTypeMapper(nil)
-
-	tests := []struct {
-		name           string
-		column         Column
-		wantErr        bool
-		errorSubstring string
-	}{
-		{
-			name:    "valid_UUID_primary_key",
-			column:  Column{Name: "id", Type: "uuid", IsNullable: false, IsArray: false},
-			wantErr: false,
-		},
-		{
-			name:    "UUID_uppercase",
-			column:  Column{Name: "id", Type: "UUID", IsNullable: false, IsArray: false},
-			wantErr: false,
-		},
-		{
-			name:           "non-UUID_type",
-			column:         Column{Name: "id", Type: "integer", IsNullable: false, IsArray: false},
-			wantErr:        true,
-			errorSubstring: "must be UUID type",
-		},
-		{
-			name:           "nullable_UUID",
-			column:         Column{Name: "id", Type: "uuid", IsNullable: true, IsArray: false},
-			wantErr:        true,
-			errorSubstring: "cannot be nullable",
-		},
-		{
-			name:           "UUID_array",
-			column:         Column{Name: "id", Type: "uuid", IsNullable: false, IsArray: true},
-			wantErr:        true,
-			errorSubstring: "cannot be an array",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tm.ValidateUUIDPrimaryKey(&tt.column)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateUUIDPrimaryKey() error = %v, wantErr %v", err, tt.wantErr)
-			}
-
-			// Check error message content for error cases
-			if tt.wantErr && err != nil && tt.errorSubstring != "" {
-				if !strings.Contains(err.Error(), tt.errorSubstring) {
-					t.Errorf("Error message should contain '%s', got: %s", tt.errorSubstring, err.Error())
-				}
-			}
-		})
 	}
 }
 

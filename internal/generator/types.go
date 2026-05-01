@@ -115,43 +115,7 @@ func (t *Table) GoFileName() string {
 
 // IsUUID checks if the column is a UUID type
 func (c *Column) IsUUID() bool {
-	return strings.ToLower(c.Type) == "uuid"
-}
-
-// IsString checks if the column is a string type
-func (c *Column) IsString() bool {
-	switch strings.ToLower(c.Type) {
-	case "text", "varchar", "character varying", "char", "character":
-		return true
-	default:
-		return false
-	}
-}
-
-// IsInteger checks if the column is an integer type
-func (c *Column) IsInteger() bool {
-	switch strings.ToLower(c.Type) {
-	case "integer", "int", "int4", "bigint", "int8", "smallint", "int2":
-		return true
-	default:
-		return false
-	}
-}
-
-// IsBoolean checks if the column is a boolean type
-func (c *Column) IsBoolean() bool {
-	return strings.ToLower(c.Type) == "boolean" || strings.ToLower(c.Type) == "bool"
-}
-
-// IsTimestamp checks if the column is a timestamp type
-func (c *Column) IsTimestamp() bool {
-	//TODO:  change this to a map or use a constant slice.  The switch is not a good solution.
-	switch strings.ToLower(c.Type) {
-	case "timestamp", "timestamptz", "timestamp with time zone", "timestamp without time zone", "date", "time", "time without time zone", "time with time zone":
-		return true
-	default:
-		return false
-	}
+	return strings.EqualFold(c.Type, "uuid")
 }
 
 // GoFieldName returns the Go field name for this column
@@ -193,7 +157,7 @@ func toPascalCase(s string) string {
 		parts := strings.Split(s, "_")
 		result := ""
 		for _, part := range parts {
-			if len(part) > 0 {
+			if part != "" {
 				result += strings.ToUpper(part[:1]) + strings.ToLower(part[1:])
 			}
 		}
@@ -201,7 +165,7 @@ func toPascalCase(s string) string {
 	}
 
 	// If it's already PascalCase or camelCase, just ensure first letter is uppercase
-	if len(s) > 0 {
+	if s != "" {
 		return strings.ToUpper(s[:1]) + s[1:]
 	}
 

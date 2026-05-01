@@ -73,6 +73,17 @@ func (qp *QueryParser) findSQLFiles() ([]string, error) {
 	return sqlFiles, err
 }
 
+// parseFileState holds the in-progress state while parseFile scans a SQL
+// file line by line. It is intentionally unexported and used only by
+// parseFile and its helpers.
+type parseFileState struct {
+	queries           []Query
+	currentQuery      *Query
+	sqlLines          []string
+	paramAnnotations  []ParameterAnnotation
+	resultAnnotations []ResultAnnotation
+}
+
 // parseFile parses a single SQL file and extracts queries with annotations
 func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 	file, err := os.Open(filename) // #nosec G304 -- user-supplied query file path by design
@@ -81,12 +92,7 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 	}
 	defer func() { _ = file.Close() }()
 
-	var queries []Query
-	var currentQuery *Query
-	var sqlLines []string
-	var paramAnnotations []ParameterAnnotation
-	var resultAnnotations []ResultAnnotation
-
+	state := &parseFileState{}
 	scanner := bufio.NewScanner(file)
 	lineNum := 0
 
@@ -95,52 +101,11 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 		line := scanner.Text()
 		trimmedLine := strings.TrimSpace(line)
 
-		// Check for query annotation
-		if annotation := qp.parseAnnotation(trimmedLine); annotation != nil {
-			// Save previous query if exists
-			if currentQuery != nil {
-				currentQuery.SQL = strings.TrimSpace(strings.Join(sqlLines, "\n"))
-				if currentQuery.SQL == "" {
-					return nil, fmt.Errorf("empty query for %s at line %d in %s", currentQuery.Name, lineNum, filename)
-				}
-				currentQuery.ParameterAnnotations = paramAnnotations
-				currentQuery.ResultAnnotations = resultAnnotations
-				if err := qp.validateParameterAnnotations(currentQuery); err != nil {
-					return nil, fmt.Errorf("error in query %s: %w", currentQuery.Name, err)
-				}
-				if err := qp.validateResultAnnotations(currentQuery); err != nil {
-					return nil, fmt.Errorf("error in query %s: %w", currentQuery.Name, err)
-				}
-				queries = append(queries, *currentQuery)
-			}
-
-			// Start new query
-			currentQuery = &Query{
-				Name:       annotation.Name,
-				Type:       annotation.Type,
-				SourceFile: filename,
-				Parameters: []Parameter{}, // Will be populated by analyzer
-				Columns:    []Column{},    // Will be populated by analyzer
-			}
-			sqlLines = []string{}
-			paramAnnotations = []ParameterAnnotation{}
-			resultAnnotations = []ResultAnnotation{}
-			continue
+		handled, err := qp.handleAnnotationLine(state, line, trimmedLine, filename, lineNum)
+		if err != nil {
+			return nil, err
 		}
-
-		// Check for parameter annotation
-		if paramAnnotation := qp.parseParameterAnnotation(trimmedLine); paramAnnotation != nil {
-			if currentQuery != nil {
-				paramAnnotations = append(paramAnnotations, *paramAnnotation)
-			}
-			continue
-		}
-
-		// Check for result annotation
-		if resultAnnotation := qp.parseResultAnnotation(trimmedLine); resultAnnotation != nil {
-			if currentQuery != nil {
-				resultAnnotations = append(resultAnnotations, *resultAnnotation)
-			}
+		if handled {
 			continue
 		}
 
@@ -150,33 +115,102 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 		}
 
 		// Collect SQL lines for current query
-		if currentQuery != nil {
-			sqlLines = append(sqlLines, line)
+		if state.currentQuery != nil {
+			state.sqlLines = append(state.sqlLines, line)
 		}
 	}
 
 	// Save the last query
-	if currentQuery != nil {
-		currentQuery.SQL = strings.TrimSpace(strings.Join(sqlLines, "\n"))
-		if currentQuery.SQL == "" {
-			return nil, fmt.Errorf("empty query for %s in %s", currentQuery.Name, filename)
+	if state.currentQuery != nil {
+		if err := qp.finalizeQuery(state, filename, 0); err != nil {
+			return nil, err
 		}
-		currentQuery.ParameterAnnotations = paramAnnotations
-		currentQuery.ResultAnnotations = resultAnnotations
-		if err := qp.validateParameterAnnotations(currentQuery); err != nil {
-			return nil, fmt.Errorf("error in query %s: %w", currentQuery.Name, err)
-		}
-		if err := qp.validateResultAnnotations(currentQuery); err != nil {
-			return nil, fmt.Errorf("error in query %s: %w", currentQuery.Name, err)
-		}
-		queries = append(queries, *currentQuery)
 	}
 
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("error reading file: %w", err)
 	}
 
-	return queries, nil
+	return state.queries, nil
+}
+
+// handleAnnotationLine attempts to interpret a line as a skimatik annotation
+// (-- name:, -- param:, -- result:). It returns handled=true when the line
+// was consumed, in which case the caller should skip its remaining work for
+// that line. An error is returned only when finalizing a previous query
+// fails (empty SQL or invalid annotations).
+func (qp *QueryParser) handleAnnotationLine(state *parseFileState, line, trimmedLine, filename string, lineNum int) (bool, error) {
+	// -- name: <Name> :<type>
+	if annotation := qp.parseAnnotation(trimmedLine); annotation != nil {
+		if state.currentQuery != nil {
+			if err := qp.finalizeQuery(state, filename, lineNum); err != nil {
+				return false, err
+			}
+		}
+		qp.startNewQuery(state, annotation, filename)
+		return true, nil
+	}
+
+	// -- param: $N name type
+	if paramAnnotation := qp.parseParameterAnnotation(trimmedLine); paramAnnotation != nil {
+		if state.currentQuery != nil {
+			state.paramAnnotations = append(state.paramAnnotations, *paramAnnotation)
+		}
+		return true, nil
+	}
+
+	// -- result: column type
+	if resultAnnotation := qp.parseResultAnnotation(trimmedLine); resultAnnotation != nil {
+		if state.currentQuery != nil {
+			state.resultAnnotations = append(state.resultAnnotations, *resultAnnotation)
+		}
+		return true, nil
+	}
+
+	_ = line // line is unused once we've classified the annotation; kept for parity with caller
+	return false, nil
+}
+
+// finalizeQuery completes the in-progress query in state: it joins the
+// collected SQL lines, validates annotations, and appends the resulting
+// Query to state.queries. lineNum, when non-zero, is used in the
+// "empty query" error message; pass 0 when finalizing the trailing query
+// at end-of-file. After this call state.currentQuery is left as-is — the
+// caller (startNewQuery / parseFile) overwrites or stops using it.
+func (qp *QueryParser) finalizeQuery(state *parseFileState, filename string, lineNum int) error {
+	state.currentQuery.SQL = strings.TrimSpace(strings.Join(state.sqlLines, "\n"))
+	if state.currentQuery.SQL == "" {
+		if lineNum > 0 {
+			return fmt.Errorf("empty query for %s at line %d in %s", state.currentQuery.Name, lineNum, filename)
+		}
+		return fmt.Errorf("empty query for %s in %s", state.currentQuery.Name, filename)
+	}
+	state.currentQuery.ParameterAnnotations = state.paramAnnotations
+	state.currentQuery.ResultAnnotations = state.resultAnnotations
+	if err := qp.validateParameterAnnotations(state.currentQuery); err != nil {
+		return fmt.Errorf("error in query %s: %w", state.currentQuery.Name, err)
+	}
+	if err := qp.validateResultAnnotations(state.currentQuery); err != nil {
+		return fmt.Errorf("error in query %s: %w", state.currentQuery.Name, err)
+	}
+	state.queries = append(state.queries, *state.currentQuery)
+	return nil
+}
+
+// startNewQuery resets the per-query buffers in state and installs a fresh
+// currentQuery seeded from the annotation. Existing queries already saved in
+// state.queries are preserved.
+func (qp *QueryParser) startNewQuery(state *parseFileState, annotation *QueryAnnotation, filename string) {
+	state.currentQuery = &Query{
+		Name:       annotation.Name,
+		Type:       annotation.Type,
+		SourceFile: filename,
+		Parameters: []Parameter{}, // Will be populated by analyzer
+		Columns:    []Column{},    // Will be populated by analyzer
+	}
+	state.sqlLines = []string{}
+	state.paramAnnotations = []ParameterAnnotation{}
+	state.resultAnnotations = []ResultAnnotation{}
 }
 
 // QueryAnnotation represents a parsed sqlc-style annotation
@@ -226,74 +260,6 @@ func (qp *QueryParser) parseQueryType(typeStr string) (QueryType, error) {
 	default:
 		return "", fmt.Errorf("invalid query type: %s (supported: one, many, exec, paginated)", typeStr)
 	}
-}
-
-// ValidateQuery performs basic validation on a parsed query
-func (qp *QueryParser) ValidateQuery(query Query) error {
-	if query.Name == "" {
-		return fmt.Errorf("query name cannot be empty")
-	}
-
-	if query.SQL == "" {
-		return fmt.Errorf("query SQL cannot be empty")
-	}
-
-	if query.Type == "" {
-		return fmt.Errorf("query type cannot be empty")
-	}
-
-	// Validate query name format (must be valid Go identifier)
-	if !isValidGoIdentifier(query.Name) {
-		return fmt.Errorf("query name '%s' is not a valid Go identifier", query.Name)
-	}
-
-	// Basic SQL validation
-	sqlLower := strings.ToLower(strings.TrimSpace(query.SQL))
-
-	// Check query type matches SQL statement
-	switch query.Type {
-	case QueryTypeOne, QueryTypeMany, QueryTypePaginated:
-		// Allow SELECT statements and CTEs (Common Table Expressions)
-		if !strings.HasPrefix(sqlLower, "select") && !strings.HasPrefix(sqlLower, "with") {
-			sqlSnippet := query.SQL
-			if len(sqlSnippet) > 50 {
-				sqlSnippet = sqlSnippet[:50] + "..."
-			}
-			return fmt.Errorf("query type %s requires SELECT statement or CTE, got: %s", query.Type, sqlSnippet)
-		}
-	case QueryTypeExec:
-		// Exec queries should not be SELECT or CTE
-		if strings.HasPrefix(sqlLower, "select") || strings.HasPrefix(sqlLower, "with") {
-			sqlSnippet := query.SQL
-			if len(sqlSnippet) > 50 {
-				sqlSnippet = sqlSnippet[:50] + "..."
-			}
-			return fmt.Errorf("query type %s cannot use SELECT statement or CTE, got: %s", query.Type, sqlSnippet)
-		}
-	}
-
-	return nil
-}
-
-// isValidGoIdentifier checks if a string is a valid Go identifier
-func isValidGoIdentifier(name string) bool {
-	if name == "" {
-		return false
-	}
-
-	// Must start with letter or underscore
-	if (name[0] < 'a' || name[0] > 'z') && (name[0] < 'A' || name[0] > 'Z') && name[0] != '_' {
-		return false
-	}
-
-	// Rest must be letters, digits, or underscores
-	for i := 1; i < len(name); i++ {
-		if (name[i] < 'a' || name[i] > 'z') && (name[i] < 'A' || name[i] > 'Z') && (name[i] < '0' || name[i] > '9') && name[i] != '_' {
-			return false
-		}
-	}
-
-	return true
 }
 
 // parseParameterAnnotation parses a parameter type annotation

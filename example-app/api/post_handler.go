@@ -52,7 +52,7 @@ func (h *PostHandler) GetPublishedPosts(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	writeJSON(w, http.StatusOK,map[string]interface{}{
+	writeJSON(w, map[string]any{
 		"posts": apiPosts,
 		"count": len(apiPosts),
 	})
@@ -86,7 +86,7 @@ func (h *PostHandler) GetPost(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:   servicePost.CreatedAt,
 	}
 
-	writeJSON(w, http.StatusOK,apiPost)
+	writeJSON(w, apiPost)
 }
 
 // GetUserPosts handles GET /api/users/{id}/posts
@@ -119,7 +119,7 @@ func (h *PostHandler) GetUserPosts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK,map[string]interface{}{
+	writeJSON(w, map[string]any{
 		"posts": apiPosts,
 		"count": len(apiPosts),
 	})
@@ -155,7 +155,7 @@ func (h *PostHandler) GetPostsWithStats(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	writeJSON(w, http.StatusOK,map[string]interface{}{
+	writeJSON(w, map[string]any{
 		"posts": apiStats,
 		"count": len(apiStats),
 	})
@@ -194,7 +194,7 @@ func (h *PostHandler) GetFeaturedPosts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK,map[string]interface{}{
+	writeJSON(w, map[string]any{
 		"posts": apiPosts,
 		"count": len(apiPosts),
 	})
@@ -237,7 +237,7 @@ func (h *PostHandler) GetPostsByTag(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK,map[string]interface{}{
+	writeJSON(w, map[string]any{
 		"posts": apiPosts,
 		"tag":   tag,
 		"count": len(apiPosts),
@@ -259,7 +259,7 @@ func (h *PostHandler) GetPostStatistics(w http.ResponseWriter, r *http.Request) 
 		DraftPosts:     serviceStats.DraftPosts,
 	}
 
-	writeJSON(w, http.StatusOK,apiStats)
+	writeJSON(w, apiStats)
 }
 
 // PublishPost handles PUT /api/posts/{id}/publish
@@ -278,7 +278,7 @@ func (h *PostHandler) PublishPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK,map[string]string{
+	writeJSON(w, map[string]string{
 		"message": "Post published successfully",
 	})
 }
