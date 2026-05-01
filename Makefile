@@ -21,14 +21,17 @@ TEST_DB_URL=postgres://skimatik:skimatik_test_password@localhost:5432/skimatik_t
 .PHONY: default
 default: help
 
-# Bootstrap dev tools that aren't auto-installed by `make lint`. Mirrors
-# go-blueprint's setup / install-tools split — skimatik has no codegen step
-# of its own, so `setup` reduces to `install-tools`. golangci-lint and
-# blueprint-sql-check stay out of this list because `make lint` bootstraps
-# them on demand via the .custom-gcl.yml file dep.
+# Bootstrap dev tools and activate Git hooks. Mirrors go-blueprint's
+# setup / install-tools split, but folds `lefthook install` into setup
+# because skimatik's setup has no other manual follow-up steps — there's
+# no codegen step, no .env to fill in, so a one-shot bootstrap is
+# friendlier than splitting it across two commands. golangci-lint and
+# blueprint-sql-check stay out of install-tools because `make lint`
+# bootstraps them on demand via the .custom-gcl.yml file dep.
 .PHONY: setup
 setup: install-tools
-	@echo "✅ Setup complete (run 'lefthook install' once to activate Git hooks)"
+	@lefthook install
+	@echo "✅ Setup complete"
 
 .PHONY: install-tools
 install-tools:
@@ -113,8 +116,8 @@ help:
 	@echo "Usage: make <target>"
 	@echo ""
 	@echo "First time:"
-	@echo "  setup              Install dev tools (lefthook); run 'lefthook install' once after"
-	@echo "  install-tools      Install dev tools without aliasing to setup"
+	@echo "  setup              Install dev tools and activate Git hooks (lefthook + lefthook install)"
+	@echo "  install-tools      Install dev tools only (no hook activation)"
 	@echo ""
 	@echo "Daily workflow:"
 	@echo "  build              Compile the skimatik binary"

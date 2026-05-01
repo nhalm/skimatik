@@ -42,8 +42,8 @@ type CustomUserRepo struct {
 ## Using the Makefile
 
 ```bash
-make setup            # Install dev tools (lefthook); run 'lefthook install' once after
-make install-tools    # Same as setup; explicit name
+make setup            # Install dev tools and activate Git hooks (lefthook + lefthook install)
+make install-tools    # Install dev tools only (no hook activation)
 make build            # Build the skimatik binary
 make test-unit        # Run unit tests (no database)
 make test-integration # Run integration tests (auto-starts database)
