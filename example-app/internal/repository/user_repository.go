@@ -50,29 +50,6 @@ func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]domai
 	return users, nil
 }
 
-func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*domain.UserDetail, error) {
-	result, err := r.UsersQueries.GetUserByEmail(ctx, executorFromContext(ctx, r.db), email)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user by email: %w", err)
-	}
-
-	var lastLoginAt *string
-	// Note: The generated result doesn't include last_login_at, so we'll leave it nil for now
-	// In a real implementation, you might need to add this field to the query
-
-	user := &domain.UserDetail{
-		ID:          result.Id,
-		Name:        result.Name,
-		Email:       result.Email,
-		IsActive:    result.IsActive,
-		PostCount:   0, // This would need to be calculated or included in the query
-		CreatedAt:   result.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		LastLoginAt: lastLoginAt,
-	}
-
-	return user, nil
-}
-
 func (r *UserRepository) SearchUsers(ctx context.Context, query string) ([]domain.UserSummary, error) {
 	results, err := r.UsersQueries.SearchUsers(ctx, executorFromContext(ctx, r.db), "%"+query+"%", 50)
 	if err != nil {
@@ -135,37 +112,4 @@ func (r *UserRepository) GetUser(ctx context.Context, userID uuid.UUID) (*domain
 	}
 
 	return userDetail, nil
-}
-
-// Custom business methods that extend generated functionality
-
-// GetUserWithPostCount demonstrates combining multiple generated methods
-func (r *UserRepository) GetUserWithPostCount(ctx context.Context, userID uuid.UUID) (*domain.UserDetail, error) {
-	// Get the basic user info
-	user, err := r.GetUser(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get the stats to fill in post count
-	stats, err := r.GetUserStats(ctx, userID)
-	if err != nil {
-		// If stats fail, still return user but with 0 post count
-		return user, nil
-	}
-
-	user.PostCount = stats.PostCount
-	return user, nil
-}
-
-// ActivateUser demonstrates custom business logic using generated methods
-func (r *UserRepository) ActivateUser(ctx context.Context, userID uuid.UUID) error {
-	// This would typically update the is_active field to true
-	// For now, we'll implement this as a placeholder
-	// In a real implementation, you would either:
-	// 1. First fetch the user to get current values, then update
-	// 2. Create a custom SQL query that only updates the is_active field
-	// 3. Or modify the generated Update method to accept partial updates
-
-	return fmt.Errorf("ActivateUser not fully implemented - would need to fetch current user data first")
 }

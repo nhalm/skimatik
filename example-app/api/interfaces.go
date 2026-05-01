@@ -13,7 +13,6 @@ import (
 // This interface is owned by the API package (the consumer)
 type UserService interface {
 	GetActiveUsers(ctx context.Context, limit int) ([]domain.UserSummary, error)
-	GetUserByEmail(ctx context.Context, email string) (*domain.UserDetail, error)
 	SearchUsers(ctx context.Context, query string) ([]domain.UserSummary, error)
 	GetUserStats(ctx context.Context, userID uuid.UUID) (*domain.UserStats, error)
 	DeactivateUser(ctx context.Context, userID uuid.UUID) error

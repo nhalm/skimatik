@@ -8,8 +8,6 @@ import (
 	"github.com/nhalm/skimatik/v2/example-app/domain"
 )
 
-var ErrPostNotFound = fmt.Errorf("post not found")
-
 // PostService implements the api.PostService interface using domain types
 type PostService struct {
 	postRepo PostRepository

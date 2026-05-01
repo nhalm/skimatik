@@ -8,15 +8,12 @@ import (
 	"github.com/nhalm/skimatik/v2/example-app/domain"
 )
 
-var ErrUserNotFound = fmt.Errorf("user not found")
-
 // UserRepository defines what the service layer needs from a user repository
 // This interface is owned by the consumer (service), not the implementer (repository package)
 // The repository should return domain types, not database-specific types
 type UserRepository interface {
 	// Basic generated query methods - all return domain types
 	GetActiveUsers(ctx context.Context, limit int) ([]domain.UserSummary, error)
-	GetUserByEmail(ctx context.Context, email string) (*domain.UserDetail, error)
 	SearchUsers(ctx context.Context, query string) ([]domain.UserSummary, error)
 	GetUserStats(ctx context.Context, userID uuid.UUID) (*domain.UserStats, error)
 	DeactivateUser(ctx context.Context, userID uuid.UUID) error
@@ -47,16 +44,6 @@ func (s *UserService) GetActiveUsers(ctx context.Context, limit int) ([]domain.U
 	// Service layer can apply business logic here if needed
 	// For now, we just pass through the domain types
 	return users, nil
-}
-
-func (s *UserService) GetUserByEmail(ctx context.Context, email string) (*domain.UserDetail, error) {
-	user, err := s.userRepo.GetUserByEmail(ctx, email)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user by email: %w", err)
-	}
-
-	// Service layer can apply business logic here if needed
-	return user, nil
 }
 
 func (s *UserService) SearchUsers(ctx context.Context, query string) ([]domain.UserSummary, error) {

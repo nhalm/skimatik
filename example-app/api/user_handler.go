@@ -20,35 +20,6 @@ func NewUserHandler(userService UserService) *UserHandler {
 	}
 }
 
-// GetUserByEmail handles GET /api/users/email/{email}
-func (h *UserHandler) GetUserByEmail(w http.ResponseWriter, r *http.Request) {
-	email := chi.URLParam(r, "email")
-
-	if email == "" {
-		http.Error(w, "Email parameter is required", http.StatusBadRequest)
-		return
-	}
-
-	domainUser, err := h.userService.GetUserByEmail(r.Context(), email)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-
-	// Convert domain type to API response type
-	apiUser := UserDetailResponse{
-		ID:          domainUser.ID,
-		Name:        domainUser.Name,
-		Email:       domainUser.Email,
-		IsActive:    domainUser.IsActive,
-		PostCount:   domainUser.PostCount,
-		CreatedAt:   domainUser.CreatedAt,
-		LastLoginAt: domainUser.LastLoginAt,
-	}
-
-	writeJSON(w, apiUser)
-}
-
 // GetActiveUsers handles GET /api/users?limit=10
 func (h *UserHandler) GetActiveUsers(w http.ResponseWriter, r *http.Request) {
 	limitStr := r.URL.Query().Get("limit")
