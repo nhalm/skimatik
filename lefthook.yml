@@ -27,4 +27,9 @@ commit-msg:
 pre-push:
   jobs:
     - name: integration
-      run: make test-integration
+      # Tear down the postgres container on exit so the host port (15432) is
+      # released for sibling projects that bind the same port. The trap fires
+      # on success and failure alike — see #142.
+      run: |
+        trap 'docker compose -f build/docker-compose.yml down -v --remove-orphans >/dev/null 2>&1 || true' EXIT
+        make test-integration
