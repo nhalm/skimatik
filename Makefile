@@ -21,6 +21,20 @@ TEST_DB_URL=postgres://skimatik:skimatik_test_password@localhost:5432/skimatik_t
 .PHONY: default
 default: help
 
+# Bootstrap dev tools that aren't auto-installed by `make lint`. Mirrors
+# go-blueprint's setup / install-tools split — skimatik has no codegen step
+# of its own, so `setup` reduces to `install-tools`. golangci-lint and
+# blueprint-sql-check stay out of this list because `make lint` bootstraps
+# them on demand via the .custom-gcl.yml file dep.
+.PHONY: setup
+setup: install-tools
+	@echo "✅ Setup complete (run 'lefthook install' once to activate Git hooks)"
+
+.PHONY: install-tools
+install-tools:
+	@go install github.com/evilmartians/lefthook@latest
+	@echo "✅ Dev tools installed"
+
 .PHONY: build
 build:
 	@echo "Building $(BINARY_NAME) version $(VERSION)..."
@@ -97,6 +111,10 @@ help:
 	@echo "skimatik - Database-first code generator for PostgreSQL"
 	@echo ""
 	@echo "Usage: make <target>"
+	@echo ""
+	@echo "First time:"
+	@echo "  setup              Install dev tools (lefthook); run 'lefthook install' once after"
+	@echo "  install-tools      Install dev tools without aliasing to setup"
 	@echo ""
 	@echo "Daily workflow:"
 	@echo "  build              Compile the skimatik binary"
