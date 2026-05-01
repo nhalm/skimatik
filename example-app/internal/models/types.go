@@ -1,6 +1,6 @@
-// Package domain defines the business types passed between the example-app's
+// Package models defines the business types passed between the example-app's
 // service, repository, and API layers.
-package domain
+package models
 
 import (
 	"github.com/google/uuid"

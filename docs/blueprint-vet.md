@@ -13,7 +13,7 @@ Two config files drive the integration:
 
 - `./bin/custom-gcl run ./...` against the **skimatik root module** — runs all stdlib linters plus blueprint-vet's R-1..R-7 / R-11 / R-12 in a single pass.
 - `./bin/custom-gcl run ./...` against the **example-app module** (when generated code is present).
-- `blueprint-sql-check example-app/database/queries` against the SQL query annotation files. (SQL files aren't lintable by golangci-lint, so this stays a separate binary.)
+- `blueprint-sql-check example-app/internal/repository/queries` against the SQL query annotation files. (SQL files aren't lintable by golangci-lint, so this stays a separate binary.)
 
 `.github/workflows/ci.yml`'s lint job mirrors the same steps. The custom-gcl binary builds once per CI run via `golangci-lint custom`.
 
@@ -22,7 +22,7 @@ Two config files drive the integration:
 | ID | Rule | Where it applies |
 |----|------|------------------|
 | R-5 | `repoexecutor` | wrapper repos in `example-app/internal/repository/` must pass `executorFromContext(ctx, r.db)` to generated methods, not `r.db` directly |
-| R-9 | `softdelete` | every `:one`/`:many`/`:paginated` query in `example-app/database/queries/*.sql` references `deleted_at` |
+| R-9 | `softdelete` | every `:one`/`:many`/`:paginated` query in `example-app/internal/repository/queries/*.sql` references `deleted_at` |
 | R-10 | `paginatedorderby` | every `:paginated` query has `ORDER BY` (skimatik already requires this for cursor stability) |
 | R-12 | `errortranslate` | wrapper repo methods that call generated code do not return bare `err` — they wrap with `fmt.Errorf("...: %w", err)` (or `translateError(err)` if you adopt that helper) |
 

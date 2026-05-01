@@ -103,7 +103,7 @@ The recommended pattern is to **embed generated types** and store a `db` field t
 ### Pattern 1: Embed Repository + Queries (Most Common)
 
 ```go
-// example-app/repository/user_repository.go
+// example-app/internal/repository/user_repository.go
 type UserRepository struct {
     db *pgxkit.DB               // Store db to pass to generated methods
     *generated.UsersRepository  // Provides CRUD operations
@@ -119,7 +119,7 @@ func NewUserRepository(db *pgxkit.DB) *UserRepository {
 }
 
 // Add business logic methods that delegate to generated code
-func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]domain.UserSummary, error) {
+func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]models.UserSummary, error) {
     // Uses generated query, passing db
     results, err := r.UsersQueries.GetActiveUsers(ctx, r.db, limit)
     if err != nil {
@@ -127,9 +127,9 @@ func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]domai
     }
 
     // Convert to domain types
-    users := make([]domain.UserSummary, len(results))
+    users := make([]models.UserSummary, len(results))
     for i, result := range results {
-        users[i] = domain.UserSummary{
+        users[i] = models.UserSummary{
             ID:    result.Id,
             Name:  result.Name,
             Email: result.Email,
@@ -142,7 +142,7 @@ func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]domai
 ### Pattern 2: Embed Queries Only
 
 ```go
-// example-app/repository/post_repository.go
+// example-app/internal/repository/post_repository.go
 type PostRepository struct {
     db *pgxkit.DB            // Store db to pass to generated methods
     *generated.PostsQueries  // Only custom queries needed
@@ -156,7 +156,7 @@ func NewPostRepository(db *pgxkit.DB) *PostRepository {
 }
 
 // Add custom business logic using generated queries
-func (r *PostRepository) GetFeaturedPosts(ctx context.Context, limit int) ([]domain.PostSummary, error) {
+func (r *PostRepository) GetFeaturedPosts(ctx context.Context, limit int) ([]models.PostSummary, error) {
     // Use generated query as base, passing db
     posts, err := r.GetPublishedPosts(ctx, r.db, limit*2)
     if err != nil {
@@ -164,7 +164,7 @@ func (r *PostRepository) GetFeaturedPosts(ctx context.Context, limit int) ([]dom
     }
 
     // Apply custom filtering logic
-    var featured []domain.PostSummary
+    var featured []models.PostSummary
     for _, post := range posts {
         if len(post.Title) > 20 && len(featured) < limit {
             featured = append(featured, post)

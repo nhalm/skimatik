@@ -6,17 +6,21 @@ The **`example-app/`** directory contains a **complete blog application** that d
 
 ```
 example-app/
-├── api/           # HTTP handlers and request/response types
-├── service/       # Business logic layer
-├── repository/    # Repository layer with generated code
-│   ├── generated/ # Generated repositories and queries (DO NOT EDIT)
-│   ├── user_repository.go    # Custom repository extensions
-│   └── post_repository.go    # Custom repository extensions
-├── domain/        # Domain types and business objects
-├── database/      # Database schema and SQL queries
-│   ├── schema.sql        # PostgreSQL schema
-│   └── queries/          # SQL query files for generation
-└── main.go        # Application entry point
+├── cmd/blog/                       # Application entry point
+├── internal/
+│   ├── api/                        # HTTP handlers and request/response types
+│   ├── service/                    # Business logic layer
+│   ├── models/                     # Domain types and business objects
+│   ├── config/                     # Group loaders (LoadLogging, LoadDatabase, LoadHTTP)
+│   ├── repository/                 # Repository layer with generated code
+│   │   ├── generated/              # Generated repositories and queries (DO NOT EDIT)
+│   │   ├── queries/                # SQL query files for generation
+│   │   ├── user_repository.go      # Custom repository extensions
+│   │   └── post_repository.go      # Custom repository extensions
+│   └── database/
+│       ├── schema.sql              # PostgreSQL schema
+│       └── migrations/             # golang-migrate SQL migrations
+└── skimatik.yaml                   # Code-generation config
 ```
 
 ## 🚀 Quick Start
@@ -151,7 +155,7 @@ func NewUserRepository(db *pgxkit.DB) *UserRepository {
 }
 
 // Add custom business logic methods
-func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]domain.UserSummary, error) {
+func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]models.UserSummary, error) {
     // Use generated query and convert to domain types (pass r.db)
     results, err := r.UsersQueries.GetActiveUsers(ctx, r.db, limit)
     if err != nil {
@@ -159,9 +163,9 @@ func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]domai
     }
 
     // Convert generated types to domain types
-    users := make([]domain.UserSummary, len(results))
+    users := make([]models.UserSummary, len(results))
     for i, result := range results {
-        users[i] = domain.UserSummary{
+        users[i] = models.UserSummary{
             ID:       result.Id,        // uuid.UUID - direct access
             Name:     result.Name,      // string - direct access
             Email:    getStringValue(result.Email),    // *string - handle nullable
@@ -214,7 +218,7 @@ database:
   schema: "public"
 
 output:
-  directory: "./repository/generated"
+  directory: "./internal/repository/generated"
   package: "generated"
 
 # Generate all functions by default
@@ -222,7 +226,7 @@ default_functions: "all"
 
 # Generate from SQL query files
 queries:
-  directory: "./database/queries"
+  directory: "./internal/repository/queries"
 
 # Also generate from tables
 tables:

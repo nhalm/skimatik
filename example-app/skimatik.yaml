@@ -11,7 +11,7 @@ default_functions: "all"
 
 # Generate from SQL query files
 queries:
-  directory: "./database/queries"
+  directory: "./internal/repository/queries"
 
 # Also generate from tables
 tables:

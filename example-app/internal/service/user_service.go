@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/nhalm/skimatik/v2/example-app/domain"
+	"github.com/nhalm/skimatik/v2/example-app/internal/models"
 )
 
 // UserRepository defines what the service layer needs from a user repository
@@ -13,11 +13,11 @@ import (
 // The repository should return domain types, not database-specific types
 type UserRepository interface {
 	// Basic generated query methods - all return domain types
-	GetActiveUsers(ctx context.Context, limit int) ([]domain.UserSummary, error)
-	SearchUsers(ctx context.Context, query string) ([]domain.UserSummary, error)
-	GetUserStats(ctx context.Context, userID uuid.UUID) (*domain.UserStats, error)
+	GetActiveUsers(ctx context.Context, limit int) ([]models.UserSummary, error)
+	SearchUsers(ctx context.Context, query string) ([]models.UserSummary, error)
+	GetUserStats(ctx context.Context, userID uuid.UUID) (*models.UserStats, error)
 	DeactivateUser(ctx context.Context, userID uuid.UUID) error
-	GetUser(ctx context.Context, userID uuid.UUID) (*domain.UserDetail, error)
+	GetUser(ctx context.Context, userID uuid.UUID) (*models.UserDetail, error)
 }
 
 // UserService implements the api.UserService interface using domain types
@@ -35,7 +35,7 @@ func NewUserService(userRepo UserRepository) *UserService {
 // Implement api.UserService interface methods
 // The service layer focuses on business logic, not data conversion
 
-func (s *UserService) GetActiveUsers(ctx context.Context, limit int) ([]domain.UserSummary, error) {
+func (s *UserService) GetActiveUsers(ctx context.Context, limit int) ([]models.UserSummary, error) {
 	users, err := s.userRepo.GetActiveUsers(ctx, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active users: %w", err)
@@ -46,7 +46,7 @@ func (s *UserService) GetActiveUsers(ctx context.Context, limit int) ([]domain.U
 	return users, nil
 }
 
-func (s *UserService) SearchUsers(ctx context.Context, query string) ([]domain.UserSummary, error) {
+func (s *UserService) SearchUsers(ctx context.Context, query string) ([]models.UserSummary, error) {
 	users, err := s.userRepo.SearchUsers(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search users: %w", err)
@@ -56,7 +56,7 @@ func (s *UserService) SearchUsers(ctx context.Context, query string) ([]domain.U
 	return users, nil
 }
 
-func (s *UserService) GetUserStats(ctx context.Context, userID uuid.UUID) (*domain.UserStats, error) {
+func (s *UserService) GetUserStats(ctx context.Context, userID uuid.UUID) (*models.UserStats, error) {
 	stats, err := s.userRepo.GetUserStats(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user stats: %w", err)
@@ -76,7 +76,7 @@ func (s *UserService) DeactivateUser(ctx context.Context, userID uuid.UUID) erro
 	return nil
 }
 
-func (s *UserService) GetUser(ctx context.Context, userID uuid.UUID) (*domain.UserDetail, error) {
+func (s *UserService) GetUser(ctx context.Context, userID uuid.UUID) (*models.UserDetail, error) {
 	user, err := s.userRepo.GetUser(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
