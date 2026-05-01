@@ -251,25 +251,3 @@ func (tm *TypeMapper) MapTableColumns(table *Table) error {
 	}
 	return nil
 }
-
-// ValidateUUIDPrimaryKey ensures a column is a valid UUID type for primary keys.
-// It checks that the column is UUID type, non-nullable, and not an array.
-func (tm *TypeMapper) ValidateUUIDPrimaryKey(column *Column) error {
-	if column == nil {
-		return fmt.Errorf("column cannot be nil")
-	}
-
-	if !column.IsUUID() {
-		return fmt.Errorf("primary key column %s must be UUID type, got %s", column.Name, column.Type)
-	}
-
-	if column.IsNullable {
-		return fmt.Errorf("primary key column %s cannot be nullable", column.Name)
-	}
-
-	if column.IsArray {
-		return fmt.Errorf("primary key column %s cannot be an array", column.Name)
-	}
-
-	return nil
-}

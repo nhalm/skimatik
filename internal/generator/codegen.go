@@ -594,47 +594,6 @@ func (cg *CodeGenerator) GenerateQueries(queries []Query) error {
 	return nil
 }
 
-// containsOrderBy checks if SQL contains an ORDER BY clause (case-insensitive)
-func containsOrderBy(sql string) bool {
-	// Normalize to lowercase for case-insensitive comparison
-	sqlLower := strings.ToLower(sql)
-
-	// Remove string literals to avoid false positives
-	sqlLower = removeStringLiterals(sqlLower)
-
-	// Look for ORDER BY clause
-	return strings.Contains(sqlLower, "order by")
-}
-
-// removeStringLiterals removes string literals from SQL to avoid false ORDER BY detection
-func removeStringLiterals(sql string) string {
-	result := []rune(sql)
-	inSingleQuote := false
-
-	for i := 0; i < len(result); i++ {
-		if result[i] == '\'' {
-			if inSingleQuote {
-				// Check for escaped quote ''
-				if i+1 < len(result) && result[i+1] == '\'' {
-					result[i] = ' '
-					result[i+1] = ' '
-					i++
-				} else {
-					inSingleQuote = false
-					result[i] = ' '
-				}
-			} else {
-				inSingleQuote = true
-				result[i] = ' '
-			}
-		} else if inSingleQuote {
-			result[i] = ' '
-		}
-	}
-
-	return string(result)
-}
-
 // groupQueriesByFile groups queries by their source file
 func (cg *CodeGenerator) groupQueriesByFile(queries []Query) map[string][]Query {
 	groups := make(map[string][]Query)

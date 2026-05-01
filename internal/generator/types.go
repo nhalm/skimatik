@@ -118,42 +118,6 @@ func (c *Column) IsUUID() bool {
 	return strings.EqualFold(c.Type, "uuid")
 }
 
-// IsString checks if the column is a string type
-func (c *Column) IsString() bool {
-	switch strings.ToLower(c.Type) {
-	case "text", "varchar", "character varying", "char", "character":
-		return true
-	default:
-		return false
-	}
-}
-
-// IsInteger checks if the column is an integer type
-func (c *Column) IsInteger() bool {
-	switch strings.ToLower(c.Type) {
-	case "integer", "int", "int4", "bigint", "int8", "smallint", "int2":
-		return true
-	default:
-		return false
-	}
-}
-
-// IsBoolean checks if the column is a boolean type
-func (c *Column) IsBoolean() bool {
-	return strings.EqualFold(c.Type, "boolean") || strings.EqualFold(c.Type, "bool")
-}
-
-// IsTimestamp checks if the column is a timestamp type
-func (c *Column) IsTimestamp() bool {
-	//TODO:  change this to a map or use a constant slice.  The switch is not a good solution.
-	switch strings.ToLower(c.Type) {
-	case "timestamp", "timestamptz", "timestamp with time zone", "timestamp without time zone", "date", "time", "time without time zone", "time with time zone":
-		return true
-	default:
-		return false
-	}
-}
-
 // GoFieldName returns the Go field name for this column
 func (c *Column) GoFieldName() string {
 	return toPascalCase(c.Name)

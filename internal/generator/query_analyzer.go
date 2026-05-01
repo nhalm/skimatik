@@ -531,103 +531,6 @@ func (qa *QueryAnalyzer) analyzeSelectQuery(ctx context.Context, query *Query) e
 	return qa.analyzeQueryColumns(ctx, query)
 }
 
-// replaceParametersForExplain replaces parameter placeholders with dummy values for EXPLAIN
-func (qa *QueryAnalyzer) replaceParametersForExplain(sql string, parameters []Parameter) string {
-	result := sql
-
-	// Replace parameters in reverse order to avoid issues with $1 vs $10
-	for i := len(parameters); i >= 1; i-- {
-		placeholder := fmt.Sprintf("$%d", i)
-		dummyValue := qa.getDummyValueForParameter()
-
-		// Use a more sophisticated replacement that avoids string literals
-		// For now, we'll use a simple approach but this could be enhanced
-		result = qa.replaceParameterOutsideQuotes(result, placeholder, dummyValue)
-	}
-	return result
-}
-
-// replaceParameterOutsideQuotes replaces parameter only when it's not inside quotes
-func (qa *QueryAnalyzer) replaceParameterOutsideQuotes(sql, placeholder, replacement string) string {
-	result := []rune(sql)
-	searchRunes := []rune(placeholder)
-	replRunes := []rune(replacement)
-	inSingleQuote := false
-	inDoubleQuote := false
-
-	for i := 0; i < len(result); i++ {
-		switch {
-		case result[i] == '\'' && (i == 0 || result[i-1] != '\\'):
-			i = trackSingleQuoteState(result, i, &inSingleQuote, inDoubleQuote)
-		case result[i] == '"' && (i == 0 || result[i-1] != '\\'):
-			i = trackDoubleQuoteState(result, i, &inDoubleQuote, inSingleQuote)
-		case !inSingleQuote && !inDoubleQuote:
-			result, i = tryReplacePlaceholder(result, i, searchRunes, replRunes)
-		}
-	}
-
-	return string(result)
-}
-
-// trackSingleQuoteState updates *inSingleQuote when scanning past a single quote
-// at position i, handling the doubled-quote (”) escape. Returns the (possibly
-// advanced) loop index. This mirrors the in-place quote tracking from
-// replaceParameterOutsideQuotes (which does NOT blank quote characters).
-func trackSingleQuoteState(result []rune, i int, inSingleQuote *bool, inDoubleQuote bool) int {
-	if *inSingleQuote {
-		if i+1 < len(result) && result[i+1] == '\'' {
-			i++
-		} else {
-			*inSingleQuote = false
-		}
-	} else if !inDoubleQuote {
-		*inSingleQuote = true
-	}
-	return i
-}
-
-// trackDoubleQuoteState is the double-quote analogue of trackSingleQuoteState.
-func trackDoubleQuoteState(result []rune, i int, inDoubleQuote *bool, inSingleQuote bool) int {
-	if *inDoubleQuote {
-		if i+1 < len(result) && result[i+1] == '"' {
-			i++
-		} else {
-			*inDoubleQuote = false
-		}
-	} else if !inSingleQuote {
-		*inDoubleQuote = true
-	}
-	return i
-}
-
-// tryReplacePlaceholder attempts to match searchRunes starting at result[i].
-// On match it splices replRunes in place of searchRunes, returning the new
-// rune slice and an updated index that — combined with the caller's `i++` —
-// resumes scanning right after the inserted replacement. On no match the
-// inputs are returned unchanged.
-func tryReplacePlaceholder(result []rune, i int, searchRunes, replRunes []rune) ([]rune, int) {
-	if i+len(searchRunes) > len(result) {
-		return result, i
-	}
-	for j := 0; j < len(searchRunes); j++ {
-		if result[i+j] != searchRunes[j] {
-			return result, i
-		}
-	}
-	// Replace the placeholder
-	newResult := make([]rune, 0, len(result)-len(searchRunes)+len(replRunes))
-	newResult = append(newResult, result[:i]...)
-	newResult = append(newResult, replRunes...)
-	newResult = append(newResult, result[i+len(searchRunes):]...)
-	return newResult, i + len(replRunes) - 1
-}
-
-// getDummyValueForParameter returns a dummy value for a parameter
-func (qa *QueryAnalyzer) getDummyValueForParameter() string {
-	// Use NULL which works with all types and avoids type conversion issues
-	return "NULL"
-}
-
 // analyzeQueryColumns analyzes the columns returned by a SELECT query
 func (qa *QueryAnalyzer) analyzeQueryColumns(ctx context.Context, query *Query) error {
 	// Remove trailing semicolon if present
@@ -1043,23 +946,5 @@ func (qa *QueryAnalyzer) inferParameterTypesFromPrepare(ctx context.Context, que
 		query.Parameters[i].GoType = goType
 	}
 
-	return nil
-}
-
-// InferParameterTypes attempts to infer parameter types from query context.
-// This is a placeholder for more advanced type inference that could analyze
-// query semantics to determine parameter types without database introspection.
-func (qa *QueryAnalyzer) InferParameterTypes(ctx context.Context, query *Query) error {
-	// This is a more advanced feature that could analyze the query context
-	// to infer parameter types based on how they're used
-	// For now, we'll keep the basic implementation from extractParameters
-	return nil
-}
-
-// ValidateQueryExecution validates that a query can be executed successfully.
-// This could be used in testing to ensure queries work with sample data.
-func (qa *QueryAnalyzer) ValidateQueryExecution(ctx context.Context, query *Query) error {
-	// This could be used to validate that the query executes without errors
-	// using test data or in a test transaction
 	return nil
 }
