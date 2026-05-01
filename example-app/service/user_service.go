@@ -98,34 +98,3 @@ func (s *UserService) GetUser(ctx context.Context, userID uuid.UUID) (*domain.Us
 	// Service layer can apply business logic here if needed
 	return user, nil
 }
-
-// Temporary stub implementation - replace when repository is implemented
-type StubUserService struct{}
-
-func NewStubUserService() *StubUserService {
-	return &StubUserService{}
-}
-
-func (s *StubUserService) GetActiveUsers(ctx context.Context, limit int) ([]domain.UserSummary, error) {
-	return nil, fmt.Errorf("not implemented - awaiting code generation")
-}
-
-func (s *StubUserService) GetUserByEmail(ctx context.Context, email string) (*domain.UserDetail, error) {
-	return nil, fmt.Errorf("not implemented - awaiting code generation")
-}
-
-func (s *StubUserService) SearchUsers(ctx context.Context, query string) ([]domain.UserSummary, error) {
-	return nil, fmt.Errorf("not implemented - awaiting code generation")
-}
-
-func (s *StubUserService) GetUserStats(ctx context.Context, userID uuid.UUID) (*domain.UserStats, error) {
-	return nil, fmt.Errorf("not implemented - awaiting code generation")
-}
-
-func (s *StubUserService) DeactivateUser(ctx context.Context, userID uuid.UUID) error {
-	return fmt.Errorf("not implemented - awaiting code generation")
-}
-
-func (s *StubUserService) GetUser(ctx context.Context, userID uuid.UUID) (*domain.UserDetail, error) {
-	return nil, fmt.Errorf("not implemented - awaiting code generation")
-}
