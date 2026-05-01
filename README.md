@@ -177,13 +177,14 @@ For more installation options and detailed setup instructions, see the [Quick St
 
 We welcome contributions! Please see our [Contributing Guidelines](https://github.com/nhalm/skimatik/wiki/contributing) for details.
 
-After cloning, activate the Git hooks once:
+After cloning, install [lefthook](https://github.com/evilmartians/lefthook) and activate the Git hooks once:
 
 ```bash
-make hooks
+go install github.com/evilmartians/lefthook@latest
+lefthook install
 ```
 
-This installs lefthook and wires up `pre-commit` (`make lint` + `make test-unit` in parallel), `commit-msg` (Conventional Commits format on the subject line), and `pre-push` (`make test-integration`).
+This wires up `pre-commit` (`make lint` + `make test-unit` in parallel), `commit-msg` (Conventional Commits format on the subject line), and `pre-push` (`make test-integration`) per `lefthook.yml`.
 
 ## License
 

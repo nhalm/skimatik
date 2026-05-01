@@ -48,7 +48,6 @@ make test-integration # Run integration tests (auto-starts database)
 make test-example-app # Run example-app tests (auto-setup)
 make test-all         # Run all tests
 make lint             # Run golangci-lint and go fmt
-make hooks            # Install lefthook + activate Git hooks (run once per checkout)
 make clean            # Clean build artifacts and stop services
 ```
 
