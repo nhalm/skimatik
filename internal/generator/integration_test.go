@@ -43,8 +43,7 @@ func TestSystem_EndToEnd(t *testing.T) {
 	// Test: System generates code without errors
 	generator := New(config, "test")
 	ctx := context.Background()
-	err := generator.Generate(ctx)
-	if err != nil {
+	if _, err := generator.Generate(ctx); err != nil {
 		t.Fatalf("System failed to generate code: %v", err)
 	}
 
@@ -120,8 +119,7 @@ UPDATE users SET is_active = false WHERE id = $1;
 	// Test: System generates query code without errors
 	generator := New(config, "test")
 	ctx := context.Background()
-	err := generator.Generate(ctx)
-	if err != nil {
+	if _, err := generator.Generate(ctx); err != nil {
 		t.Fatalf("Query generation failed: %v", err)
 	}
 
@@ -198,8 +196,7 @@ func TestSystem_RealWorldScenarios(t *testing.T) {
 			// Test: Table-specific generation works
 			generator := New(config, "test")
 			ctx := context.Background()
-			err := generator.Generate(ctx)
-			if err != nil {
+			if _, err := generator.Generate(ctx); err != nil {
 				t.Fatalf("Failed to generate code for %s (%s): %v", scenario.table, scenario.description, err)
 			}
 
@@ -323,7 +320,7 @@ func TestSystem_ErrorHandling(t *testing.T) {
 
 		generator := New(config, "test")
 		ctx := context.Background()
-		err := generator.Generate(ctx)
+		_, err := generator.Generate(ctx)
 
 		// Test: System handles invalid database gracefully
 		if err == nil {

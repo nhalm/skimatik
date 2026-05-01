@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -53,8 +52,7 @@ func (h *PostHandler) GetPublishedPosts(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK,map[string]interface{}{
 		"posts": apiPosts,
 		"count": len(apiPosts),
 	})
@@ -88,8 +86,7 @@ func (h *PostHandler) GetPost(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:   servicePost.CreatedAt,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(apiPost)
+	writeJSON(w, http.StatusOK,apiPost)
 }
 
 // GetUserPosts handles GET /api/users/{id}/posts
@@ -122,8 +119,7 @@ func (h *PostHandler) GetUserPosts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK,map[string]interface{}{
 		"posts": apiPosts,
 		"count": len(apiPosts),
 	})
@@ -159,8 +155,7 @@ func (h *PostHandler) GetPostsWithStats(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK,map[string]interface{}{
 		"posts": apiStats,
 		"count": len(apiStats),
 	})
@@ -199,8 +194,7 @@ func (h *PostHandler) GetFeaturedPosts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK,map[string]interface{}{
 		"posts": apiPosts,
 		"count": len(apiPosts),
 	})
@@ -243,8 +237,7 @@ func (h *PostHandler) GetPostsByTag(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK,map[string]interface{}{
 		"posts": apiPosts,
 		"tag":   tag,
 		"count": len(apiPosts),
@@ -266,8 +259,7 @@ func (h *PostHandler) GetPostStatistics(w http.ResponseWriter, r *http.Request) 
 		DraftPosts:     serviceStats.DraftPosts,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(apiStats)
+	writeJSON(w, http.StatusOK,apiStats)
 }
 
 // PublishPost handles PUT /api/posts/{id}/publish
@@ -286,8 +278,7 @@ func (h *PostHandler) PublishPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	writeJSON(w, http.StatusOK,map[string]string{
 		"message": "Post published successfully",
 	})
 }

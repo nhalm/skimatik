@@ -1,16 +1,21 @@
 # blueprint-vet integration
 
-[blueprint-vet](https://github.com/nhalm/blueprint-vet) is a Go static analyzer + SQL linter that enforces conformance rules for services built on the [go-blueprint](https://github.com/nhalm/blueprint) layout. skimatik runs both binaries as part of `make lint` and CI to keep generated code and the example-app aligned with those rules.
+[blueprint-vet](https://github.com/nhalm/blueprint-vet) is a Go static analyzer + SQL linter that enforces conformance rules for services built on the [go-blueprint](https://github.com/nhalm/blueprint) layout. Since blueprint-vet `v0.2.0`, the Go AST analyzers ship as a [golangci-lint Module Plugin](https://golangci-lint.run/plugins/module-plugins/), so skimatik runs them inside `golangci-lint` rather than as a separate binary.
 
-## What gets checked
+## How it's wired
+
+Two config files drive the integration:
+
+- **`.custom-gcl.yml`** — pins golangci-lint version and the blueprint-vet plugin. `golangci-lint custom` reads this file and produces `./bin/custom-gcl`, a custom golangci-lint binary that bundles the plugin.
+- **`.golangci.yml`** — enables `blueprint-vet` alongside the stdlib linters under `linters.settings.custom`.
 
 `make lint` runs:
 
-- `blueprint-vet -nofmtprint=false ./...` against the **skimatik root module** (the generator itself).
-- `blueprint-vet -nofmtprint=false ./...` against the **example-app module** (consumer + generated code).
-- `blueprint-sql-check example-app/database/queries` against the SQL query annotation files.
+- `./bin/custom-gcl run ./...` against the **skimatik root module** — runs all stdlib linters plus blueprint-vet's R-1..R-7 / R-11 / R-12 in a single pass.
+- `./bin/custom-gcl run ./...` against the **example-app module** (when generated code is present).
+- `blueprint-sql-check example-app/database/queries` against the SQL query annotation files. (SQL files aren't lintable by golangci-lint, so this stays a separate binary.)
 
-Same three steps run in `.github/workflows/ci.yml`'s lint job.
+`.github/workflows/ci.yml`'s lint job mirrors the same steps. The custom-gcl binary builds once per CI run via `golangci-lint custom`.
 
 ## Rules in effect
 
@@ -23,11 +28,7 @@ Same three steps run in `.github/workflows/ci.yml`'s lint job.
 
 R-6 (`idtypeuuid`) is satisfied automatically because skimatik uses `uuid.UUID` for ID columns.
 
-## Why `-nofmtprint=false`
-
-R-8 (`nofmtprint`) bans the entire `fmt.Print*/Sprint*/Fprint*` family on the assumption the call is a runtime log that should go through canonlog. skimatik is a code generator: `fmt.Fprintf(&code, ...)` is how the generator writes Go source, and generated cursor helpers use `fmt.Sprintf("%v", value)` for value formatting. None of that is logging, so the rule does not apply. CI and `make lint` keep R-8 disabled for both modules.
-
-If you adopt skimatik in a service that genuinely uses canonlog, leave R-8 on for your own packages — only the generator and generated code need the exemption.
+R-8 (`nofmtprint`) runs unmodified. The generator assembles source files via `text/template` (see `internal/generator/templates/shared/file.tmpl`) and any user-facing logging happens in `cmd/skimatik/main.go`, which R-8 exempts.
 
 ## The wrapper executor pattern
 
@@ -76,4 +77,8 @@ blueprint-vet's analyzers key off path substrings: `/internal/api`, `/internal/m
 
 ## Versions
 
-Pinned to `v0.1.2` in both `Makefile` (`BLUEPRINT_VET_VERSION`) and `.github/workflows/ci.yml`. Bump both together.
+Three version pins, all bumped together:
+
+- `.custom-gcl.yml` → `version: v2.11.4` (golangci-lint base)
+- `.custom-gcl.yml` → blueprint-vet plugin `version: v0.2.0`
+- `Makefile` / `.github/workflows/ci.yml` → `BLUEPRINT_VET_VERSION` for the standalone `blueprint-sql-check` binary (kept on the same release tag as the plugin for consistency).

@@ -1,16 +1,6 @@
 // Package-level error types and utilities for database operations
 // This file is generated once per package and provides reusable error handling
 
-import (
-	"context"
-	"errors"
-	"fmt"
-	"strings"
-
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-)
-
 // Error types that implementers can check and handle
 var (
 	ErrNotFound           = errors.New("record not found")

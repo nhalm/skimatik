@@ -79,7 +79,7 @@ func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var queries []Query
 	var currentQuery *Query

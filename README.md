@@ -47,7 +47,7 @@ A database-first code generator for PostgreSQL that creates type-safe Go reposit
 - **Zero Dependencies**: Generated code only requires pgx - no external pagination or ORM dependencies
 - **Shared Utilities**: Eliminates code duplication with reusable database operation and retry patterns
 - **Repository Embedding**: Generated repositories designed for clean composition and extension
-- **Production Ready**: Clean, formatted code following Go best practices
+- **Strict-Linter Clean**: Generated code passes the lint set strict downstream consumers commonly run — `errcheck`, `errorlint`, `govet`, `ineffassign`, `rowserrcheck`, `sqlclosecheck`, `staticcheck`, `unused`, plus the [blueprint-vet](https://github.com/nhalm/blueprint-vet) conformance rules. Verified end-to-end on every CI run by regenerating + linting the [example-app](./example-app/).
 
 ## Quick Start
 

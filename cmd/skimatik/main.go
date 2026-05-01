@@ -171,8 +171,15 @@ MORE INFO:
 	gen := generator.New(cfg, getVersion())
 	ctx := context.Background()
 
-	if err := gen.Generate(ctx); err != nil {
+	files, err := gen.Generate(ctx)
+	if err != nil {
 		log.Fatalf("Generation failed: %v", err)
+	}
+
+	if cfg.Verbose {
+		for _, f := range files {
+			fmt.Printf("Generated: %s\n", f)
+		}
 	}
 
 	fmt.Printf("Successfully generated code in %s\n", cfg.OutputDir)

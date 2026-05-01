@@ -34,7 +34,7 @@ func getTestDB(t *testing.T) *pgxkit.DB {
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		db.Shutdown(ctx)
+		_ = db.Shutdown(ctx)
 	})
 
 	return db
@@ -67,7 +67,7 @@ func TestPaginatedQuery_CursorNavigation(t *testing.T) {
 			t.Fatalf("Failed to create test user: %v", err)
 		}
 		t.Cleanup(func() {
-			db.Exec(ctx, "DELETE FROM users WHERE id = $1", userID)
+			_, _ = db.Exec(ctx, "DELETE FROM users WHERE id = $1", userID)
 		})
 	}
 
@@ -94,7 +94,7 @@ func TestPaginatedQuery_CursorNavigation(t *testing.T) {
 
 	t.Cleanup(func() {
 		for _, post := range testPosts {
-			db.Exec(ctx, "DELETE FROM posts WHERE id = $1", post.id)
+			_, _ = db.Exec(ctx, "DELETE FROM posts WHERE id = $1", post.id)
 		}
 	})
 
@@ -266,7 +266,7 @@ func TestPaginatedQuery_WithFilterParameter(t *testing.T) {
 		t.Fatalf("Failed to create test user: %v", err)
 	}
 	t.Cleanup(func() {
-		db.Exec(ctx, "DELETE FROM users WHERE id = $1", testUserID)
+		_, _ = db.Exec(ctx, "DELETE FROM users WHERE id = $1", testUserID)
 	})
 
 	// Create test posts for this specific author
@@ -292,7 +292,7 @@ func TestPaginatedQuery_WithFilterParameter(t *testing.T) {
 
 	t.Cleanup(func() {
 		for _, post := range testPosts {
-			db.Exec(ctx, "DELETE FROM posts WHERE id = $1", post.id)
+			_, _ = db.Exec(ctx, "DELETE FROM posts WHERE id = $1", post.id)
 		}
 	})
 
@@ -401,7 +401,7 @@ func TestPaginatedQuery_BidirectionalNavigation(t *testing.T) {
 		t.Fatalf("Failed to create test user: %v", err)
 	}
 	t.Cleanup(func() {
-		db.Exec(ctx, "DELETE FROM users WHERE id = $1", testUserID)
+		_, _ = db.Exec(ctx, "DELETE FROM users WHERE id = $1", testUserID)
 	})
 
 	// Create 5 test posts with distinct times (DESC order means newest first)
@@ -429,7 +429,7 @@ func TestPaginatedQuery_BidirectionalNavigation(t *testing.T) {
 
 	t.Cleanup(func() {
 		for _, post := range testPosts {
-			db.Exec(ctx, "DELETE FROM posts WHERE id = $1", post.id)
+			_, _ = db.Exec(ctx, "DELETE FROM posts WHERE id = $1", post.id)
 		}
 	})
 

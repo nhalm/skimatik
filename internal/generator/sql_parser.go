@@ -696,51 +696,12 @@ func (sp *SQLParser) walkExprForParams(node *pg_query_go.Node, params map[int]*P
 	}
 
 	if paramRef := node.GetParamRef(); paramRef != nil {
-		pos := int(paramRef.Number)
-		if params[pos] == nil {
-			params[pos] = &ParameterInfo{Position: pos}
-		}
-		params[pos].IsInWhere = params[pos].IsInWhere || isInWhere
-		params[pos].IsInSet = params[pos].IsInSet || isInSet
+		sp.handleParamRefNode(paramRef, params, isInWhere, isInSet)
 		return
 	}
 
 	if aExpr := node.GetAExpr(); aExpr != nil {
-		if colRef := aExpr.Lexpr.GetColumnRef(); colRef != nil {
-			columnName := sp.extractColumnNameFromRef(colRef)
-			tableName := sp.extractTableNameFromRef(colRef)
-
-			if paramRef := aExpr.Rexpr.GetParamRef(); paramRef != nil {
-				pos := int(paramRef.Number)
-				if params[pos] == nil {
-					params[pos] = &ParameterInfo{Position: pos}
-				}
-				params[pos].ColumnName = columnName
-				if tableName != "" {
-					params[pos].TableName = tableName
-				}
-				params[pos].Operator = sp.getOperatorName(aExpr)
-				params[pos].IsInWhere = isInWhere
-			} else if list := aExpr.Rexpr.GetList(); list != nil {
-				for _, item := range list.Items {
-					if paramRef := item.GetParamRef(); paramRef != nil {
-						pos := int(paramRef.Number)
-						if params[pos] == nil {
-							params[pos] = &ParameterInfo{Position: pos}
-						}
-						params[pos].ColumnName = columnName
-						if tableName != "" {
-							params[pos].TableName = tableName
-						}
-						params[pos].Operator = sp.getOperatorName(aExpr)
-						params[pos].IsInWhere = isInWhere
-					}
-				}
-			}
-		}
-
-		sp.walkExprForParams(aExpr.Lexpr, params, isInWhere, isInSet)
-		sp.walkExprForParams(aExpr.Rexpr, params, isInWhere, isInSet)
+		sp.handleAExprNode(aExpr, params, isInWhere, isInSet)
 	}
 
 	if boolExpr := node.GetBoolExpr(); boolExpr != nil {
@@ -750,15 +711,7 @@ func (sp *SQLParser) walkExprForParams(node *pg_query_go.Node, params map[int]*P
 	}
 
 	if subLink := node.GetSubLink(); subLink != nil {
-		if subLink.Testexpr != nil {
-			sp.walkExprForParams(subLink.Testexpr, params, isInWhere, isInSet)
-		}
-		// Walk the subquery inside SubLink (e.g., IN (SELECT ...), EXISTS (SELECT ...))
-		if subLink.Subselect != nil {
-			if subSelect := subLink.Subselect.GetSelectStmt(); subSelect != nil {
-				sp.walkSelectForParams(subSelect, params)
-			}
-		}
+		sp.handleSubLinkNode(subLink, params, isInWhere, isInSet)
 	}
 
 	if funcCall := node.GetFuncCall(); funcCall != nil {
@@ -772,48 +725,12 @@ func (sp *SQLParser) walkExprForParams(node *pg_query_go.Node, params map[int]*P
 	}
 
 	if caseExpr := node.GetCaseExpr(); caseExpr != nil {
-		if caseExpr.Arg != nil {
-			sp.walkExprForParams(caseExpr.Arg, params, isInWhere, isInSet)
-		}
-		for _, whenClause := range caseExpr.Args {
-			if when := whenClause.GetCaseWhen(); when != nil {
-				sp.walkExprForParams(when.Expr, params, isInWhere, isInSet)
-				sp.walkExprForParams(when.Result, params, isInWhere, isInSet)
-			}
-		}
-		if caseExpr.Defresult != nil {
-			sp.walkExprForParams(caseExpr.Defresult, params, isInWhere, isInSet)
-		}
+		sp.handleCaseExprNode(caseExpr, params, isInWhere, isInSet)
 	}
 
 	// Handle IN clauses: status IN ($1) becomes ScalarArrayOpExpr
 	if scalarArrayOp := node.GetScalarArrayOpExpr(); scalarArrayOp != nil {
-		// Args[0] is the column, Args[1] is the parameter/array
-		if len(scalarArrayOp.Args) >= 2 {
-			if colRef := scalarArrayOp.Args[0].GetColumnRef(); colRef != nil {
-				columnName := sp.extractColumnNameFromRef(colRef)
-				tableName := sp.extractTableNameFromRef(colRef)
-
-				// Second argument could be a parameter
-				if paramRef := scalarArrayOp.Args[1].GetParamRef(); paramRef != nil {
-					pos := int(paramRef.Number)
-					if params[pos] == nil {
-						params[pos] = &ParameterInfo{Position: pos}
-					}
-					params[pos].ColumnName = columnName
-					if tableName != "" {
-						params[pos].TableName = tableName
-					}
-					params[pos].Operator = "IN"
-					params[pos].IsInWhere = isInWhere
-				}
-			}
-		}
-
-		// Recursively walk all args
-		for _, arg := range scalarArrayOp.Args {
-			sp.walkExprForParams(arg, params, isInWhere, isInSet)
-		}
+		sp.handleScalarArrayOpNode(scalarArrayOp, params, isInWhere, isInSet)
 	}
 
 	if list := node.GetList(); list != nil {
@@ -821,6 +738,102 @@ func (sp *SQLParser) walkExprForParams(node *pg_query_go.Node, params map[int]*P
 			sp.walkExprForParams(item, params, isInWhere, isInSet)
 		}
 	}
+}
+
+// handleParamRefNode records the position-only parameter info from a bare ParamRef.
+// Caller is responsible for the early return; this helper does not recurse.
+func (sp *SQLParser) handleParamRefNode(paramRef *pg_query_go.ParamRef, params map[int]*ParameterInfo, isInWhere, isInSet bool) {
+	pos := int(paramRef.Number)
+	if params[pos] == nil {
+		params[pos] = &ParameterInfo{Position: pos}
+	}
+	params[pos].IsInWhere = params[pos].IsInWhere || isInWhere
+	params[pos].IsInSet = params[pos].IsInSet || isInSet
+}
+
+// handleAExprNode extracts column-aware parameter info from a binary expression
+// (e.g. `column = $1`, `column IN ($1, $2)`) and recurses into both sides.
+func (sp *SQLParser) handleAExprNode(aExpr *pg_query_go.A_Expr, params map[int]*ParameterInfo, isInWhere, isInSet bool) {
+	if colRef := aExpr.Lexpr.GetColumnRef(); colRef != nil {
+		columnName := sp.extractColumnNameFromRef(colRef)
+		tableName := sp.extractTableNameFromRef(colRef)
+		operator := sp.getOperatorName(aExpr)
+
+		if paramRef := aExpr.Rexpr.GetParamRef(); paramRef != nil {
+			recordParamWithColumn(params, int(paramRef.Number), columnName, tableName, operator, isInWhere)
+		} else if list := aExpr.Rexpr.GetList(); list != nil {
+			for _, item := range list.Items {
+				if paramRef := item.GetParamRef(); paramRef != nil {
+					recordParamWithColumn(params, int(paramRef.Number), columnName, tableName, operator, isInWhere)
+				}
+			}
+		}
+	}
+
+	sp.walkExprForParams(aExpr.Lexpr, params, isInWhere, isInSet)
+	sp.walkExprForParams(aExpr.Rexpr, params, isInWhere, isInSet)
+}
+
+// handleSubLinkNode walks the test expression and any embedded SELECT.
+func (sp *SQLParser) handleSubLinkNode(subLink *pg_query_go.SubLink, params map[int]*ParameterInfo, isInWhere, isInSet bool) {
+	if subLink.Testexpr != nil {
+		sp.walkExprForParams(subLink.Testexpr, params, isInWhere, isInSet)
+	}
+	// Walk the subquery inside SubLink (e.g., IN (SELECT ...), EXISTS (SELECT ...))
+	if subLink.Subselect != nil {
+		if subSelect := subLink.Subselect.GetSelectStmt(); subSelect != nil {
+			sp.walkSelectForParams(subSelect, params)
+		}
+	}
+}
+
+// handleCaseExprNode walks the optional discriminator, every WHEN/THEN pair,
+// and the optional ELSE.
+func (sp *SQLParser) handleCaseExprNode(caseExpr *pg_query_go.CaseExpr, params map[int]*ParameterInfo, isInWhere, isInSet bool) {
+	if caseExpr.Arg != nil {
+		sp.walkExprForParams(caseExpr.Arg, params, isInWhere, isInSet)
+	}
+	for _, whenClause := range caseExpr.Args {
+		if when := whenClause.GetCaseWhen(); when != nil {
+			sp.walkExprForParams(when.Expr, params, isInWhere, isInSet)
+			sp.walkExprForParams(when.Result, params, isInWhere, isInSet)
+		}
+	}
+	if caseExpr.Defresult != nil {
+		sp.walkExprForParams(caseExpr.Defresult, params, isInWhere, isInSet)
+	}
+}
+
+// handleScalarArrayOpNode handles IN/= ANY clauses where Args[0] is a column
+// and Args[1] is the parameter/array, then recursively walks every arg.
+func (sp *SQLParser) handleScalarArrayOpNode(scalarArrayOp *pg_query_go.ScalarArrayOpExpr, params map[int]*ParameterInfo, isInWhere, isInSet bool) {
+	if len(scalarArrayOp.Args) >= 2 {
+		if colRef := scalarArrayOp.Args[0].GetColumnRef(); colRef != nil {
+			columnName := sp.extractColumnNameFromRef(colRef)
+			tableName := sp.extractTableNameFromRef(colRef)
+
+			if paramRef := scalarArrayOp.Args[1].GetParamRef(); paramRef != nil {
+				recordParamWithColumn(params, int(paramRef.Number), columnName, tableName, "IN", isInWhere)
+			}
+		}
+	}
+
+	for _, arg := range scalarArrayOp.Args {
+		sp.walkExprForParams(arg, params, isInWhere, isInSet)
+	}
+}
+
+// recordParamWithColumn upserts column metadata for a parameter at pos.
+func recordParamWithColumn(params map[int]*ParameterInfo, pos int, columnName, tableName, operator string, isInWhere bool) {
+	if params[pos] == nil {
+		params[pos] = &ParameterInfo{Position: pos}
+	}
+	params[pos].ColumnName = columnName
+	if tableName != "" {
+		params[pos].TableName = tableName
+	}
+	params[pos].Operator = operator
+	params[pos].IsInWhere = isInWhere
 }
 
 // walkExprForParamsWithColumn walks expression with known column context

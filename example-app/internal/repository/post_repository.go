@@ -113,7 +113,7 @@ func (r *PostRepository) GetUserPosts(ctx context.Context, userID uuid.UUID) ([]
 
 func (r *PostRepository) GetPostsWithStats(ctx context.Context, limit int) ([]domain.PostWithStats, error) {
 	// Use GetPostsWithCommentCount as the equivalent for "stats"
-	results, err := r.PostsQueries.GetPostsWithCommentCount(ctx, executorFromContext(ctx, r.db), limit)
+	results, err := r.GetPostsWithCommentCount(ctx, executorFromContext(ctx, r.db), limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get posts with stats: %w", err)
 	}

@@ -2,12 +2,6 @@
 // These functions eliminate duplication across repositories and provide consistent patterns
 // Available for both generated repositories and custom implementer extensions
 
-import (
-	"context"
-	"github.com/jackc/pgx/v5"
-	"github.com/nhalm/pgxkit/v2"
-)
-
 // ExecuteQueryRow executes a single-row query and returns the row for scanning
 // This eliminates duplication across Create, Get, Update, and One query operations
 func ExecuteQueryRow(ctx context.Context, db pgxkit.Executor, operation, entity, query string, args ...interface{}) pgx.Row {
@@ -23,8 +17,12 @@ func ExecuteReadQueryRow(ctx context.Context, db pgxkit.Executor, operation, ent
 	return db.QueryRow(ctx, query, args...)
 }
 
-// ExecuteQuery executes a multi-row query and returns rows for scanning
-// This eliminates duplication across List, Many queries, and paginated operations
+// ExecuteQuery executes a multi-row query and returns rows for scanning.
+// This eliminates duplication across List, Many queries, and paginated operations.
+// Callers must defer rows.Close() and call HandleRowsResult(entity, rows) after
+// iteration to surface any rows.Err().
+//
+//nolint:rowserrcheck // rows.Err() is the caller's responsibility; see HandleRowsResult.
 func ExecuteQuery(ctx context.Context, db pgxkit.Executor, operation, entity, query string, args ...interface{}) (pgx.Rows, error) {
 	rows, err := db.Query(ctx, query, args...)
 	if err != nil {
@@ -33,8 +31,12 @@ func ExecuteQuery(ctx context.Context, db pgxkit.Executor, operation, entity, qu
 	return rows, nil
 }
 
-// ExecuteReadQuery executes a multi-row read query, routing to read replica when available
-// Falls back to standard Query when db is not *pgxkit.DB (e.g., within a transaction)
+// ExecuteReadQuery executes a multi-row read query, routing to read replica when available.
+// Falls back to standard Query when db is not *pgxkit.DB (e.g., within a transaction).
+// Callers must defer rows.Close() and call HandleRowsResult(entity, rows) after
+// iteration to surface any rows.Err().
+//
+//nolint:rowserrcheck // rows.Err() is the caller's responsibility; see HandleRowsResult.
 func ExecuteReadQuery(ctx context.Context, db pgxkit.Executor, operation, entity, query string, args ...interface{}) (pgx.Rows, error) {
 	if dbConn, ok := db.(*pgxkit.DB); ok {
 		rows, err := dbConn.ReadQuery(ctx, query, args...)
