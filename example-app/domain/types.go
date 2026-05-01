@@ -1,3 +1,5 @@
+// Package domain defines the business types passed between the example-app's
+// service, repository, and API layers.
 package domain
 
 import (

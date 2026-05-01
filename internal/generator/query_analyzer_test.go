@@ -750,10 +750,7 @@ func TestQueryAnalyzer_InferParameterNames(t *testing.T) {
 			}
 
 			// Then infer names
-			err = analyzer.inferParameterNames(&query)
-			if err != nil {
-				t.Fatalf("inferParameterNames failed: %v", err)
-			}
+			analyzer.inferParameterNames(&query)
 
 			// Verify names
 			for _, param := range query.Parameters {
@@ -878,10 +875,7 @@ func TestQueryAnalyzer_TableColumnTracking(t *testing.T) {
 				t.Fatalf("extractParameters failed: %v", err)
 			}
 
-			err = analyzer.inferParameterNames(&query)
-			if err != nil {
-				t.Fatalf("inferParameterNames failed: %v", err)
-			}
+			analyzer.inferParameterNames(&query)
 
 			// Verify table/column tracking
 			for _, param := range query.Parameters {
@@ -1044,19 +1038,20 @@ func TestQueryAnalyzer_ApplyResultAnnotations(t *testing.T) {
 					for _, annotation := range tt.query.ResultAnnotations {
 						found := false
 						for _, col := range query.Columns {
-							if col.Name == annotation.ColumnName {
-								found = true
-								if col.GoType != annotation.GoType {
-									t.Errorf("Column %s: expected GoType %q, got %q",
-										col.Name, annotation.GoType, col.GoType)
-								}
-								expectedNullable := strings.HasPrefix(annotation.GoType, "*")
-								if col.IsNullable != expectedNullable {
-									t.Errorf("Column %s: expected IsNullable %v, got %v",
-										col.Name, expectedNullable, col.IsNullable)
-								}
-								break
+							if col.Name != annotation.ColumnName {
+								continue
 							}
+							found = true
+							if col.GoType != annotation.GoType {
+								t.Errorf("Column %s: expected GoType %q, got %q",
+									col.Name, annotation.GoType, col.GoType)
+							}
+							expectedNullable := strings.HasPrefix(annotation.GoType, "*")
+							if col.IsNullable != expectedNullable {
+								t.Errorf("Column %s: expected IsNullable %v, got %v",
+									col.Name, expectedNullable, col.IsNullable)
+							}
+							break
 						}
 						if !found && !tt.expectError {
 							t.Errorf("Annotation for column %s was not applied", annotation.ColumnName)

@@ -28,10 +28,11 @@ func TestMain(m *testing.M) {
 	// Teardown: Close database connection
 	if packageTestDB != nil {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
 		if err := packageTestDB.Shutdown(shutdownCtx); err != nil {
+			cancel()
 			panic("Failed to shutdown test database: " + err.Error())
 		}
+		cancel()
 	}
 
 	os.Exit(code)

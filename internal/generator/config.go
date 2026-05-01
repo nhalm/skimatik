@@ -77,13 +77,13 @@ type FileConfig struct {
 	Tables           TablesConfig   `yaml:"tables"`
 	Queries          QueriesConfig  `yaml:"queries"`
 	Types            TypesConfig    `yaml:"types"`
-	DefaultFunctions interface{}    `yaml:"default_functions"` // "all" or []string
+	DefaultFunctions any            `yaml:"default_functions"` // "all" or []string
 	Verbose          bool           `yaml:"verbose"`
 }
 
 // parseDefaultFunctions parses the default_functions field from YAML
 // It can be either "all" (string) or an array of function names
-func parseDefaultFunctions(value interface{}) ([]string, error) {
+func parseDefaultFunctions(value any) ([]string, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -94,7 +94,7 @@ func parseDefaultFunctions(value interface{}) ([]string, error) {
 			return []string{"create", "get", "update", "delete", "list", "paginate"}, nil
 		}
 		return nil, fmt.Errorf("invalid string value for default_functions: %q (only 'all' is supported)", v)
-	case []interface{}:
+	case []any:
 		var functions []string
 		for _, item := range v {
 			if str, ok := item.(string); ok {
@@ -184,7 +184,7 @@ func (c *Config) Validate() error {
 	}
 
 	// Ensure output directory exists or can be created
-	if err := os.MkdirAll(c.OutputDir, 0750); err != nil {
+	if err := os.MkdirAll(c.OutputDir, 0o750); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 

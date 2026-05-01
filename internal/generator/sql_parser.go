@@ -201,74 +201,122 @@ func (sp *SQLParser) extractOrderByColumnName(node *pg_query_go.Node, selectStmt
 // extractColumnNameFromOrderByRef extracts column name from ColumnRef in ORDER BY
 // Handles qualified references (table.column) and matches them to SELECT list aliases
 func (sp *SQLParser) extractColumnNameFromOrderByRef(colRef *pg_query_go.ColumnRef, selectStmt *pg_query_go.SelectStmt) string {
-	if len(colRef.Fields) == 0 {
-		return ""
-	}
-
-	// Extract the column name (last field in the reference)
-	lastField := colRef.Fields[len(colRef.Fields)-1]
-	if lastField == nil {
-		return ""
-	}
-
-	var columnName string
-	if str := lastField.GetString_(); str != nil {
-		columnName = str.Sval
-	}
-
+	columnName := lastFieldString(colRef)
 	if columnName == "" {
 		return ""
 	}
 
-	// Check if there's a table qualifier
-	var tableQualifier string
-	if len(colRef.Fields) >= 2 {
-		firstField := colRef.Fields[0]
-		if firstField != nil {
-			if str := firstField.GetString_(); str != nil {
-				tableQualifier = str.Sval
-			}
-		}
-	}
+	// Determine the table qualifier ("" when the reference is unqualified).
+	tableQualifier := tableQualifierFromColumnRef(colRef)
 
 	// If we have a table qualifier (e.g., u.name or p.created_at),
-	// check if the SELECT list has an alias for this column
+	// look for a matching alias / column in the SELECT list.
 	if tableQualifier != "" {
-		for _, targetNode := range selectStmt.TargetList {
-			resTarget := targetNode.GetResTarget()
-			if resTarget == nil {
-				continue
-			}
-
-			// If there's an explicit alias in the SELECT list, use it
-			if resTarget.Name != "" {
-				// Check if this target's value matches the qualified column reference
-				if valColRef := resTarget.Val.GetColumnRef(); valColRef != nil {
-					valColumnName := sp.extractColumnNameFromRef(valColRef)
-					valTableName := sp.extractTableNameFromRef(valColRef)
-
-					if valColumnName == columnName && (valTableName == "" || valTableName == tableQualifier) {
-						return resTarget.Name
-					}
-				}
-			} else {
-				// No alias, check if the column name matches
-				valColumnName := sp.extractColumnNameFromNode(resTarget.Val)
-				if valColumnName == columnName {
-					// Check if there's a table qualifier match
-					if valColRef := resTarget.Val.GetColumnRef(); valColRef != nil {
-						valTableName := sp.extractTableNameFromRef(valColRef)
-						if valTableName == "" || valTableName == tableQualifier {
-							return columnName
-						}
-					}
-				}
-			}
+		if resolved, ok := sp.resolveQualifiedOrderByColumn(selectStmt, columnName, tableQualifier); ok {
+			return resolved
 		}
 	}
 
 	// Return the column name (without table qualifier)
 	return columnName
+}
+
+// lastFieldString returns the string value of the last field in colRef,
+// which corresponds to the column-name component of a possibly-qualified
+// reference. Returns "" if no usable name can be extracted.
+func lastFieldString(colRef *pg_query_go.ColumnRef) string {
+	if colRef == nil || len(colRef.Fields) == 0 {
+		return ""
+	}
+	lastField := colRef.Fields[len(colRef.Fields)-1]
+	if lastField == nil {
+		return ""
+	}
+	if str := lastField.GetString_(); str != nil {
+		return str.Sval
+	}
+	return ""
+}
+
+// tableQualifierFromColumnRef extracts the table-qualifier portion of a
+// possibly-qualified column reference (e.g. "u" in "u.name"). Returns "" for
+// unqualified references.
+func tableQualifierFromColumnRef(colRef *pg_query_go.ColumnRef) string {
+	if colRef == nil || len(colRef.Fields) < 2 {
+		return ""
+	}
+	firstField := colRef.Fields[0]
+	if firstField == nil {
+		return ""
+	}
+	if str := firstField.GetString_(); str != nil {
+		return str.Sval
+	}
+	return ""
+}
+
+// resolveQualifiedOrderByColumn walks the SELECT target list looking for an
+// entry that matches columnName with the given tableQualifier. When found
+// it returns the name to use in the ORDER BY clause (an explicit alias if
+// the target had one, otherwise the column name itself) and ok=true.
+func (sp *SQLParser) resolveQualifiedOrderByColumn(selectStmt *pg_query_go.SelectStmt, columnName, tableQualifier string) (string, bool) {
+	for _, targetNode := range selectStmt.TargetList {
+		resTarget := targetNode.GetResTarget()
+		if resTarget == nil {
+			continue
+		}
+
+		if resolved, ok := sp.matchAliasedTarget(resTarget, columnName, tableQualifier); ok {
+			return resolved, true
+		}
+		if resolved, ok := sp.matchUnaliasedTarget(resTarget, columnName, tableQualifier); ok {
+			return resolved, true
+		}
+	}
+	return "", false
+}
+
+// matchAliasedTarget returns the alias of resTarget when it has one and its
+// value is a ColumnRef that matches the (columnName, tableQualifier) pair.
+// Targets without an explicit alias are ignored — those are handled by
+// matchUnaliasedTarget.
+func (sp *SQLParser) matchAliasedTarget(resTarget *pg_query_go.ResTarget, columnName, tableQualifier string) (string, bool) {
+	if resTarget.Name == "" {
+		return "", false
+	}
+	valColRef := resTarget.Val.GetColumnRef()
+	if valColRef == nil {
+		return "", false
+	}
+	valColumnName := sp.extractColumnNameFromRef(valColRef)
+	valTableName := sp.extractTableNameFromRef(valColRef)
+	if valColumnName == columnName && (valTableName == "" || valTableName == tableQualifier) {
+		return resTarget.Name, true
+	}
+	return "", false
+}
+
+// matchUnaliasedTarget returns columnName when resTarget has no explicit
+// alias and its value matches the (columnName, tableQualifier) pair.
+// Targets that already carry an alias are ignored — those are handled by
+// matchAliasedTarget.
+func (sp *SQLParser) matchUnaliasedTarget(resTarget *pg_query_go.ResTarget, columnName, tableQualifier string) (string, bool) {
+	if resTarget.Name != "" {
+		return "", false
+	}
+	valColumnName := sp.extractColumnNameFromNode(resTarget.Val)
+	if valColumnName != columnName {
+		return "", false
+	}
+	valColRef := resTarget.Val.GetColumnRef()
+	if valColRef == nil {
+		return "", false
+	}
+	valTableName := sp.extractTableNameFromRef(valColRef)
+	if valTableName == "" || valTableName == tableQualifier {
+		return columnName, true
+	}
+	return "", false
 }
 
 // extractInfo extracts metadata from parse result
@@ -963,7 +1011,7 @@ func (sp *SQLParser) extractTables(stmt *pg_query_go.Node) []TableRef {
 
 // extractTablesFromSelect extracts tables from SELECT statement
 func (sp *SQLParser) extractTablesFromSelect(selectStmt *pg_query_go.SelectStmt) []TableRef {
-	var tables []TableRef
+	tables := make([]TableRef, 0, len(selectStmt.FromClause))
 
 	for _, fromNode := range selectStmt.FromClause {
 		tables = append(tables, sp.walkFromClause(fromNode)...)

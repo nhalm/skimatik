@@ -25,7 +25,7 @@ func NewTypeMapper(customMappings map[string]string) *TypeMapper {
 // MapType converts a PostgreSQL type to the appropriate Go type.
 // It applies custom mappings first, then defaults to intelligent type detection.
 // The isNullable flag determines pointer vs value types, and isArray wraps in slices.
-func (tm *TypeMapper) MapType(pgType string, isNullable bool, isArray bool) (string, error) {
+func (tm *TypeMapper) MapType(pgType string, isNullable, isArray bool) (string, error) {
 	// Check custom mappings first
 	if customType, exists := tm.customMappings[pgType]; exists {
 		result := tm.applyNullableAndArray(customType, isNullable, isArray)
@@ -44,81 +44,106 @@ func (tm *TypeMapper) MapType(pgType string, isNullable bool, isArray bool) (str
 
 // getBaseGoType returns the base Go type for a PostgreSQL type
 func (tm *TypeMapper) getBaseGoType(pgType string) (string, error) {
-	switch strings.ToLower(pgType) {
-	// UUID types
-	case "uuid":
-		return "uuid.UUID", nil
+	normalized := strings.ToLower(pgType)
+	if goType, ok := mapNumericPgType(normalized); ok {
+		return goType, nil
+	}
+	if goType, ok := mapStringPgType(normalized); ok {
+		return goType, nil
+	}
+	if goType, ok := mapTimePgType(normalized); ok {
+		return goType, nil
+	}
+	if goType, ok := mapMiscPgType(normalized); ok {
+		return goType, nil
+	}
+	return "", fmt.Errorf("unsupported PostgreSQL type: %s", pgType)
+}
 
-	// String types
-	case "text", "varchar", "character varying", "char", "character":
-		return "string", nil
-
+// mapNumericPgType maps numeric/boolean PostgreSQL types to their Go types.
+func mapNumericPgType(pgType string) (string, bool) {
+	switch pgType {
 	// Integer types - all map to int for ergonomic, idiomatic Go
 	case "smallint", "int2", "integer", "int", "int4", "bigint", "int8", "serial", "bigserial", "smallserial":
-		return "int", nil
-
+		return "int", true
 	// Floating point types
 	case "real", "float4":
-		return "float32", nil
+		return "float32", true
 	case "double precision", "float8":
-		return "float64", nil
+		return "float64", true
 	case "numeric", "decimal":
-		return "float64", nil // Could also use shopspring/decimal for precision
-
+		return "float64", true // Could also use shopspring/decimal for precision
 	// Boolean type
 	case "boolean", "bool":
-		return "bool", nil
+		return "bool", true
+	}
+	return "", false
+}
 
-	// Date/time types
-	case "date":
-		return "time.Time", nil
-	case "time", "time without time zone":
-		return "time.Time", nil
-	case "timetz", "time with time zone":
-		return "time.Time", nil
-	case "timestamp", "timestamp without time zone":
-		return "time.Time", nil
-	case "timestamptz", "timestamp with time zone":
-		return "time.Time", nil
-
-	// Binary types
-	case "bytea":
-		return "[]byte", nil
-
-	// JSON types - use json.RawMessage for pgx v5
-	case "json", "jsonb":
-		return "json.RawMessage", nil
-
+// mapStringPgType maps string-like PostgreSQL types to their Go types.
+// This includes textual types as well as network, geometric, range and other
+// types that we currently represent as strings.
+func mapStringPgType(pgType string) (string, bool) {
+	switch pgType {
+	// String types
+	case "text", "varchar", "character varying", "char", "character":
+		return "string", true
 	// Network types
 	case "inet", "cidr":
-		return "string", nil // Could use net.IP for more type safety
+		return "string", true // Could use net.IP for more type safety
 	case "macaddr":
-		return "string", nil
-
+		return "string", true
 	// Geometric types (simplified to strings for now)
 	case "point", "line", "lseg", "box", "path", "polygon", "circle":
-		return "string", nil
-
+		return "string", true
 	// Range types (simplified to strings for now)
 	case "int4range", "int8range", "numrange", "tsrange", "tstzrange", "daterange":
-		return "string", nil
-
+		return "string", true
 	// Interval type
 	case "interval":
-		return "string", nil //TODO: Could use time.Duration for more type safety
-
+		return "string", true //TODO: Could use time.Duration for more type safety
 	// XML type
 	case "xml":
-		return "string", nil
-
-	// Array types are handled by the isArray parameter
-	default:
-		return "", fmt.Errorf("unsupported PostgreSQL type: %s", pgType)
+		return "string", true
 	}
+	return "", false
+}
+
+// mapTimePgType maps date/time PostgreSQL types to their Go types.
+func mapTimePgType(pgType string) (string, bool) {
+	switch pgType {
+	case "date":
+		return "time.Time", true
+	case "time", "time without time zone":
+		return "time.Time", true
+	case "timetz", "time with time zone":
+		return "time.Time", true
+	case "timestamp", "timestamp without time zone":
+		return "time.Time", true
+	case "timestamptz", "timestamp with time zone":
+		return "time.Time", true
+	}
+	return "", false
+}
+
+// mapMiscPgType maps miscellaneous PostgreSQL types (uuid, bytea, json) to their Go types.
+func mapMiscPgType(pgType string) (string, bool) {
+	switch pgType {
+	// UUID types
+	case "uuid":
+		return "uuid.UUID", true
+	// Binary types
+	case "bytea":
+		return "[]byte", true
+	// JSON types - use json.RawMessage for pgx v5
+	case "json", "jsonb":
+		return "json.RawMessage", true
+	}
+	return "", false
 }
 
 // applyNullableAndArray applies nullable and array modifiers to a base type
-func (tm *TypeMapper) applyNullableAndArray(baseType string, isNullable bool, isArray bool) string {
+func (tm *TypeMapper) applyNullableAndArray(baseType string, isNullable, isArray bool) string {
 	result := baseType
 
 	// Handle arrays first
@@ -172,7 +197,7 @@ func (tm *TypeMapper) GetRequiredImports(columns []Column) []string {
 	}
 
 	// Convert map to slice
-	var result []string
+	result := make([]string, 0, len(imports))
 	for imp := range imports {
 		result = append(result, imp)
 	}

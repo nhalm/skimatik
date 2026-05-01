@@ -46,7 +46,7 @@ func (h *UserHandler) GetUserByEmail(w http.ResponseWriter, r *http.Request) {
 		LastLoginAt: domainUser.LastLoginAt,
 	}
 
-	writeJSON(w, http.StatusOK,apiUser)
+	writeJSON(w, apiUser)
 }
 
 // GetActiveUsers handles GET /api/users?limit=10
@@ -77,7 +77,7 @@ func (h *UserHandler) GetActiveUsers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK,map[string]interface{}{
+	writeJSON(w, map[string]any{
 		"users": apiUsers,
 		"count": len(apiUsers),
 	})
@@ -110,7 +110,7 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		LastLoginAt: domainUser.LastLoginAt,
 	}
 
-	writeJSON(w, http.StatusOK,apiUser)
+	writeJSON(w, apiUser)
 }
 
 // GetUserStats handles GET /api/users/{id}/stats
@@ -136,7 +136,7 @@ func (h *UserHandler) GetUserStats(w http.ResponseWriter, r *http.Request) {
 		LastActivity: domainStats.LastActivity,
 	}
 
-	writeJSON(w, http.StatusOK,apiStats)
+	writeJSON(w, apiStats)
 }
 
 // SearchUsers handles GET /api/users/search?q=query
@@ -164,7 +164,7 @@ func (h *UserHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK,map[string]interface{}{
+	writeJSON(w, map[string]any{
 		"users": apiUsers,
 		"query": query,
 		"count": len(apiUsers),
@@ -186,7 +186,7 @@ func (h *UserHandler) DeactivateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK,map[string]string{
+	writeJSON(w, map[string]string{
 		"message": "User deactivated successfully",
 	})
 }

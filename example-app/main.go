@@ -1,7 +1,10 @@
+// Package main runs the example-app HTTP server, wiring repositories, services,
+// and handlers together to demonstrate skimatik-generated code in a real app.
 package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
@@ -17,6 +20,13 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Printf("fatal: %v", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	// Get database URL from environment
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
@@ -25,9 +35,8 @@ func main() {
 
 	// Connect to database using pgxkit
 	db := pgxkit.NewDB()
-	err := db.Connect(context.Background(), databaseURL)
-	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
+	if err := db.Connect(context.Background(), databaseURL); err != nil {
+		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -39,7 +48,7 @@ func main() {
 
 	// Test database connection
 	if err := db.HealthCheck(context.Background()); err != nil {
-		log.Fatal("Failed database health check:", err)
+		return fmt.Errorf("failed database health check: %w", err)
 	}
 	log.Println("✅ Connected to database")
 
@@ -131,6 +140,7 @@ func main() {
 	log.Printf("   2. Run: make run      (start with full API)")
 
 	if err := http.ListenAndServe(":"+port, r); err != nil {
-		log.Fatal("Server failed to start:", err)
+		return fmt.Errorf("server failed to start: %w", err)
 	}
+	return nil
 }

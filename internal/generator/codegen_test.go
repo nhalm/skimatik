@@ -23,15 +23,12 @@ func TestCodeGenerator_prepareCRUDTemplateData(t *testing.T) {
 	cg := NewCodeGenerator(getTestConfig(), "test")
 	table := getTestTable()
 
-	data, err := cg.prepareCRUDTemplateData(table)
-	if err != nil {
-		t.Fatalf("prepareCRUDTemplateData failed: %v", err)
-	}
+	data := cg.prepareCRUDTemplateData(table)
 
 	// Test essential template data
 	tests := []struct {
 		key      string
-		expected interface{}
+		expected any
 	}{
 		{"StructName", "Users"},
 		{"RepositoryName", "UsersRepository"},

@@ -1,9 +1,14 @@
 version: "2"
+
+run:
+  timeout: 5m
+
 linters:
+  default: none
   enable:
+    # Bug-class linters — surface real defects, not style preferences.
     - errcheck
     - errorlint
-    - gocyclo
     - govet
     - ineffassign
     - rowserrcheck
@@ -12,7 +17,18 @@ linters:
     - unused
     - misspell
     - unconvert
+    - gocyclo
+    # Blueprint conformance rules. Provided by the blueprint-vet plugin
+    # compiled into ./bin/custom-gcl via .custom-gcl.yml.
     - blueprint-vet
+    # Project-local guardrails — see settings.forbidigo below.
+    - forbidigo
+    # Style/clarity linters that historically caught real bugs in this stack.
+    - gocritic
+    - revive
+    - unparam
+    - wastedassign
+    - prealloc
   settings:
     custom:
       blueprint-vet:
@@ -23,6 +39,62 @@ linters:
       # pgx so it actually fires on the iteration code skimatik generates.
       packages:
         - github.com/jackc/pgx/v5
+    forbidigo:
+      analyze-types: true
+      forbid:
+        # LC-1: *pgxkit.DB has no Ping method; use HealthCheck or IsReady.
+        # Scoped to pgxkit so Redis clients (which do expose Ping) aren't flagged.
+        - pattern: '\.Ping$'
+          pkg: '^github\.com/nhalm/pgxkit/v2$'
+          msg: '*pgxkit.DB does not expose Ping; use HealthCheck or IsReady'
+        # LC-2: canonlog.AddRequestFields does not exist.
+        - pattern: 'canonlog\.AddRequestFields'
+          msg: 'use canonlog.InfoAdd(ctx, key, value) or canonlog.InfoAddMany(ctx, fields)'
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+        - opinionated
+      disabled-checks:
+        - commentFormatting
+        - unlambda
+        - whyNoLint
+        - unnamedResult
+        # hugeParam fights "pass values across layer boundaries, not pointers".
+        - hugeParam
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: if-return
+        - name: increment-decrement
+        - name: var-naming
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: redefines-builtin-id
+        - name: use-any
+        # unused-parameter is disabled — cobra RunE and chi handler signatures
+        # commonly include params (cmd, args, w) that the body doesn't reference,
+        # but renaming them to `_` loses the type-name documentation that helps
+        # readers identify the function's role.
+    gocyclo:
+      min-complexity: 15
+    unparam:
+      check-exported: false
   exclusions:
     # Lint generated code on equal footing with handwritten code. The example-app
     # is skimatik's proof that the generator emits clean output — hiding generated
@@ -34,6 +106,12 @@ linters:
       - path: '_test\.go$'
         linters:
           - gocyclo
+
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

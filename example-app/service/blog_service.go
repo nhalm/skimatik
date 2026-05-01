@@ -1,3 +1,5 @@
+// Package service implements the example-app's business logic layer, mediating
+// between the HTTP handlers in api and the repository layer.
 package service
 
 import (
@@ -161,7 +163,8 @@ func (s *BlogService) DeleteUserWithContent(
 	if err != nil {
 		return fmt.Errorf("list comments: %w", err)
 	}
-	for _, comment := range comments {
+	for i := range comments {
+		comment := &comments[i]
 		if comment.AuthorId == userID {
 			if err := s.commentsRepo.Delete(ctx, tx, comment.Id); err != nil {
 				return fmt.Errorf("delete comment %s: %w", comment.Id, err)
@@ -173,7 +176,8 @@ func (s *BlogService) DeleteUserWithContent(
 	if err != nil {
 		return fmt.Errorf("list posts: %w", err)
 	}
-	for _, post := range posts {
+	for i := range posts {
+		post := &posts[i]
 		if post.AuthorId == userID {
 			if err := s.postsRepo.Delete(ctx, tx, post.Id); err != nil {
 				return fmt.Errorf("delete post %s: %w", post.Id, err)

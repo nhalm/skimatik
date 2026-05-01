@@ -38,13 +38,7 @@ func (g *Generator) Generate(ctx context.Context) ([]string, error) {
 	if err := g.connect(ctx); err != nil {
 		return nil, fmt.Errorf("database connection failed: %w", err)
 	}
-	defer func() {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := g.db.Shutdown(shutdownCtx); err != nil {
-			slog.Warn("database shutdown encountered error", "error", err)
-		}
-	}()
+	defer g.shutdownDB()
 
 	// Initialize components
 	g.introspect = NewIntrospector(g.db, g.config.Schema)
@@ -56,47 +50,15 @@ func (g *Generator) Generate(ctx context.Context) ([]string, error) {
 
 	// Generate table-based repositories
 	if g.config.Tables {
-		// Generate shared files first
-		if err := g.generateSharedPaginationTypes(); err != nil {
-			return nil, fmt.Errorf("shared pagination types generation failed: %w", err)
-		}
-
-		if err := g.generateSharedErrors(); err != nil {
-			return nil, fmt.Errorf("shared error handling generation failed: %w", err)
-		}
-
-		if err := g.generateSharedDatabaseOperations(); err != nil {
-			return nil, fmt.Errorf("shared database operations generation failed: %w", err)
-		}
-
-		if err := g.generateSharedIDGenerators(); err != nil {
-			return nil, fmt.Errorf("shared ID generators generation failed: %w", err)
-		}
-
-		if err := g.generateTables(ctx); err != nil {
-			return nil, fmt.Errorf("table generation failed: %w", err)
+		if err := g.generateTablesStage(ctx); err != nil {
+			return nil, err
 		}
 	}
 
 	// Generate query-based code
 	if g.config.QueriesDir != "" {
-		// Ensure shared files exist for queries even if tables are disabled
-		if !g.config.Tables {
-			if err := g.generateSharedPaginationTypes(); err != nil {
-				return nil, fmt.Errorf("shared pagination types generation failed: %w", err)
-			}
-
-			if err := g.generateSharedErrors(); err != nil {
-				return nil, fmt.Errorf("shared error handling generation failed: %w", err)
-			}
-
-			if err := g.generateSharedDatabaseOperations(); err != nil {
-				return nil, fmt.Errorf("shared database operations generation failed: %w", err)
-			}
-		}
-
-		if err := g.generateQueries(ctx); err != nil {
-			return nil, fmt.Errorf("query generation failed: %w", err)
+		if err := g.generateQueriesStage(ctx); err != nil {
+			return nil, err
 		}
 	}
 
@@ -105,6 +67,67 @@ func (g *Generator) Generate(ctx context.Context) ([]string, error) {
 	}
 
 	return g.codegen.GeneratedFiles(), nil
+}
+
+// shutdownDB shuts down the database connection with a bounded timeout.
+// Errors are logged at warn level rather than returned because shutdown
+// happens in a deferred call.
+func (g *Generator) shutdownDB() {
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := g.db.Shutdown(shutdownCtx); err != nil {
+		slog.Warn("database shutdown encountered error", "error", err)
+	}
+}
+
+// generateTablesStage emits the shared support files plus per-table
+// repository code. It is the table-mode entry point used by Generate.
+func (g *Generator) generateTablesStage(ctx context.Context) error {
+	if err := g.generateSharedFiles(true); err != nil {
+		return err
+	}
+	if err := g.generateTables(ctx); err != nil {
+		return fmt.Errorf("table generation failed: %w", err)
+	}
+	return nil
+}
+
+// generateQueriesStage emits any shared support files needed by query-only
+// generation, then generates per-query code. Shared files are only written
+// when table generation didn't already write them.
+func (g *Generator) generateQueriesStage(ctx context.Context) error {
+	// Ensure shared files exist for queries even if tables are disabled.
+	// When Tables is true, generateTablesStage already emitted these.
+	if !g.config.Tables {
+		if err := g.generateSharedFiles(false); err != nil {
+			return err
+		}
+	}
+	if err := g.generateQueries(ctx); err != nil {
+		return fmt.Errorf("query generation failed: %w", err)
+	}
+	return nil
+}
+
+// generateSharedFiles emits the shared pagination/error/database-operations
+// files. When includeIDGenerators is true, it also emits the shared ID
+// generator helpers (only required when generating table repositories).
+func (g *Generator) generateSharedFiles(includeIDGenerators bool) error {
+	if err := g.generateSharedPaginationTypes(); err != nil {
+		return fmt.Errorf("shared pagination types generation failed: %w", err)
+	}
+	if err := g.generateSharedErrors(); err != nil {
+		return fmt.Errorf("shared error handling generation failed: %w", err)
+	}
+	if err := g.generateSharedDatabaseOperations(); err != nil {
+		return fmt.Errorf("shared database operations generation failed: %w", err)
+	}
+	if includeIDGenerators {
+		if err := g.generateSharedIDGenerators(); err != nil {
+			return fmt.Errorf("shared ID generators generation failed: %w", err)
+		}
+	}
+	return nil
 }
 
 // connect establishes a connection to the PostgreSQL database

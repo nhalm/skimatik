@@ -1,3 +1,5 @@
+// Package api contains HTTP handlers, response helpers, and the consumer-owned
+// service interfaces used by the example-app's HTTP layer.
 package api
 
 import (

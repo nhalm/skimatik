@@ -115,7 +115,7 @@ func (t *Table) GoFileName() string {
 
 // IsUUID checks if the column is a UUID type
 func (c *Column) IsUUID() bool {
-	return strings.ToLower(c.Type) == "uuid"
+	return strings.EqualFold(c.Type, "uuid")
 }
 
 // IsString checks if the column is a string type
@@ -140,7 +140,7 @@ func (c *Column) IsInteger() bool {
 
 // IsBoolean checks if the column is a boolean type
 func (c *Column) IsBoolean() bool {
-	return strings.ToLower(c.Type) == "boolean" || strings.ToLower(c.Type) == "bool"
+	return strings.EqualFold(c.Type, "boolean") || strings.EqualFold(c.Type, "bool")
 }
 
 // IsTimestamp checks if the column is a timestamp type
@@ -193,7 +193,7 @@ func toPascalCase(s string) string {
 		parts := strings.Split(s, "_")
 		result := ""
 		for _, part := range parts {
-			if len(part) > 0 {
+			if part != "" {
 				result += strings.ToUpper(part[:1]) + strings.ToLower(part[1:])
 			}
 		}
@@ -201,7 +201,7 @@ func toPascalCase(s string) string {
 	}
 
 	// If it's already PascalCase or camelCase, just ensure first letter is uppercase
-	if len(s) > 0 {
+	if s != "" {
 		return strings.ToUpper(s[:1]) + s[1:]
 	}
 

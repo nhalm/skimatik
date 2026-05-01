@@ -56,8 +56,8 @@ func TestSystem_EndToEnd(t *testing.T) {
 	}
 
 	for _, filename := range expectedFiles {
-		filepath := filepath.Join(tempDir, filename)
-		if _, err := os.Stat(filepath); os.IsNotExist(err) {
+		path := filepath.Join(tempDir, filename)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
 			t.Errorf("Expected file %s was not generated", filename)
 		}
 	}
@@ -81,7 +81,7 @@ func TestSystem_QueryGeneration(t *testing.T) {
 
 	// Create a simple test query directory
 	queriesDir := filepath.Join(tempDir, "queries")
-	if err := os.MkdirAll(queriesDir, 0755); err != nil {
+	if err := os.MkdirAll(queriesDir, 0o755); err != nil {
 		t.Fatalf("Failed to create queries directory: %v", err)
 	}
 
@@ -101,7 +101,7 @@ LIMIT $1;
 -- name: DeactivateUser :exec
 UPDATE users SET is_active = false WHERE id = $1;
 `
-	if err := os.WriteFile(filepath.Join(queriesDir, "users.sql"), []byte(queryContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(queriesDir, "users.sql"), []byte(queryContent), 0o644); err != nil {
 		t.Fatalf("Failed to write query file: %v", err)
 	}
 
@@ -131,8 +131,8 @@ UPDATE users SET is_active = false WHERE id = $1;
 	}
 
 	for _, filename := range requiredFiles {
-		filepath := filepath.Join(tempDir, filename)
-		if _, err := os.Stat(filepath); os.IsNotExist(err) {
+		path := filepath.Join(tempDir, filename)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
 			t.Errorf("Expected file %s was not generated", filename)
 		}
 	}
@@ -511,7 +511,7 @@ require (
 )
 `
 
-	err := os.WriteFile(filepath.Join(tempDir, "go.mod"), []byte(goModContent), 0644)
+	err := os.WriteFile(filepath.Join(tempDir, "go.mod"), []byte(goModContent), 0o644)
 	if err != nil {
 		t.Errorf("Failed to create go.mod: %v", err)
 		return false

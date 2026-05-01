@@ -1,3 +1,6 @@
+// Package repository wires the example-app's custom repository wrappers around
+// the skimatik-generated code in the generated subpackage and provides the
+// transactional executor plumbing they share.
 package repository
 
 import (

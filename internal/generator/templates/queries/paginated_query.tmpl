@@ -22,6 +22,125 @@ func (r *{{.RepositoryName}}) {{.FunctionName}}(ctx context.Context, db pgxkit.E
 }
 
 {{if .OrderByColumns}}
+{{- $firstCol := index .OrderByColumns 0}}
+{{- $orderBy := $firstCol.Name}}
+{{- $direction := $firstCol.Direction}}
+{{- $forwardOp := ">"}}{{if eq $direction "DESC"}}{{$forwardOp = "<"}}{{end}}
+{{- $backwardOp := "<"}}{{if eq $direction "DESC"}}{{$backwardOp = ">"}}{{end}}
+{{- $reverseDirection := "ASC"}}{{if eq $direction "ASC"}}{{$reverseDirection = "DESC"}}{{end}}
+
+// decode{{.FunctionName}}Cursor extracts the cursor value from pagination params.
+func decode{{.FunctionName}}Cursor(params PaginationParams) (interface{}, error) {
+	switch {
+	case params.NextCursor != "":
+		_, value, err := decodeJSONCursor(params.NextCursor)
+		if err != nil {
+			return nil, fmt.Errorf("invalid cursor format: %w", err)
+		}
+		return value, nil
+	case params.BeforeCursor != "":
+		_, value, err := decodeJSONCursor(params.BeforeCursor)
+		if err != nil {
+			return nil, fmt.Errorf("invalid cursor format: %w", err)
+		}
+		return value, nil
+	default:
+		return nil, nil
+	}
+}
+
+// build{{.FunctionName}}PaginatedQuery constructs the SQL query for one page of results.
+// baseParamCount is the number of base-query parameters already bound.
+func build{{.FunctionName}}PaginatedQuery(baseQuery string, baseParamCount int, cursorValue interface{}, isBackward bool) string {
+	if cursorValue == nil {
+		return fmt.Sprintf(
+			"SELECT * FROM (%s) AS subquery ORDER BY %s {{$direction}} LIMIT $%d",
+			baseQuery,
+			"{{$orderBy}}",
+			baseParamCount+1,
+		)
+	}
+	if isBackward {
+		return fmt.Sprintf(
+			"SELECT * FROM (%s) AS subquery WHERE %s {{$backwardOp}} $%d ORDER BY %s {{$reverseDirection}} LIMIT $%d",
+			baseQuery,
+			"{{$orderBy}}",
+			baseParamCount+1,
+			"{{$orderBy}}",
+			baseParamCount+2,
+		)
+	}
+	return fmt.Sprintf(
+		"SELECT * FROM (%s) AS subquery WHERE %s {{$forwardOp}} $%d ORDER BY %s {{$direction}} LIMIT $%d",
+		baseQuery,
+		"{{$orderBy}}",
+		baseParamCount+1,
+		"{{$orderBy}}",
+		baseParamCount+2,
+	)
+}
+
+// extract{{.FunctionName}}CursorValue reads the order-by field from an item via reflection.
+func extract{{.FunctionName}}CursorValue(item {{.ResultType}}, fieldName string) (interface{}, bool) {
+	v := reflect.ValueOf(item)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return nil, false
+	}
+	field := v.FieldByName(fieldName)
+	if !field.IsValid() {
+		return nil, false
+	}
+	return formatCursorValue(field.Interface()), true
+}
+
+// finalize{{.FunctionName}}Page assembles the PaginationResult, reversing items
+// for backward pagination and producing next/before cursors.
+func finalize{{.FunctionName}}Page(items []{{.ResultType}}, cursorValue interface{}, isBackward, hasExtra bool) *PaginationResult[{{.ResultType}}] {
+	// For backward pagination, reverse items to maintain correct order
+	if isBackward {
+		for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 {
+			items[i], items[j] = items[j], items[i]
+		}
+	}
+
+	// Determine hasMore and hasPrevious based on pagination direction
+	var hasMore, hasPrevious bool
+	if isBackward {
+		hasPrevious = hasExtra
+		hasMore = cursorValue != nil
+	} else {
+		hasMore = hasExtra
+		hasPrevious = cursorValue != nil
+	}
+
+	// Generate cursors
+	var nextCursor, beforeCursor string
+	fieldName := toCamelCase("{{$orderBy}}")
+
+	if hasMore && len(items) > 0 {
+		if cursorVal, ok := extract{{.FunctionName}}CursorValue(items[len(items)-1], fieldName); ok {
+			nextCursor, _ = encodeJSONCursor("{{$orderBy}}", cursorVal)
+		}
+	}
+
+	if hasPrevious && len(items) > 0 {
+		if cursorVal, ok := extract{{.FunctionName}}CursorValue(items[0], fieldName); ok {
+			beforeCursor, _ = encodeJSONCursor("{{$orderBy}}", cursorVal)
+		}
+	}
+
+	return &PaginationResult[{{.ResultType}}]{
+		Items:        items,
+		HasMore:      hasMore,
+		HasPrevious:  hasPrevious,
+		NextCursor:   nextCursor,
+		BeforeCursor: beforeCursor,
+	}
+}
+
 // {{.FunctionName}}Paginated executes the {{.QueryName}} query with cursor-based pagination
 // Sort order: {{range $index, $col := .OrderByColumns}}{{if $index}}, {{end}}{{$col.Name}} {{$col.Direction}}{{end}}
 func (r *{{.RepositoryName}}) {{.FunctionName}}Paginated(ctx context.Context, db pgxkit.Executor{{.ParameterDeclarations}}, params PaginationParams) (*PaginationResult[{{.ResultType}}], error) {
@@ -43,63 +162,15 @@ func (r *{{.RepositoryName}}) {{.FunctionName}}Paginated(ctx context.Context, db
 	isBackward := params.BeforeCursor != ""
 
 	// Parse cursor if provided
-	var cursorValue interface{}
-	if params.NextCursor != "" {
-		_, value, err := decodeJSONCursor(params.NextCursor)
-		if err != nil {
-			return nil, fmt.Errorf("invalid cursor format: %w", err)
-		}
-		cursorValue = value
-	} else if params.BeforeCursor != "" {
-		_, value, err := decodeJSONCursor(params.BeforeCursor)
-		if err != nil {
-			return nil, fmt.Errorf("invalid cursor format: %w", err)
-		}
-		cursorValue = value
+	cursorValue, err := decode{{.FunctionName}}Cursor(params)
+	if err != nil {
+		return nil, err
 	}
 
 	// Build paginated query by wrapping the base query
 	baseQuery := `{{.SQL}}`
-	var paginatedQuery string
-
-	{{- $firstCol := index .OrderByColumns 0}}
-	{{- $orderBy := $firstCol.Name}}
-	{{- $direction := $firstCol.Direction}}
-	{{- $forwardOp := ">"}}{{if eq $direction "DESC"}}{{$forwardOp = "<"}}{{end}}
-	{{- $backwardOp := "<"}}{{if eq $direction "DESC"}}{{$backwardOp = ">"}}{{end}}
-	{{- $reverseDirection := "ASC"}}{{if eq $direction "ASC"}}{{$reverseDirection = "DESC"}}{{end}}
-
-	if cursorValue != nil {
-		if isBackward {
-			// Backward pagination: reverse the operator and sort direction, then reverse results
-			paginatedQuery = fmt.Sprintf(
-				"SELECT * FROM (%s) AS subquery WHERE %s {{$backwardOp}} $%d ORDER BY %s {{$reverseDirection}} LIMIT $%d",
-				baseQuery,
-				"{{$orderBy}}",
-				{{if .ParameterArgsOnly}}len([]interface{}{ {{.ParameterArgsOnly}} })+1{{else}}1{{end}},
-				"{{$orderBy}}",
-				{{if .ParameterArgsOnly}}len([]interface{}{ {{.ParameterArgsOnly}} })+2{{else}}2{{end}},
-			)
-		} else {
-			// Forward pagination
-			paginatedQuery = fmt.Sprintf(
-				"SELECT * FROM (%s) AS subquery WHERE %s {{$forwardOp}} $%d ORDER BY %s {{$direction}} LIMIT $%d",
-				baseQuery,
-				"{{$orderBy}}",
-				{{if .ParameterArgsOnly}}len([]interface{}{ {{.ParameterArgsOnly}} })+1{{else}}1{{end}},
-				"{{$orderBy}}",
-				{{if .ParameterArgsOnly}}len([]interface{}{ {{.ParameterArgsOnly}} })+2{{else}}2{{end}},
-			)
-		}
-	} else {
-		// No cursor, just add ORDER BY and LIMIT
-		paginatedQuery = fmt.Sprintf(
-			"SELECT * FROM (%s) AS subquery ORDER BY %s {{$direction}} LIMIT $%d",
-			baseQuery,
-			"{{$orderBy}}",
-			{{if .ParameterArgsOnly}}len([]interface{}{ {{.ParameterArgsOnly}} })+1{{else}}1{{end}},
-		)
-	}
+	{{if .ParameterArgsOnly}}baseParamCount := len([]interface{}{ {{.ParameterArgsOnly}} }){{else}}baseParamCount := 0{{end}}
+	paginatedQuery := build{{.FunctionName}}PaginatedQuery(baseQuery, baseParamCount, cursorValue, isBackward)
 
 	// Build parameter list
 	var args []interface{}
@@ -139,64 +210,7 @@ func (r *{{.RepositoryName}}) {{.FunctionName}}Paginated(ctx context.Context, db
 		items = items[:limit] // Remove the extra item
 	}
 
-	// For backward pagination, reverse items to maintain correct order
-	if isBackward {
-		for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 {
-			items[i], items[j] = items[j], items[i]
-		}
-	}
-
-	// Determine hasMore and hasPrevious based on pagination direction
-	var hasMore, hasPrevious bool
-	if isBackward {
-		hasPrevious = hasExtra
-		hasMore = cursorValue != nil // If we used a cursor, there's more after
-	} else {
-		hasMore = hasExtra
-		hasPrevious = cursorValue != nil // If we used a cursor, there's previous
-	}
-
-	// Generate cursors
-	var nextCursor, beforeCursor string
-	fieldName := toCamelCase("{{$orderBy}}")
-
-	if hasMore && len(items) > 0 {
-		lastItem := items[len(items)-1]
-		v := reflect.ValueOf(lastItem)
-		if v.Kind() == reflect.Ptr {
-			v = v.Elem()
-		}
-		if v.Kind() == reflect.Struct {
-			field := v.FieldByName(fieldName)
-			if field.IsValid() {
-				cursorVal := formatCursorValue(field.Interface())
-				nextCursor, _ = encodeJSONCursor("{{$orderBy}}", cursorVal)
-			}
-		}
-	}
-
-	if hasPrevious && len(items) > 0 {
-		firstItem := items[0]
-		v := reflect.ValueOf(firstItem)
-		if v.Kind() == reflect.Ptr {
-			v = v.Elem()
-		}
-		if v.Kind() == reflect.Struct {
-			field := v.FieldByName(fieldName)
-			if field.IsValid() {
-				cursorVal := formatCursorValue(field.Interface())
-				beforeCursor, _ = encodeJSONCursor("{{$orderBy}}", cursorVal)
-			}
-		}
-	}
-
-	return &PaginationResult[{{.ResultType}}]{
-		Items:        items,
-		HasMore:      hasMore,
-		HasPrevious:  hasPrevious,
-		NextCursor:   nextCursor,
-		BeforeCursor: beforeCursor,
-	}, nil
+	return finalize{{.FunctionName}}Page(items, cursorValue, isBackward, hasExtra), nil
 }
 {{else}}
 // {{.FunctionName}}Paginated executes the {{.QueryName}} query with cursor-based pagination
