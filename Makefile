@@ -88,7 +88,7 @@ lint: $(CUSTOM_GCL)
 		echo "Skipping example-app lint: generated code not present — run 'make test-example-app' to validate"; \
 	fi
 	@command -v blueprint-sql-check >/dev/null 2>&1 || go install github.com/nhalm/blueprint-vet/cmd/blueprint-sql-check@$(BLUEPRINT_VET_VERSION)
-	@blueprint-sql-check example-app/database/queries
+	@blueprint-sql-check example-app/internal/repository/queries
 	@echo "✅ Linting completed"
 
 # Build the custom golangci-lint binary that bundles blueprint-vet's analyzers,

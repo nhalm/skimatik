@@ -46,7 +46,7 @@ setup: install-migrate
 	@echo "Waiting for database..."
 	@bash -c 'for i in {1..30}; do if pg_isready -h localhost -p 15987 -U postgres >/dev/null 2>&1; then break; fi; sleep 1; done'
 	@echo "Running migrations..."
-	@migrate -database "$(DATABASE_URL)" -path database/migrations up 2>/dev/null || sleep 2 && migrate -database "$(DATABASE_URL)" -path database/migrations up
+	@migrate -database "$(DATABASE_URL)" -path internal/database/migrations up 2>/dev/null || sleep 2 && migrate -database "$(DATABASE_URL)" -path internal/database/migrations up
 	@echo "✅ Database ready"
 
 generate:
@@ -56,7 +56,7 @@ generate:
 
 test: setup generate
 	@echo "Testing application..."
-	@go build -o /tmp/example-app-test .
+	@go build -o /tmp/example-app-test ./cmd/blog
 	@if command -v curl >/dev/null 2>&1; then \
 		lsof -ti:8080 | xargs kill -9 2>/dev/null || true; \
 		sleep 1; \
@@ -75,23 +75,23 @@ test: setup generate
 	@echo "✅ Tests passed"
 
 run:
-	@export DATABASE_URL="$(DATABASE_URL)" && go run .
+	@export DATABASE_URL="$(DATABASE_URL)" && go run ./cmd/blog
 
 migrate-up: install-migrate
-	@migrate -database "$(DATABASE_URL)" -path database/migrations up
+	@migrate -database "$(DATABASE_URL)" -path internal/database/migrations up
 
 migrate-down: install-migrate
-	@migrate -database "$(DATABASE_URL)" -path database/migrations down 1
+	@migrate -database "$(DATABASE_URL)" -path internal/database/migrations down 1
 
 migrate-status: install-migrate
-	@migrate -database "$(DATABASE_URL)" -path database/migrations version
+	@migrate -database "$(DATABASE_URL)" -path internal/database/migrations version
 
 migrate-create: install-migrate
 	@if [ -z "$(NAME)" ]; then echo "Usage: make migrate-create NAME=<name>"; exit 1; fi
-	@migrate create -ext sql -dir database/migrations -seq $(NAME)
+	@migrate create -ext sql -dir internal/database/migrations -seq $(NAME)
 
 clean:
-	@rm -rf repository/generated/
+	@rm -rf internal/repository/generated/
 	@docker stop blog-db 2>/dev/null || true
 	@docker rm blog-db 2>/dev/null || true
 	@echo "✅ Clean"

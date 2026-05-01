@@ -106,6 +106,14 @@ linters:
       - path: '_test\.go$'
         linters:
           - gocyclo
+      # example-app is a smoke test for skimatik-emitted code, not a chikit
+      # showcase. Issue #140 keeps chikit out of scope, so the two
+      # chikit-required blueprint-vet rules are silenced under
+      # example-app/internal/api/. Other blueprint-vet rules still apply.
+      - path: 'example-app/internal/api/'
+        text: '(nowriteheader|nojsonencode)'
+        linters:
+          - blueprint-vet
 
 issues:
   max-issues-per-linter: 0

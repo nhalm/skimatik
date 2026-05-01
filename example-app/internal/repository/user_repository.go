@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nhalm/pgxkit/v2"
-	"github.com/nhalm/skimatik/v2/example-app/domain"
+	"github.com/nhalm/skimatik/v2/example-app/internal/models"
 	"github.com/nhalm/skimatik/v2/example-app/internal/repository/generated"
 )
 
@@ -31,15 +31,15 @@ func NewUserRepository(db *pgxkit.DB) *UserRepository {
 
 // Implement service.UserRepository interface methods with domain type conversion
 
-func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]domain.UserSummary, error) {
+func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]models.UserSummary, error) {
 	results, err := r.UsersQueries.GetActiveUsers(ctx, executorFromContext(ctx, r.db), limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active users: %w", err)
 	}
 
-	users := make([]domain.UserSummary, len(results))
+	users := make([]models.UserSummary, len(results))
 	for i, result := range results {
-		users[i] = domain.UserSummary{
+		users[i] = models.UserSummary{
 			ID:       result.Id,
 			Name:     result.Name,
 			Email:    result.Email,
@@ -50,15 +50,15 @@ func (r *UserRepository) GetActiveUsers(ctx context.Context, limit int) ([]domai
 	return users, nil
 }
 
-func (r *UserRepository) SearchUsers(ctx context.Context, query string) ([]domain.UserSummary, error) {
+func (r *UserRepository) SearchUsers(ctx context.Context, query string) ([]models.UserSummary, error) {
 	results, err := r.UsersQueries.SearchUsers(ctx, executorFromContext(ctx, r.db), "%"+query+"%", 50)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search users: %w", err)
 	}
 
-	users := make([]domain.UserSummary, len(results))
+	users := make([]models.UserSummary, len(results))
 	for i, result := range results {
-		users[i] = domain.UserSummary{
+		users[i] = models.UserSummary{
 			ID:       result.Id,
 			Name:     result.Name,
 			Email:    result.Email,
@@ -69,13 +69,13 @@ func (r *UserRepository) SearchUsers(ctx context.Context, query string) ([]domai
 	return users, nil
 }
 
-func (r *UserRepository) GetUserStats(ctx context.Context, userID uuid.UUID) (*domain.UserStats, error) {
+func (r *UserRepository) GetUserStats(ctx context.Context, userID uuid.UUID) (*models.UserStats, error) {
 	result, err := r.UsersQueries.GetUserStats(ctx, executorFromContext(ctx, r.db), userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user stats: %w", err)
 	}
 
-	stats := &domain.UserStats{
+	stats := &models.UserStats{
 		UserID:       userID,
 		PostCount:    result.PostCount,
 		CommentCount: result.CommentCount,
@@ -94,14 +94,14 @@ func (r *UserRepository) DeactivateUser(ctx context.Context, userID uuid.UUID) e
 	return nil
 }
 
-func (r *UserRepository) GetUser(ctx context.Context, userID uuid.UUID) (*domain.UserDetail, error) {
+func (r *UserRepository) GetUser(ctx context.Context, userID uuid.UUID) (*models.UserDetail, error) {
 	// Use the generated Get method from UsersRepository
 	user, err := r.Get(ctx, executorFromContext(ctx, r.db), userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	userDetail := &domain.UserDetail{
+	userDetail := &models.UserDetail{
 		ID:          user.Id,
 		Name:        user.Name,
 		Email:       user.Email,

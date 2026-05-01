@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/nhalm/skimatik/v2/example-app/domain"
+	"github.com/nhalm/skimatik/v2/example-app/internal/models"
 )
 
 // PostHandler handles HTTP requests for post operations
@@ -39,9 +39,9 @@ func (h *PostHandler) GetPublishedPosts(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Convert service types to API types
-	apiPosts := make([]domain.PostSummary, len(servicePosts))
+	apiPosts := make([]models.PostSummary, len(servicePosts))
 	for i, post := range servicePosts {
-		apiPosts[i] = domain.PostSummary{
+		apiPosts[i] = models.PostSummary{
 			ID:          post.ID,
 			Title:       post.Title,
 			Content:     post.Content,
@@ -74,7 +74,7 @@ func (h *PostHandler) GetPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Convert service type to API type
-	apiPost := domain.PostDetail{
+	apiPost := models.PostDetail{
 		ID:          servicePost.ID,
 		Title:       servicePost.Title,
 		Content:     servicePost.Content,
@@ -106,9 +106,9 @@ func (h *PostHandler) GetUserPosts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Convert service types to API types
-	apiPosts := make([]domain.PostSummary, len(servicePosts))
+	apiPosts := make([]models.PostSummary, len(servicePosts))
 	for i, post := range servicePosts {
-		apiPosts[i] = domain.PostSummary{
+		apiPosts[i] = models.PostSummary{
 			ID:          post.ID,
 			Title:       post.Title,
 			Content:     post.Content,
@@ -143,9 +143,9 @@ func (h *PostHandler) GetPostsWithStats(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Convert service types to API types
-	apiStats := make([]domain.PostWithStats, len(serviceStats))
+	apiStats := make([]models.PostWithStats, len(serviceStats))
 	for i, stat := range serviceStats {
-		apiStats[i] = domain.PostWithStats{
+		apiStats[i] = models.PostWithStats{
 			ID:           stat.ID,
 			Title:        stat.Title,
 			AuthorID:     stat.AuthorID,
@@ -181,9 +181,9 @@ func (h *PostHandler) GetFeaturedPosts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Convert service types to API types
-	apiPosts := make([]domain.PostSummary, len(servicePosts))
+	apiPosts := make([]models.PostSummary, len(servicePosts))
 	for i, post := range servicePosts {
-		apiPosts[i] = domain.PostSummary{
+		apiPosts[i] = models.PostSummary{
 			ID:          post.ID,
 			Title:       post.Title,
 			Content:     post.Content,
@@ -224,9 +224,9 @@ func (h *PostHandler) GetPostsByTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Convert service types to API types
-	apiPosts := make([]domain.PostSummary, len(servicePosts))
+	apiPosts := make([]models.PostSummary, len(servicePosts))
 	for i, post := range servicePosts {
-		apiPosts[i] = domain.PostSummary{
+		apiPosts[i] = models.PostSummary{
 			ID:          post.ID,
 			Title:       post.Title,
 			Content:     post.Content,
@@ -253,7 +253,7 @@ func (h *PostHandler) GetPostStatistics(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Convert service type to API type
-	apiStats := domain.PostStats{
+	apiStats := models.PostStats{
 		TotalPosts:     serviceStats.TotalPosts,
 		PublishedPosts: serviceStats.PublishedPosts,
 		DraftPosts:     serviceStats.DraftPosts,
