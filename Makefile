@@ -81,6 +81,14 @@ $(CUSTOM_GCL): .custom-gcl.yml
 	@echo "Building custom-gcl from .custom-gcl.yml..."
 	@golangci-lint custom
 
+# Install lefthook and activate the Git hooks defined in lefthook.yml
+# (pre-commit: lint + test-unit; commit-msg: Conventional Commits; pre-push:
+# test-integration). Run once per checkout.
+.PHONY: hooks
+hooks:
+	@command -v lefthook >/dev/null 2>&1 || go install github.com/evilmartians/lefthook@latest
+	@lefthook install
+
 .PHONY: clean
 clean:
 	@echo "Cleaning..."
@@ -108,6 +116,7 @@ help:
 	@echo "  test-example-app   Regenerate + test example-app end-to-end"
 	@echo ""
 	@echo "Other:"
+	@echo "  hooks              Install lefthook + activate Git hooks (run once per checkout)"
 	@echo "  clean              Remove build artifacts, stop services"
 	@echo "  help               Show this help"
 	@echo ""

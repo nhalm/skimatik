@@ -177,6 +177,14 @@ For more installation options and detailed setup instructions, see the [Quick St
 
 We welcome contributions! Please see our [Contributing Guidelines](https://github.com/nhalm/skimatik/wiki/contributing) for details.
 
+After cloning, activate the Git hooks once:
+
+```bash
+make hooks
+```
+
+This installs lefthook and wires up `pre-commit` (`make lint` + `make test-unit` in parallel), `commit-msg` (Conventional Commits format on the subject line), and `pre-push` (`make test-integration`).
+
 ## License
 
 skimatik is licensed under the [MIT License](LICENSE).
