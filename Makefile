@@ -16,7 +16,7 @@ COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 DOCKER_COMPOSE=docker compose -f build/docker-compose.yml
 
-TEST_DB_URL=postgres://skimatik:skimatik_test_password@localhost:5432/skimatik_test?sslmode=disable
+TEST_DB_URL=postgres://skimatik:skimatik_test_password@localhost:15432/skimatik_test?sslmode=disable
 
 .PHONY: default
 default: help
@@ -57,7 +57,7 @@ test-integration:
 	@echo "Starting database..."
 	@$(DOCKER_COMPOSE) up -d postgres
 	@echo "Waiting for database..."
-	@bash -c 'for i in {1..30}; do if pg_isready -h localhost -p 5432 -U skimatik -d skimatik_test >/dev/null 2>&1; then break; fi; sleep 1; done'
+	@bash -c 'for i in {1..30}; do if pg_isready -h localhost -p 15432 -U skimatik -d skimatik_test >/dev/null 2>&1; then break; fi; sleep 1; done'
 	@echo "Running integration tests..."
 	@$(GOMOD) tidy
 	TEST_DATABASE_URL=$(TEST_DB_URL) $(GOTEST) -v -race -parallel=1 -timeout 60s ./...
