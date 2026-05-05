@@ -55,52 +55,7 @@ generate:
 	@echo "✅ Code generated"
 
 test: setup generate
-	@echo "Testing application..."
-	@go build -o /tmp/example-app-test ./cmd/blog
-	@if command -v curl >/dev/null 2>&1; then \
-		set -e; \
-		lsof -ti:8080 | xargs kill -9 2>/dev/null || true; \
-		sleep 1; \
-		DATABASE_URL="$(DATABASE_URL)" /tmp/example-app-test & echo $$! > /tmp/example-app.pid; \
-		sleep 2; \
-		trap 'kill $$(cat /tmp/example-app.pid) 2>/dev/null || true; rm -f /tmp/example-app.pid /tmp/example-app-test' EXIT; \
-		echo "Testing endpoints..."; \
-		curl -f http://localhost:8080/api/health; \
-		curl -f http://localhost:8080/api/users; \
-		curl -f http://localhost:8080/api/posts; \
-		curl -f http://localhost:8080/api/posts/with-stats; \
-		curl -f http://localhost:8080/api/posts/featured; \
-		curl -f "http://localhost:8080/api/users/search?q=test"; \
-		echo ""; \
-		echo "Audit demo: POST + PATCH on /api/users (audited table)..."; \
-		EMAIL="audit-demo-$$$$@example.com"; \
-		CREATED_JSON=$$(curl -sf -X POST http://localhost:8080/api/users \
-			-H 'Content-Type: application/json' \
-			-d "{\"name\":\"Audit Demo Original\",\"email\":\"$$EMAIL\"}"); \
-		echo "Created: $$CREATED_JSON"; \
-		USER_ID=$$(echo "$$CREATED_JSON" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p'); \
-		if [ -z "$$USER_ID" ]; then echo "could not parse created user id"; exit 1; fi; \
-		echo "Asserting one open audit row after Create..."; \
-		AUDIT_AFTER_CREATE=$$(curl -sf "http://localhost:8080/api/users/$$USER_ID/audit"); \
-		echo "Audit after create: $$AUDIT_AFTER_CREATE"; \
-		echo "$$AUDIT_AFTER_CREATE" | grep -q '"count":1' || { echo "expected 1 audit row after create"; exit 1; }; \
-		curl -sf -X PATCH "http://localhost:8080/api/users/$$USER_ID/name" \
-			-H 'Content-Type: application/json' \
-			-d '{"name":"Audit Demo Renamed"}'; \
-		echo "Asserting two audit rows (one closed, one open) after Update..."; \
-		AUDIT_AFTER_UPDATE=$$(curl -sf "http://localhost:8080/api/users/$$USER_ID/audit"); \
-		echo "Audit after update: $$AUDIT_AFTER_UPDATE"; \
-		echo "$$AUDIT_AFTER_UPDATE" | grep -q '"count":2' || { echo "expected 2 audit rows after update"; exit 1; }; \
-		echo "$$AUDIT_AFTER_UPDATE" | grep -q 'Audit Demo Original' || { echo "expected closed audit row to retain original name"; exit 1; }; \
-		echo "$$AUDIT_AFTER_UPDATE" | grep -q 'Audit Demo Renamed' || { echo "expected open audit row to carry new name"; exit 1; }; \
-		echo "$$AUDIT_AFTER_UPDATE" | grep -q '"valid_to":"' || { echo "expected one closed audit row with non-null valid_to"; exit 1; }; \
-		echo "$$AUDIT_AFTER_UPDATE" | grep -q '"valid_to":null' || { echo "expected one open audit row with null valid_to"; exit 1; }; \
-		echo "$$AUDIT_AFTER_UPDATE" | grep -q '"version":1' || { echo "expected closed audit row with version=1"; exit 1; }; \
-		echo "$$AUDIT_AFTER_UPDATE" | grep -q '"version":2' || { echo "expected open audit row with version=2"; exit 1; }; \
-		FINAL_USER=$$(curl -sf "http://localhost:8080/api/users/$$USER_ID"); \
-		echo "Final user: $$FINAL_USER"; \
-		echo "$$FINAL_USER" | grep -q '"name":"Audit Demo Renamed"' || { echo "expected GET user to show updated name"; exit 1; }; \
-	fi
+	@DATABASE_URL="$(DATABASE_URL)" go test -tags=integration -count=1 -v ./...
 	@echo "✅ Tests passed"
 
 run:

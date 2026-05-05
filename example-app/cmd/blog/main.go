@@ -51,6 +51,18 @@ func run() error {
 	}
 	log.Println("✅ Connected to database")
 
+	addr := ":" + strconv.Itoa(cfg.HTTPPort)
+	log.Printf("🚀 Server starting on %s", addr)
+	if err := http.ListenAndServe(addr, newHandler(db)); err != nil {
+		return fmt.Errorf("server failed to start: %w", err)
+	}
+	return nil
+}
+
+// newHandler builds the HTTP handler tree (middleware + routes) backed by db.
+// It is the seam used by integration tests so they can wrap the same router
+// with httptest.NewServer instead of binding a real port.
+func newHandler(db *pgxkit.DB) http.Handler {
 	userRepo := repository.NewUserRepository(db)
 	postRepo := repository.NewPostRepository(db)
 
@@ -115,12 +127,7 @@ func run() error {
 		})
 	})
 
-	addr := ":" + strconv.Itoa(cfg.HTTPPort)
-	log.Printf("🚀 Server starting on %s", addr)
-	if err := http.ListenAndServe(addr, r); err != nil {
-		return fmt.Errorf("server failed to start: %w", err)
-	}
-	return nil
+	return r
 }
 
 func loadConfig() (*config.Config, error) {
