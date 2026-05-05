@@ -47,6 +47,7 @@ A database-first code generator for PostgreSQL that creates type-safe Go reposit
 - **Zero Dependencies**: Generated code only requires pgx - no external pagination or ORM dependencies
 - **Shared Utilities**: Eliminates code duplication with reusable database operation and retry patterns
 - **Repository Embedding**: Generated repositories designed for clean composition and extension
+- **Audit History**: Opt-in per table — Create/Update become single-statement CTEs that maintain SCD Type 2 history in a user-provided `<table>_audit` companion table
 - **Strict-Linter Clean**: Generated code passes the lint set strict downstream consumers commonly run — `errcheck`, `errorlint`, `govet`, `ineffassign`, `rowserrcheck`, `sqlclosecheck`, `staticcheck`, `unused`, plus the [blueprint-vet](https://github.com/nhalm/blueprint-vet) conformance rules. Verified end-to-end on every CI run by regenerating + linting the [example-app](./example-app/).
 
 ## Quick Start
@@ -88,6 +89,7 @@ For comprehensive documentation, examples, and guides, visit the **[skimatik Wik
 - **[Examples & Tutorials](https://github.com/nhalm/skimatik/wiki/examples)** - Real-world usage examples
 - **[Configuration Reference](https://github.com/nhalm/skimatik/wiki/configuration-reference)** - Complete configuration options
 - **[Database Migrations](https://github.com/nhalm/skimatik/wiki/database-migrations)** - Schema management with golang-migrate
+- **[Audit Tables](https://github.com/nhalm/skimatik/wiki/audit)** - Per-table SCD Type 2 history via CTE-based mutations
 
 ## Example
 
