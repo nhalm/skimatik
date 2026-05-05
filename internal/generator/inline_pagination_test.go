@@ -193,14 +193,14 @@ func TestPaginatedQuery_BidirectionalSupport(t *testing.T) {
 	cg := NewCodeGenerator(config, "test")
 
 	// Create a paginated query with ORDER BY DESC
-	query := Query{
+	q := query{
 		Name: "GetRecentPosts",
-		Type: QueryTypePaginated,
+		Type: queryTypePaginated,
 		SQL:  "SELECT id, title, created_at FROM posts WHERE is_published = true ORDER BY created_at DESC",
-		OrderByColumns: []OrderByColumn{
+		OrderByColumns: []orderByColumn{
 			{Name: "created_at", Direction: "DESC"},
 		},
-		Columns: []Column{
+		Columns: []column{
 			{Name: "id", GoType: "uuid.UUID"},
 			{Name: "title", GoType: "string"},
 			{Name: "created_at", GoType: "time.Time"},
@@ -208,7 +208,7 @@ func TestPaginatedQuery_BidirectionalSupport(t *testing.T) {
 	}
 
 	// Generate the query code
-	code, err := cg.generateQueryCode("posts.sql", []Query{query})
+	code, err := cg.generateQueryCode("posts.sql", []query{q})
 	if err != nil {
 		t.Fatalf("generateQueryCode failed: %v", err)
 	}
@@ -245,14 +245,14 @@ func TestPaginatedQuery_ASCBidirectional(t *testing.T) {
 	cg := NewCodeGenerator(config, "test")
 
 	// Create a paginated query with ORDER BY ASC
-	query := Query{
+	q := query{
 		Name: "GetOldestPosts",
-		Type: QueryTypePaginated,
+		Type: queryTypePaginated,
 		SQL:  "SELECT id, title, created_at FROM posts WHERE is_published = true ORDER BY created_at ASC",
-		OrderByColumns: []OrderByColumn{
+		OrderByColumns: []orderByColumn{
 			{Name: "created_at", Direction: "ASC"},
 		},
-		Columns: []Column{
+		Columns: []column{
 			{Name: "id", GoType: "uuid.UUID"},
 			{Name: "title", GoType: "string"},
 			{Name: "created_at", GoType: "time.Time"},
@@ -260,7 +260,7 @@ func TestPaginatedQuery_ASCBidirectional(t *testing.T) {
 	}
 
 	// Generate the query code
-	code, err := cg.generateQueryCode("posts.sql", []Query{query})
+	code, err := cg.generateQueryCode("posts.sql", []query{q})
 	if err != nil {
 		t.Fatalf("generateQueryCode failed: %v", err)
 	}

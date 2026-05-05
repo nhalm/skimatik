@@ -35,6 +35,16 @@ type UserStats struct {
 	LastActivity *string
 }
 
+// UserAuditEntry represents a single SCD Type 2 audit row from users_audit.
+type UserAuditEntry struct {
+	ID        uuid.UUID `json:"id"`
+	ParentID  uuid.UUID `json:"parent_id"`
+	Version   int       `json:"version"`
+	Snapshot  string    `json:"snapshot"`
+	ValidFrom string    `json:"valid_from"`
+	ValidTo   *string   `json:"valid_to"`
+}
+
 // Post types
 
 // PostSummary represents a post summary for business logic

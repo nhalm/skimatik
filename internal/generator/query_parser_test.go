@@ -15,37 +15,37 @@ func TestQueryParser_ParseAnnotation(t *testing.T) {
 		{
 			name:     "basic annotation",
 			line:     "-- name: GetUser :one",
-			expected: &QueryAnnotation{Name: "GetUser", Type: QueryTypeOne},
+			expected: &QueryAnnotation{Name: "GetUser", Type: queryTypeOne},
 		},
 		{
 			name:     "annotation with extra spaces",
 			line:     "--   name:   GetUser   :one   ",
-			expected: &QueryAnnotation{Name: "GetUser", Type: QueryTypeOne},
+			expected: &QueryAnnotation{Name: "GetUser", Type: queryTypeOne},
 		},
 		{
 			name:     "annotation with semicolon",
 			line:     "-- name: GetUser :one;",
-			expected: &QueryAnnotation{Name: "GetUser", Type: QueryTypeOne},
+			expected: &QueryAnnotation{Name: "GetUser", Type: queryTypeOne},
 		},
 		{
 			name:     "many type",
 			line:     "-- name: ListUsers :many",
-			expected: &QueryAnnotation{Name: "ListUsers", Type: QueryTypeMany},
+			expected: &QueryAnnotation{Name: "ListUsers", Type: queryTypeMany},
 		},
 		{
 			name:     "exec type",
 			line:     "-- name: CreateUser :exec",
-			expected: &QueryAnnotation{Name: "CreateUser", Type: QueryTypeExec},
+			expected: &QueryAnnotation{Name: "CreateUser", Type: queryTypeExec},
 		},
 		{
 			name:     "paginated type",
 			line:     "-- name: GetUsersPaginated :paginated",
-			expected: &QueryAnnotation{Name: "GetUsersPaginated", Type: QueryTypePaginated},
+			expected: &QueryAnnotation{Name: "GetUsersPaginated", Type: queryTypePaginated},
 		},
 		{
 			name:     "underscore in name",
 			line:     "-- name: get_user_by_email :one",
-			expected: &QueryAnnotation{Name: "get_user_by_email", Type: QueryTypeOne},
+			expected: &QueryAnnotation{Name: "get_user_by_email", Type: queryTypeOne},
 		},
 		{
 			name:     "invalid format",
@@ -102,15 +102,15 @@ func TestQueryParser_ParseQueryType(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
-		expected QueryType
+		expected queryType
 		hasError bool
 	}{
-		{"one", "one", QueryTypeOne, false},
-		{"many", "many", QueryTypeMany, false},
-		{"exec", "exec", QueryTypeExec, false},
-		{"paginated", "paginated", QueryTypePaginated, false},
-		{"ONE uppercase", "ONE", QueryTypeOne, false},
-		{"Many mixed case", "Many", QueryTypeMany, false},
+		{"one", "one", queryTypeOne, false},
+		{"many", "many", queryTypeMany, false},
+		{"exec", "exec", queryTypeExec, false},
+		{"paginated", "paginated", queryTypePaginated, false},
+		{"ONE uppercase", "ONE", queryTypeOne, false},
+		{"Many mixed case", "Many", queryTypeMany, false},
 		{"invalid type", "invalid", "", true},
 		{"empty string", "", "", true},
 	}
@@ -144,37 +144,37 @@ func TestQueryParser_ParseResultAnnotation(t *testing.T) {
 	tests := []struct {
 		name     string
 		line     string
-		expected *ResultAnnotation
+		expected *resultAnnotation
 	}{
 		{
 			name:     "basic result annotation",
 			line:     "-- result: payment_count int",
-			expected: &ResultAnnotation{ColumnName: "payment_count", GoType: "int"},
+			expected: &resultAnnotation{ColumnName: "payment_count", GoType: "int"},
 		},
 		{
 			name:     "result annotation with pointer type",
 			line:     "-- result: total_amount *int",
-			expected: &ResultAnnotation{ColumnName: "total_amount", GoType: "*int"},
+			expected: &resultAnnotation{ColumnName: "total_amount", GoType: "*int"},
 		},
 		{
 			name:     "result annotation with qualified type",
 			line:     "-- result: created_at time.Time",
-			expected: &ResultAnnotation{ColumnName: "created_at", GoType: "time.Time"},
+			expected: &resultAnnotation{ColumnName: "created_at", GoType: "time.Time"},
 		},
 		{
 			name:     "result annotation with pointer qualified type",
 			line:     "-- result: user_id *uuid.UUID",
-			expected: &ResultAnnotation{ColumnName: "user_id", GoType: "*uuid.UUID"},
+			expected: &resultAnnotation{ColumnName: "user_id", GoType: "*uuid.UUID"},
 		},
 		{
 			name:     "result annotation with extra spaces",
 			line:     "--   result:   payment_count   int   ",
-			expected: &ResultAnnotation{ColumnName: "payment_count", GoType: "int"},
+			expected: &resultAnnotation{ColumnName: "payment_count", GoType: "int"},
 		},
 		{
 			name:     "result annotation with underscore in name",
 			line:     "-- result: payment_method_count int64",
-			expected: &ResultAnnotation{ColumnName: "payment_method_count", GoType: "int64"},
+			expected: &resultAnnotation{ColumnName: "payment_method_count", GoType: "int64"},
 		},
 		{
 			name:     "invalid format - missing colon",
@@ -235,17 +235,17 @@ func TestQueryParser_ValidateResultAnnotations(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		query    Query
+		query    query
 		hasError bool
 		errorMsg string
 	}{
 		{
 			name: "valid result annotations",
-			query: Query{
+			query: query{
 				Name: "GetPaymentSummary",
-				Type: QueryTypeOne,
+				Type: queryTypeOne,
 				SQL:  "SELECT payment_count, total_amount FROM payments",
-				ResultAnnotations: []ResultAnnotation{
+				ResultAnnotations: []resultAnnotation{
 					{ColumnName: "payment_count", GoType: "int"},
 					{ColumnName: "total_amount", GoType: "*int64"},
 				},
@@ -254,11 +254,11 @@ func TestQueryParser_ValidateResultAnnotations(t *testing.T) {
 		},
 		{
 			name: "valid result annotation with qualified type",
-			query: Query{
+			query: query{
 				Name: "GetUser",
-				Type: QueryTypeOne,
+				Type: queryTypeOne,
 				SQL:  "SELECT id, created_at FROM users",
-				ResultAnnotations: []ResultAnnotation{
+				ResultAnnotations: []resultAnnotation{
 					{ColumnName: "id", GoType: "uuid.UUID"},
 					{ColumnName: "created_at", GoType: "time.Time"},
 				},
@@ -267,11 +267,11 @@ func TestQueryParser_ValidateResultAnnotations(t *testing.T) {
 		},
 		{
 			name: "duplicate column names",
-			query: Query{
+			query: query{
 				Name: "GetUser",
-				Type: QueryTypeOne,
+				Type: queryTypeOne,
 				SQL:  "SELECT id FROM users",
-				ResultAnnotations: []ResultAnnotation{
+				ResultAnnotations: []resultAnnotation{
 					{ColumnName: "payment_count", GoType: "int"},
 					{ColumnName: "payment_count", GoType: "int64"},
 				},
@@ -281,19 +281,19 @@ func TestQueryParser_ValidateResultAnnotations(t *testing.T) {
 		},
 		{
 			name: "empty result annotations",
-			query: Query{
+			query: query{
 				Name:              "GetUser",
-				Type:              QueryTypeOne,
+				Type:              queryTypeOne,
 				SQL:               "SELECT id FROM users",
-				ResultAnnotations: []ResultAnnotation{},
+				ResultAnnotations: []resultAnnotation{},
 			},
 			hasError: false,
 		},
 		{
 			name: "nil result annotations",
-			query: Query{
+			query: query{
 				Name:              "GetUser",
-				Type:              QueryTypeOne,
+				Type:              queryTypeOne,
 				SQL:               "SELECT id FROM users",
 				ResultAnnotations: nil,
 			},
@@ -359,12 +359,12 @@ func TestQueryParser_ParseParameterAnnotation(t *testing.T) {
 	tests := []struct {
 		name     string
 		line     string
-		expected *ParameterAnnotation
+		expected *parameterAnnotation
 	}{
 		{
 			name: "basic nullable string",
 			line: "-- param: $1 status *string",
-			expected: &ParameterAnnotation{
+			expected: &parameterAnnotation{
 				Position: 1,
 				Name:     "status",
 				GoType:   "*string",
@@ -373,7 +373,7 @@ func TestQueryParser_ParseParameterAnnotation(t *testing.T) {
 		{
 			name: "non-nullable UUID",
 			line: "-- param: $2 tenant_id uuid.UUID",
-			expected: &ParameterAnnotation{
+			expected: &parameterAnnotation{
 				Position: 2,
 				Name:     "tenant_id",
 				GoType:   "uuid.UUID",
@@ -382,7 +382,7 @@ func TestQueryParser_ParseParameterAnnotation(t *testing.T) {
 		{
 			name: "nullable time",
 			line: "-- param: $3 created_after *time.Time",
-			expected: &ParameterAnnotation{
+			expected: &parameterAnnotation{
 				Position: 3,
 				Name:     "created_after",
 				GoType:   "*time.Time",
@@ -391,7 +391,7 @@ func TestQueryParser_ParseParameterAnnotation(t *testing.T) {
 		{
 			name: "nullable int",
 			line: "-- param: $4 limit *int",
-			expected: &ParameterAnnotation{
+			expected: &parameterAnnotation{
 				Position: 4,
 				Name:     "limit",
 				GoType:   "*int",
@@ -447,13 +447,13 @@ func TestQueryParser_ValidateParameterAnnotations(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		annotations []ParameterAnnotation
+		annotations []parameterAnnotation
 		shouldError bool
 		errorMsg    string
 	}{
 		{
 			name: "valid sequential annotations",
-			annotations: []ParameterAnnotation{
+			annotations: []parameterAnnotation{
 				{Position: 1, Name: "tenant_id", GoType: "uuid.UUID"},
 				{Position: 2, Name: "status", GoType: "*string"},
 				{Position: 3, Name: "limit", GoType: "int"},
@@ -462,12 +462,12 @@ func TestQueryParser_ValidateParameterAnnotations(t *testing.T) {
 		},
 		{
 			name:        "empty annotations is valid",
-			annotations: []ParameterAnnotation{},
+			annotations: []parameterAnnotation{},
 			shouldError: false,
 		},
 		{
 			name: "duplicate position",
-			annotations: []ParameterAnnotation{
+			annotations: []parameterAnnotation{
 				{Position: 1, Name: "tenant_id", GoType: "uuid.UUID"},
 				{Position: 1, Name: "status", GoType: "string"},
 			},
@@ -476,7 +476,7 @@ func TestQueryParser_ValidateParameterAnnotations(t *testing.T) {
 		},
 		{
 			name: "non-sequential (missing $2)",
-			annotations: []ParameterAnnotation{
+			annotations: []parameterAnnotation{
 				{Position: 1, Name: "tenant_id", GoType: "uuid.UUID"},
 				{Position: 3, Name: "limit", GoType: "int"},
 			},
@@ -487,7 +487,7 @@ func TestQueryParser_ValidateParameterAnnotations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			query := &Query{
+			query := &query{
 				Name:                 "TestQuery",
 				ParameterAnnotations: tt.annotations,
 			}

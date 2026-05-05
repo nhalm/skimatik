@@ -60,7 +60,7 @@ test-integration:
 	@bash -c 'for i in {1..30}; do if pg_isready -h localhost -p 15432 -U skimatik -d skimatik_test >/dev/null 2>&1; then break; fi; sleep 1; done'
 	@echo "Running integration tests..."
 	@$(GOMOD) tidy
-	TEST_DATABASE_URL=$(TEST_DB_URL) $(GOTEST) -v -race -parallel=1 -timeout 60s ./...
+	TEST_DATABASE_URL=$(TEST_DB_URL) $(GOTEST) -tags=integration -v -race -parallel=1 -timeout 60s ./...
 	@echo "✅ Integration tests completed"
 
 .PHONY: test-example-app

@@ -11,40 +11,40 @@ func TestQueryAnalyzer_ExtractParameters(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		query          Query
-		expectedParams []Parameter
+		query          query
+		expectedParams []parameter
 		expectError    bool
 	}{
 		{
 			name: "query with no parameters",
-			query: Query{
+			query: query{
 				Name: "GetAllUsers",
 				SQL:  "SELECT id, name FROM users",
-				Type: QueryTypeMany,
+				Type: queryTypeMany,
 			},
-			expectedParams: []Parameter{},
+			expectedParams: []parameter{},
 			expectError:    false,
 		},
 		{
 			name: "query with single parameter",
-			query: Query{
+			query: query{
 				Name: "GetUserByID",
 				SQL:  "SELECT id, name FROM users WHERE id = $1",
-				Type: QueryTypeOne,
+				Type: queryTypeOne,
 			},
-			expectedParams: []Parameter{
+			expectedParams: []parameter{
 				{Name: "param1", Type: "text", GoType: "string", Index: 1},
 			},
 			expectError: false,
 		},
 		{
 			name: "query with multiple parameters",
-			query: Query{
+			query: query{
 				Name: "GetUsersByNameAndEmail",
 				SQL:  "SELECT id, name FROM users WHERE name = $1 AND email = $2",
-				Type: QueryTypeMany,
+				Type: queryTypeMany,
 			},
-			expectedParams: []Parameter{
+			expectedParams: []parameter{
 				{Name: "param1", Type: "text", GoType: "string", Index: 1},
 				{Name: "param2", Type: "text", GoType: "string", Index: 2},
 			},
@@ -52,24 +52,24 @@ func TestQueryAnalyzer_ExtractParameters(t *testing.T) {
 		},
 		{
 			name: "query with duplicate parameters",
-			query: Query{
+			query: query{
 				Name: "GetUsersByStatus",
 				SQL:  "SELECT id, name FROM users WHERE status = $1 OR backup_status = $1",
-				Type: QueryTypeMany,
+				Type: queryTypeMany,
 			},
-			expectedParams: []Parameter{
+			expectedParams: []parameter{
 				{Name: "param1", Type: "text", GoType: "string", Index: 1},
 			},
 			expectError: false,
 		},
 		{
 			name: "query with non-sequential parameters",
-			query: Query{
+			query: query{
 				Name: "GetUsersByStatusAndRole",
 				SQL:  "SELECT id, name FROM users WHERE status = $2 AND role = $1",
-				Type: QueryTypeMany,
+				Type: queryTypeMany,
 			},
-			expectedParams: []Parameter{
+			expectedParams: []parameter{
 				{Name: "param1", Type: "text", GoType: "string", Index: 1},
 				{Name: "param2", Type: "text", GoType: "string", Index: 2},
 			},
@@ -110,66 +110,66 @@ func TestQueryAnalyzer_EdgeCases(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		query       Query
+		query       query
 		expectError bool
 		description string
 	}{
 		{
 			name: "empty SQL",
-			query: Query{
+			query: query{
 				Name: "EmptyQuery",
 				SQL:  "",
-				Type: QueryTypeMany,
+				Type: queryTypeMany,
 			},
 			expectError: false,
 			description: "Empty SQL should return no parameters",
 		},
 		{
 			name: "dollar sign in string literal",
-			query: Query{
+			query: query{
 				Name: "DollarInString",
 				SQL:  "SELECT '$100' as price, id FROM products WHERE id = $1",
-				Type: QueryTypeOne,
+				Type: queryTypeOne,
 			},
 			expectError: false,
 			description: "Dollar signs in string literals should not be treated as parameters",
 		},
 		{
 			name: "dollar sign in quoted identifier",
-			query: Query{
+			query: query{
 				Name: "DollarInIdentifier",
 				SQL:  `SELECT "price$amount" FROM products WHERE id = $1`,
-				Type: QueryTypeOne,
+				Type: queryTypeOne,
 			},
 			expectError: false,
 			description: "Dollar signs in quoted identifiers should not be treated as parameters",
 		},
 		{
 			name: "parameter in comment",
-			query: Query{
+			query: query{
 				Name: "ParameterInComment",
 				SQL:  "SELECT id FROM users -- WHERE status = $1\nWHERE id = $1",
-				Type: QueryTypeOne,
+				Type: queryTypeOne,
 			},
 			expectError: false,
 			description: "Parameters in comments should be ignored",
 		},
 		{
 			name: "high parameter number",
-			query: Query{
+			query: query{
 				Name: "HighParameterNumber",
 				SQL:  "SELECT id FROM users WHERE id = $100",
-				Type: QueryTypeOne,
+				Type: queryTypeOne,
 			},
 			expectError: false,
 			description: "High parameter numbers should be handled correctly",
 		},
 		{
 			name: "invalid parameter format",
-			query: Query{
+			query: query{
 				Name: "InvalidParameterFormat",
 				SQL:  "SELECT id FROM users WHERE id = $abc",
-				Type: QueryTypeOne,
+				Type: queryTypeOne,
 			},
 			expectError: false,
 			description: "Invalid parameter formats should be ignored",
@@ -201,13 +201,13 @@ func TestQueryAnalyzer_ComplexQueries(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		query          Query
+		query          query
 		expectedParams int
 		description    string
 	}{
 		{
 			name: "CTE query",
-			query: Query{
+			query: query{
 				Name: "CTEQuery",
 				SQL: `WITH user_posts AS (
 					SELECT user_id, COUNT(*) as post_count
@@ -219,53 +219,53 @@ func TestQueryAnalyzer_ComplexQueries(t *testing.T) {
 				FROM users u
 				JOIN user_posts up ON u.id = up.user_id
 				WHERE u.status = $2`,
-				Type: QueryTypeMany,
+				Type: queryTypeMany,
 			},
 			expectedParams: 2,
 			description:    "CTE with multiple parameters",
 		},
 		{
 			name: "subquery",
-			query: Query{
+			query: query{
 				Name: "SubqueryExample",
 				SQL: `SELECT id, name FROM users
 				WHERE id IN (
 					SELECT user_id FROM posts
 					WHERE category_id = $1 AND created_at > $2
 				) AND status = $3`,
-				Type: QueryTypeMany,
+				Type: queryTypeMany,
 			},
 			expectedParams: 3,
 			description:    "Subquery with multiple parameters",
 		},
 		{
 			name: "window function",
-			query: Query{
+			query: query{
 				Name: "WindowFunctionQuery",
 				SQL: `SELECT
 					id, name,
 					ROW_NUMBER() OVER (PARTITION BY department ORDER BY salary DESC) as rank
 				FROM employees
 				WHERE department = $1 AND salary > $2`,
-				Type: QueryTypeMany,
+				Type: queryTypeMany,
 			},
 			expectedParams: 2,
 			description:    "Window function with parameters",
 		},
 		{
 			name: "array operations",
-			query: Query{
+			query: query{
 				Name: "ArrayQuery",
 				SQL: `SELECT id, tags FROM posts
 				WHERE $1 = ANY(tags) AND category_id = $2`,
-				Type: QueryTypeMany,
+				Type: queryTypeMany,
 			},
 			expectedParams: 2,
 			description:    "Array operations with parameters",
 		},
 		{
 			name: "multiple joins",
-			query: Query{
+			query: query{
 				Name: "MultipleJoins",
 				SQL: `SELECT u.id, u.name, p.title, c.name as category
 				FROM users u
@@ -274,7 +274,7 @@ func TestQueryAnalyzer_ComplexQueries(t *testing.T) {
 				WHERE u.created_at > $1
 				AND p.status = $2
 				AND c.active = $3`,
-				Type: QueryTypeMany,
+				Type: queryTypeMany,
 			},
 			expectedParams: 3,
 			description:    "Multiple joins with parameters",
@@ -301,13 +301,13 @@ func TestQueryAnalyzer_ComplexQueries(t *testing.T) {
 func TestQueryAnalyzer_IsSelectQuery(t *testing.T) {
 	tests := []struct {
 		name      string
-		queryType QueryType
+		queryType queryType
 		expected  bool
 	}{
-		{"QueryTypeOne", QueryTypeOne, true},
-		{"QueryTypeMany", QueryTypeMany, true},
-		{"QueryTypePaginated", QueryTypePaginated, true},
-		{"QueryTypeExec", QueryTypeExec, false},
+		{"QueryTypeOne", queryTypeOne, true},
+		{"QueryTypeMany", queryTypeMany, true},
+		{"QueryTypePaginated", queryTypePaginated, true},
+		{"QueryTypeExec", queryTypeExec, false},
 	}
 
 	analyzer := NewQueryAnalyzer(nil, "public")
@@ -507,10 +507,10 @@ func TestQueryAnalyzer_OIDMapping_Synchronization(t *testing.T) {
 func TestQueryAnalyzer_AnalyzeQuery_ParameterExtraction(t *testing.T) {
 	analyzer := NewQueryAnalyzer(nil, "public") // No database needed for parameter extraction only
 
-	query := Query{
+	query := query{
 		Name: "TestQuery",
 		SQL:  "SELECT id FROM users WHERE name = $1 AND age > $2",
-		Type: QueryTypeMany,
+		Type: queryTypeMany,
 	}
 
 	err := analyzer.AnalyzeQuery(context.Background(), &query)
@@ -522,7 +522,7 @@ func TestQueryAnalyzer_AnalyzeQuery_ParameterExtraction(t *testing.T) {
 func TestQueryAnalyzer_AnalyzeQuery_NilQuery(t *testing.T) {
 	analyzer := NewQueryAnalyzer(nil, "public")
 
-	query := Query{}
+	query := query{}
 	err := analyzer.AnalyzeQuery(context.Background(), &query)
 	if err != nil {
 		t.Errorf("Unexpected error with empty query: %v", err)
@@ -661,10 +661,10 @@ func TestQueryAnalyzer_InferParameterNames(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			query := Query{
+			query := query{
 				Name: tt.name,
 				SQL:  tt.sql,
-				Type: QueryTypeMany,
+				Type: queryTypeMany,
 			}
 
 			// First extract parameters
@@ -787,10 +787,10 @@ func TestQueryAnalyzer_TableColumnTracking(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			query := Query{
+			query := query{
 				Name: tt.name,
 				SQL:  tt.sql,
-				Type: QueryTypeMany,
+				Type: queryTypeMany,
 			}
 
 			// Extract and infer
@@ -851,27 +851,27 @@ func TestQueryAnalyzer_ApplyResultAnnotations(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		query       Query
+		query       query
 		expectError bool
 		errorMsg    string
 		description string
 	}{
 		{
 			name: "nil columns with no annotations",
-			query: Query{
+			query: query{
 				Name:              "TestQuery",
 				Columns:           nil,
-				ResultAnnotations: []ResultAnnotation{},
+				ResultAnnotations: []resultAnnotation{},
 			},
 			expectError: false,
 			description: "No error expected when columns is nil but no annotations exist",
 		},
 		{
 			name: "nil columns with annotations",
-			query: Query{
+			query: query{
 				Name:    "TestQuery",
 				Columns: nil,
-				ResultAnnotations: []ResultAnnotation{
+				ResultAnnotations: []resultAnnotation{
 					{ColumnName: "user_id", GoType: "*int"},
 				},
 			},
@@ -881,10 +881,10 @@ func TestQueryAnalyzer_ApplyResultAnnotations(t *testing.T) {
 		},
 		{
 			name: "empty columns with annotations",
-			query: Query{
+			query: query{
 				Name:    "TestQuery",
-				Columns: []Column{},
-				ResultAnnotations: []ResultAnnotation{
+				Columns: []column{},
+				ResultAnnotations: []resultAnnotation{
 					{ColumnName: "user_id", GoType: "*int"},
 				},
 			},
@@ -894,13 +894,13 @@ func TestQueryAnalyzer_ApplyResultAnnotations(t *testing.T) {
 		},
 		{
 			name: "valid annotation applied",
-			query: Query{
+			query: query{
 				Name: "TestQuery",
-				Columns: []Column{
+				Columns: []column{
 					{Name: "user_id", Type: "integer", GoType: "int", IsNullable: false},
 					{Name: "email", Type: "text", GoType: "string", IsNullable: false},
 				},
-				ResultAnnotations: []ResultAnnotation{
+				ResultAnnotations: []resultAnnotation{
 					{ColumnName: "user_id", GoType: "*int"},
 				},
 			},
@@ -909,12 +909,12 @@ func TestQueryAnalyzer_ApplyResultAnnotations(t *testing.T) {
 		},
 		{
 			name: "non-existent column annotation",
-			query: Query{
+			query: query{
 				Name: "TestQuery",
-				Columns: []Column{
+				Columns: []column{
 					{Name: "user_id", Type: "integer", GoType: "int", IsNullable: false},
 				},
-				ResultAnnotations: []ResultAnnotation{
+				ResultAnnotations: []resultAnnotation{
 					{ColumnName: "nonexistent", GoType: "*int"},
 				},
 			},
@@ -924,14 +924,14 @@ func TestQueryAnalyzer_ApplyResultAnnotations(t *testing.T) {
 		},
 		{
 			name: "multiple annotations",
-			query: Query{
+			query: query{
 				Name: "TestQuery",
-				Columns: []Column{
+				Columns: []column{
 					{Name: "user_id", Type: "integer", GoType: "int", IsNullable: false},
 					{Name: "email", Type: "text", GoType: "string", IsNullable: false},
 					{Name: "name", Type: "text", GoType: "string", IsNullable: false},
 				},
-				ResultAnnotations: []ResultAnnotation{
+				ResultAnnotations: []resultAnnotation{
 					{ColumnName: "user_id", GoType: "*int"},
 					{ColumnName: "email", GoType: "*string"},
 				},

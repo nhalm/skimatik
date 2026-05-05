@@ -17,6 +17,10 @@ type UserService interface {
 	GetUserStats(ctx context.Context, userID uuid.UUID) (*models.UserStats, error)
 	DeactivateUser(ctx context.Context, userID uuid.UUID) error
 	GetUser(ctx context.Context, userID uuid.UUID) (*models.UserDetail, error)
+
+	CreateUser(ctx context.Context, name, email string, bio *string) (*models.UserSummary, error)
+	UpdateUserName(ctx context.Context, userID uuid.UUID, name string) (*models.UserSummary, error)
+	GetUserAuditHistory(ctx context.Context, userID uuid.UUID) ([]models.UserAuditEntry, error)
 }
 
 // PostService defines what the API layer needs from a post service

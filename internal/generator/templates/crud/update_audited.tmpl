@@ -1,0 +1,51 @@
+// Update{{.StructName}}Params holds parameters for updating a {{.StructName}}
+type Update{{.StructName}}Params struct {
+{{range .UpdateFields}}	{{.Name}} {{.Type}} `{{.Tag}}`
+{{end}}}
+
+// Update mutates an existing {{.StructName}} and maintains its audit history
+// in {{.AuditTableName}}. A single CTE closes the open audit row, applies the
+// parent UPDATE, and inserts the new audit row, all sharing one
+// statement-level NOW() timestamp.
+//
+// Concurrency: `version` is computed as
+//   COALESCE((SELECT MAX(version) FROM {{.AuditTableName}} WHERE parent_id = updated.id), 0) + 1
+// This is race-safe because the parent UPDATE in the same statement row-locks
+// the parent ({{.TableName}}) row, serializing concurrent updates to the same
+// parent; a second transaction's MAX subquery runs only after the first has
+// committed. The UNIQUE index on ({{.AuditTableName}}.parent_id, version) is
+// the defensive backstop in case the lock assumption is ever wrong.
+func (r *{{.RepositoryName}}) Update(ctx context.Context, db pgxkit.Executor, id {{.IDType}}, params Update{{.StructName}}Params) (*{{.StructName}}, error) {
+	auditID := UUIDv7()
+	query := `
+		WITH closed AS (
+			UPDATE {{.AuditTableName}}
+			SET valid_to = NOW()
+			WHERE parent_id = $1 AND valid_to IS NULL
+		),
+		updated AS (
+			UPDATE {{.TableName}}
+			SET {{.AuditedUpdateColumns}}
+			WHERE {{.IDColumn}} = $1
+			RETURNING {{.SelectColumns}}
+		),
+		audited AS (
+			INSERT INTO {{.AuditTableName}} (id, parent_id, version, snapshot, valid_from)
+			SELECT {{.UpdateAuditIDParam}}, updated.id,
+			       COALESCE((SELECT MAX(version) FROM {{.AuditTableName}} WHERE parent_id = updated.id), 0) + 1,
+			       to_jsonb(updated.*),
+			       NOW()
+			FROM updated
+		)
+		SELECT {{.SelectColumns}} FROM updated
+	`
+
+	var {{.ReceiverName}} {{.StructName}}
+	row := ExecuteQueryRow(ctx, db, "update", "{{.StructName}}", query, {{.AuditedUpdateArgs}})
+	err := row.Scan({{.ScanArgs}})
+	if err := HandleQueryRowError("update", "{{.StructName}}", err); err != nil {
+		return nil, err
+	}
+
+	return &{{.ReceiverName}}, nil
+}

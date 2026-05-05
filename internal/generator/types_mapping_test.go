@@ -281,12 +281,12 @@ func TestTypeMapper_GetRequiredImports(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		columns  []Column
+		columns  []column
 		expected []string
 	}{
 		{
 			name: "basic_types_with_imports",
-			columns: []Column{
+			columns: []column{
 				{Type: "uuid", IsNullable: false, IsArray: false},
 				{Type: "timestamp", IsNullable: false, IsArray: false},
 				{Type: "uuid", IsNullable: true, IsArray: false},
@@ -300,7 +300,7 @@ func TestTypeMapper_GetRequiredImports(t *testing.T) {
 		},
 		{
 			name: "only_basic_types",
-			columns: []Column{
+			columns: []column{
 				{Type: "text", IsNullable: false, IsArray: false},
 				{Type: "integer", IsNullable: false, IsArray: false},
 				{Type: "boolean", IsNullable: false, IsArray: false},
@@ -309,7 +309,7 @@ func TestTypeMapper_GetRequiredImports(t *testing.T) {
 		},
 		{
 			name: "array_types",
-			columns: []Column{
+			columns: []column{
 				{Type: "text", IsNullable: false, IsArray: true},
 				{Type: "uuid", IsNullable: false, IsArray: true},
 				{Type: "uuid", IsNullable: true, IsArray: true},
@@ -338,17 +338,17 @@ func TestTypeMapper_GetRequiredImports_EdgeCases(t *testing.T) {
 
 	testCases := []struct {
 		name            string
-		columns         []Column
+		columns         []column
 		expectedImports []string
 	}{
 		{
 			name:            "no_columns",
-			columns:         []Column{},
+			columns:         []column{},
 			expectedImports: []string{},
 		},
 		{
 			name: "only_basic_types",
-			columns: []Column{
+			columns: []column{
 				{Type: "text", IsNullable: false, IsArray: false},
 				{Type: "integer", IsNullable: false, IsArray: false},
 				{Type: "boolean", IsNullable: false, IsArray: false},
@@ -357,7 +357,7 @@ func TestTypeMapper_GetRequiredImports_EdgeCases(t *testing.T) {
 		},
 		{
 			name: "mixed_imports",
-			columns: []Column{
+			columns: []column{
 				{Type: "uuid", IsNullable: false, IsArray: false},
 				{Type: "text", IsNullable: true, IsArray: false},
 				{Type: "timestamp", IsNullable: false, IsArray: false},
@@ -371,7 +371,7 @@ func TestTypeMapper_GetRequiredImports_EdgeCases(t *testing.T) {
 		},
 		{
 			name: "duplicate_imports",
-			columns: []Column{
+			columns: []column{
 				{Type: "uuid", IsNullable: false, IsArray: false},
 				{Type: "uuid", IsNullable: true, IsArray: false},
 				{Type: "uuid", IsNullable: false, IsArray: true},
@@ -429,10 +429,10 @@ func TestTypeMapper_GetRequiredImports_EdgeCases(t *testing.T) {
 func TestTypeMapper_MapTableColumns(t *testing.T) {
 	tm := NewTypeMapper(nil)
 
-	table := Table{
+	table := table{
 		Name:   "test_table",
 		Schema: "public",
-		Columns: []Column{
+		Columns: []column{
 			{Name: "id", Type: "uuid", IsNullable: false},
 			{Name: "name", Type: "text", IsNullable: false},
 			{Name: "email", Type: "text", IsNullable: true},
@@ -455,10 +455,10 @@ func TestTypeMapper_MapTableColumns(t *testing.T) {
 func TestTypeMapper_MapTableColumns_WithError(t *testing.T) {
 	tm := NewTypeMapper(nil)
 
-	table := Table{
+	table := table{
 		Name:   "test_table",
 		Schema: "public",
-		Columns: []Column{
+		Columns: []column{
 			{Name: "id", Type: "unsupported_type", IsNullable: false},
 		},
 	}

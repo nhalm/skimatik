@@ -192,6 +192,40 @@ CREATE TABLE composite_pk_table (
     PRIMARY KEY (tenant_id, user_id)
 );
 
+-- Composite-FK fixture: child references the parent's 2-column UNIQUE key.
+CREATE TABLE composite_uk_parent (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    tenant_id UUID NOT NULL,
+    code VARCHAR(50) NOT NULL,
+    label VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE (tenant_id, code)
+);
+
+CREATE TABLE composite_fk_child (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    tenant_id UUID NOT NULL,
+    parent_code VARCHAR(50) NOT NULL,
+    note TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT composite_fk_child_parent_fkey
+        FOREIGN KEY (tenant_id, parent_code)
+        REFERENCES composite_uk_parent (tenant_id, code)
+        ON DELETE CASCADE
+);
+
+-- Audit fixture: a well-formed SCD Type 2 audit child for users.
+CREATE TABLE users_audit (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    parent_id UUID NOT NULL REFERENCES users(id),
+    version INTEGER NOT NULL,
+    snapshot JSONB NOT NULL,
+    valid_from TIMESTAMP WITH TIME ZONE NOT NULL,
+    valid_to TIMESTAMP WITH TIME ZONE
+);
+CREATE INDEX idx_users_audit_parent ON users_audit (parent_id);
+CREATE UNIQUE INDEX uq_users_audit_parent_version ON users_audit (parent_id, version);
+
 -- Indexes for performance testing
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_active_created ON users(is_active, created_at);

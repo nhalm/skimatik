@@ -1,0 +1,33 @@
+// Create{{.StructName}}Params holds parameters for creating a {{.StructName}}
+type Create{{.StructName}}Params struct {
+{{range .CreateFields}}	{{.Name}} {{.Type}} `{{.Tag}}`
+{{end}}}
+
+// Create inserts a new {{.StructName}} and writes the initial audit row to
+// {{.AuditTableName}} in a single CTE. The audit row id is generated Go-side
+// via UUIDv7 to match the parent id convention.
+func (r *{{.RepositoryName}}) Create(ctx context.Context, db pgxkit.Executor, params Create{{.StructName}}Params) (*{{.StructName}}, error) {
+	id := r.generateIdFunc()
+	auditID := UUIDv7()
+	query := `
+		WITH inserted AS (
+			INSERT INTO {{.TableName}} ({{.InsertColumns}})
+			VALUES ({{.InsertPlaceholders}})
+			RETURNING {{.SelectColumns}}
+		),
+		audited AS (
+			INSERT INTO {{.AuditTableName}} (id, parent_id, version, snapshot, valid_from)
+			SELECT {{.CreateAuditIDParam}}, id, 1, to_jsonb(inserted.*), NOW() FROM inserted
+		)
+		SELECT {{.SelectColumns}} FROM inserted
+	`
+
+	var {{.ReceiverName}} {{.StructName}}
+	row := ExecuteQueryRow(ctx, db, "create", "{{.StructName}}", query, {{.AuditedInsertArgs}})
+	err := row.Scan({{.ScanArgs}})
+	if err := HandleQueryRowError("create", "{{.StructName}}", err); err != nil {
+		return nil, err
+	}
+
+	return &{{.ReceiverName}}, nil
+}

@@ -10,12 +10,12 @@ func TestSQLParser_Parse_Simple(t *testing.T) {
 	testCases := []struct {
 		name     string
 		sql      string
-		wantType QueryType
+		wantType queryType
 	}{
-		{"SELECT", "SELECT id FROM users", QueryTypeMany},
-		{"INSERT", "INSERT INTO users (name) VALUES ($1)", QueryTypeExec},
-		{"UPDATE", "UPDATE users SET name = $1 WHERE id = $2", QueryTypeExec},
-		{"DELETE", "DELETE FROM users WHERE id = $1", QueryTypeExec},
+		{"SELECT", "SELECT id FROM users", queryTypeMany},
+		{"INSERT", "INSERT INTO users (name) VALUES ($1)", queryTypeExec},
+		{"UPDATE", "UPDATE users SET name = $1 WHERE id = $2", queryTypeExec},
+		{"DELETE", "DELETE FROM users WHERE id = $1", queryTypeExec},
 	}
 
 	for _, tc := range testCases {
@@ -658,27 +658,27 @@ func TestSQLParser_ExtractOrderBy(t *testing.T) {
 	tests := []struct {
 		name     string
 		sql      string
-		expected []OrderByColumn
+		expected []orderByColumn
 	}{
 		{
 			name:     "single column ASC explicit",
 			sql:      "SELECT id, name FROM users ORDER BY name ASC",
-			expected: []OrderByColumn{{Name: "name", Direction: "ASC"}},
+			expected: []orderByColumn{{Name: "name", Direction: "ASC"}},
 		},
 		{
 			name:     "single column DESC",
 			sql:      "SELECT id, name FROM users ORDER BY name DESC",
-			expected: []OrderByColumn{{Name: "name", Direction: "DESC"}},
+			expected: []orderByColumn{{Name: "name", Direction: "DESC"}},
 		},
 		{
 			name:     "single column default (ASC)",
 			sql:      "SELECT id, name FROM users ORDER BY name",
-			expected: []OrderByColumn{{Name: "name", Direction: "ASC"}},
+			expected: []orderByColumn{{Name: "name", Direction: "ASC"}},
 		},
 		{
 			name: "multiple columns same direction",
 			sql:  "SELECT id, created_at FROM posts ORDER BY created_at DESC, id DESC",
-			expected: []OrderByColumn{
+			expected: []orderByColumn{
 				{Name: "created_at", Direction: "DESC"},
 				{Name: "id", Direction: "DESC"},
 			},
@@ -686,7 +686,7 @@ func TestSQLParser_ExtractOrderBy(t *testing.T) {
 		{
 			name: "multiple columns mixed direction",
 			sql:  "SELECT id, created_at FROM posts ORDER BY created_at DESC, id ASC",
-			expected: []OrderByColumn{
+			expected: []orderByColumn{
 				{Name: "created_at", Direction: "DESC"},
 				{Name: "id", Direction: "ASC"},
 			},
@@ -702,7 +702,7 @@ func TestSQLParser_ExtractOrderBy(t *testing.T) {
 				SELECT id, name, created_at FROM users ORDER BY name ASC
 			) AS sub
 			ORDER BY created_at DESC`,
-			expected: []OrderByColumn{{Name: "created_at", Direction: "DESC"}},
+			expected: []orderByColumn{{Name: "created_at", Direction: "DESC"}},
 		},
 		{
 			name: "subquery in FROM - no outer ORDER BY returns nil",
@@ -717,7 +717,7 @@ func TestSQLParser_ExtractOrderBy(t *testing.T) {
 			sql: `SELECT id, name FROM users
 			WHERE id IN (SELECT user_id FROM active_users ORDER BY user_id)
 			ORDER BY name DESC`,
-			expected: []OrderByColumn{{Name: "name", Direction: "DESC"}},
+			expected: []orderByColumn{{Name: "name", Direction: "DESC"}},
 		},
 		{
 			name: "CTE with ORDER BY in CTE - use main query ORDER BY",
@@ -728,7 +728,7 @@ func TestSQLParser_ExtractOrderBy(t *testing.T) {
 			)
 			SELECT * FROM ranked_users
 			ORDER BY name ASC`,
-			expected: []OrderByColumn{{Name: "name", Direction: "ASC"}},
+			expected: []orderByColumn{{Name: "name", Direction: "ASC"}},
 		},
 		{
 			name: "CTE without main query ORDER BY returns nil",
@@ -746,7 +746,7 @@ func TestSQLParser_ExtractOrderBy(t *testing.T) {
 			SELECT u.name, p.title
 			FROM cte1 u JOIN cte2 p ON u.id = p.id
 			ORDER BY u.name DESC, p.title ASC`,
-			expected: []OrderByColumn{
+			expected: []orderByColumn{
 				{Name: "name", Direction: "DESC"},
 				{Name: "title", Direction: "ASC"},
 			},
@@ -754,7 +754,7 @@ func TestSQLParser_ExtractOrderBy(t *testing.T) {
 		{
 			name:     "table-qualified column",
 			sql:      "SELECT u.id, u.name FROM users u ORDER BY u.name DESC",
-			expected: []OrderByColumn{{Name: "name", Direction: "DESC"}},
+			expected: []orderByColumn{{Name: "name", Direction: "DESC"}},
 		},
 		{
 			name: "JOIN with multiple table-qualified ORDER BY columns",
@@ -762,7 +762,7 @@ func TestSQLParser_ExtractOrderBy(t *testing.T) {
 				  FROM payments p
 				  JOIN payment_methods pm ON p.payment_method_id = pm.id
 				  ORDER BY p.created_at DESC, pm.created_at DESC`,
-			expected: []OrderByColumn{
+			expected: []orderByColumn{
 				{Name: "created_at", Direction: "DESC"},
 				{Name: "pm_created_at", Direction: "DESC"},
 			},
@@ -773,7 +773,7 @@ func TestSQLParser_ExtractOrderBy(t *testing.T) {
 				  FROM orders o
 				  JOIN customers c ON o.customer_id = c.id
 				  ORDER BY c.name ASC, o.created_at DESC`,
-			expected: []OrderByColumn{
+			expected: []orderByColumn{
 				{Name: "customer_name", Direction: "ASC"},
 				{Name: "created_at", Direction: "DESC"},
 			},
@@ -784,23 +784,23 @@ func TestSQLParser_ExtractOrderBy(t *testing.T) {
 				  FROM users u
 				  LEFT JOIN profiles p ON u.id = p.user_id
 				  ORDER BY p.last_login DESC`,
-			expected: []OrderByColumn{{Name: "last_login", Direction: "DESC"}},
+			expected: []orderByColumn{{Name: "last_login", Direction: "DESC"}},
 		},
 		{
 			name:     "ORDER BY alias",
 			sql:      "SELECT id, name AS username FROM users ORDER BY username DESC",
-			expected: []OrderByColumn{{Name: "username", Direction: "DESC"}},
+			expected: []orderByColumn{{Name: "username", Direction: "DESC"}},
 		},
 		{
 			name:     "ordinal position - extract column name from SELECT",
 			sql:      "SELECT id, name, created_at FROM users ORDER BY 2 DESC",
-			expected: []OrderByColumn{{Name: "name", Direction: "DESC"}},
+			expected: []orderByColumn{{Name: "name", Direction: "DESC"}},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := parser.ExtractOrderBy(tt.sql)
+			result, err := parser.extractOrderBy(tt.sql)
 
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)

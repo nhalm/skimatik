@@ -183,7 +183,7 @@ func (tm *TypeMapper) makeNullable(goType string) string {
 
 // GetRequiredImports returns the imports needed for the generated Go types.
 // It scans all column types and collects necessary package imports (uuid, time, json, etc.).
-func (tm *TypeMapper) GetRequiredImports(columns []Column) []string {
+func (tm *TypeMapper) GetRequiredImports(columns []column) []string {
 	imports := make(map[string]bool)
 
 	for _, col := range columns {
@@ -237,7 +237,7 @@ func (tm *TypeMapper) addImportsForType(goType string, imports map[string]bool) 
 
 // MapTableColumns maps all columns in a table and sets their GoType field.
 // This is used during table struct generation from database introspection.
-func (tm *TypeMapper) MapTableColumns(table *Table) error {
+func (tm *TypeMapper) MapTableColumns(table *table) error {
 	if table == nil {
 		return fmt.Errorf("table cannot be nil")
 	}

@@ -55,23 +55,7 @@ generate:
 	@echo "✅ Code generated"
 
 test: setup generate
-	@echo "Testing application..."
-	@go build -o /tmp/example-app-test ./cmd/blog
-	@if command -v curl >/dev/null 2>&1; then \
-		lsof -ti:8080 | xargs kill -9 2>/dev/null || true; \
-		sleep 1; \
-		DATABASE_URL="$(DATABASE_URL)" /tmp/example-app-test & echo $$! > /tmp/example-app.pid; \
-		sleep 2; \
-		echo "Testing endpoints..."; \
-		curl -f http://localhost:8080/api/health || (kill $$(cat /tmp/example-app.pid) 2>/dev/null; exit 1); \
-		curl -f http://localhost:8080/api/users || (kill $$(cat /tmp/example-app.pid) 2>/dev/null; exit 1); \
-		curl -f http://localhost:8080/api/posts || (kill $$(cat /tmp/example-app.pid) 2>/dev/null; exit 1); \
-		curl -f http://localhost:8080/api/posts/with-stats || (kill $$(cat /tmp/example-app.pid) 2>/dev/null; exit 1); \
-		curl -f http://localhost:8080/api/posts/featured || (kill $$(cat /tmp/example-app.pid) 2>/dev/null; exit 1); \
-		curl -f "http://localhost:8080/api/users/search?q=test" || (kill $$(cat /tmp/example-app.pid) 2>/dev/null; exit 1); \
-		kill $$(cat /tmp/example-app.pid) 2>/dev/null || true; \
-		rm -f /tmp/example-app.pid /tmp/example-app-test; \
-	fi
+	@DATABASE_URL="$(DATABASE_URL)" go test -tags=integration -count=1 -v ./...
 	@echo "✅ Tests passed"
 
 run:

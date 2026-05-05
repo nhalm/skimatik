@@ -9,6 +9,7 @@
 - **[Type Mapping](type-mapping)** - PostgreSQL to Go type reference
 - **[Database Migrations](database-migrations)** - Schema management with golang-migrate
 - **[ID Generation](id-generation)** - Application-side ID generation patterns
+- **[Audit Tables](audit)** - SCD Type 2 history via CTE-based mutations
 - **[Configuration](configuration-reference)** - Complete config options
 
 ### Architecture

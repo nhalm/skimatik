@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/nhalm/pgxkit/v2"
@@ -112,4 +113,90 @@ func (r *UserRepository) GetUser(ctx context.Context, userID uuid.UUID) (*models
 	}
 
 	return userDetail, nil
+}
+
+// CreateUser delegates to the audited generated Create.
+func (r *UserRepository) CreateUser(ctx context.Context, name, email string, bio *string) (*models.UserSummary, error) {
+	user, err := r.Create(ctx, executorFromContext(ctx, r.db), generated.CreateUsersParams{
+		Name:  name,
+		Email: email,
+		Bio:   bio,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+	return &models.UserSummary{
+		ID:       user.Id,
+		Name:     user.Name,
+		Email:    user.Email,
+		IsActive: user.IsActive,
+	}, nil
+}
+
+// UpdateUserName delegates to the audited generated Update, mutating only the
+// name field. The current row is read first so the audit CTE captures a
+// faithful post-image of the unchanged columns.
+func (r *UserRepository) UpdateUserName(ctx context.Context, userID uuid.UUID, name string) (*models.UserSummary, error) {
+	exec := executorFromContext(ctx, r.db)
+	current, err := r.Get(ctx, exec, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read user before update: %w", err)
+	}
+	user, err := r.Update(ctx, exec, userID, generated.UpdateUsersParams{
+		Name:      name,
+		Email:     current.Email,
+		Bio:       current.Bio,
+		IsActive:  current.IsActive,
+		CreatedAt: current.CreatedAt,
+		UpdatedAt: current.UpdatedAt,
+		DeletedAt: current.DeletedAt,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to update user: %w", err)
+	}
+	return &models.UserSummary{
+		ID:       user.Id,
+		Name:     user.Name,
+		Email:    user.Email,
+		IsActive: user.IsActive,
+	}, nil
+}
+
+// GetUserAuditHistory returns the SCD Type 2 history rows for a user, ordered
+// from oldest to newest version.
+func (r *UserRepository) GetUserAuditHistory(ctx context.Context, userID uuid.UUID) ([]models.UserAuditEntry, error) {
+	const q = `
+		SELECT id, parent_id, version, snapshot::text, valid_from, valid_to
+		FROM users_audit
+		WHERE parent_id = $1
+		ORDER BY version ASC
+	`
+	rows, err := executorFromContext(ctx, r.db).Query(ctx, q, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query users_audit: %w", err)
+	}
+	defer rows.Close()
+
+	const tsLayout = "2006-01-02T15:04:05.999999999Z07:00"
+	var entries []models.UserAuditEntry
+	for rows.Next() {
+		var (
+			entry  models.UserAuditEntry
+			start  time.Time
+			endPtr *time.Time
+		)
+		if err := rows.Scan(&entry.ID, &entry.ParentID, &entry.Version, &entry.Snapshot, &start, &endPtr); err != nil {
+			return nil, fmt.Errorf("failed to scan audit row: %w", err)
+		}
+		entry.ValidFrom = start.Format(tsLayout)
+		if endPtr != nil {
+			s := endPtr.Format(tsLayout)
+			entry.ValidTo = &s
+		}
+		entries = append(entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("audit history rows: %w", err)
+	}
+	return entries, nil
 }

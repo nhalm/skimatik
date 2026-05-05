@@ -20,8 +20,7 @@ func NewQueryParser(dir string) *QueryParser {
 	return &QueryParser{dir: dir}
 }
 
-// ParseQueries parses all SQL files in the directory and returns Query objects
-func (qp *QueryParser) ParseQueries() ([]Query, error) {
+func (qp *QueryParser) parseQueries() ([]query, error) {
 	if qp.dir == "" {
 		return nil, fmt.Errorf("queries directory not specified")
 	}
@@ -42,7 +41,7 @@ func (qp *QueryParser) ParseQueries() ([]Query, error) {
 	}
 
 	// Parse each SQL file
-	var allQueries []Query
+	var allQueries []query
 	for _, sqlFile := range sqlFiles {
 		queries, err := qp.parseFile(sqlFile)
 		if err != nil {
@@ -77,15 +76,15 @@ func (qp *QueryParser) findSQLFiles() ([]string, error) {
 // file line by line. It is intentionally unexported and used only by
 // parseFile and its helpers.
 type parseFileState struct {
-	queries           []Query
-	currentQuery      *Query
+	queries           []query
+	currentQuery      *query
 	sqlLines          []string
-	paramAnnotations  []ParameterAnnotation
-	resultAnnotations []ResultAnnotation
+	paramAnnotations  []parameterAnnotation
+	resultAnnotations []resultAnnotation
 }
 
 // parseFile parses a single SQL file and extracts queries with annotations
-func (qp *QueryParser) parseFile(filename string) ([]Query, error) {
+func (qp *QueryParser) parseFile(filename string) ([]query, error) {
 	file, err := os.Open(filename) // #nosec G304 -- user-supplied query file path by design
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
@@ -201,22 +200,22 @@ func (qp *QueryParser) finalizeQuery(state *parseFileState, filename string, lin
 // currentQuery seeded from the annotation. Existing queries already saved in
 // state.queries are preserved.
 func (qp *QueryParser) startNewQuery(state *parseFileState, annotation *QueryAnnotation, filename string) {
-	state.currentQuery = &Query{
+	state.currentQuery = &query{
 		Name:       annotation.Name,
 		Type:       annotation.Type,
 		SourceFile: filename,
-		Parameters: []Parameter{}, // Will be populated by analyzer
-		Columns:    []Column{},    // Will be populated by analyzer
+		Parameters: []parameter{}, // Will be populated by analyzer
+		Columns:    []column{},    // Will be populated by analyzer
 	}
 	state.sqlLines = []string{}
-	state.paramAnnotations = []ParameterAnnotation{}
-	state.resultAnnotations = []ResultAnnotation{}
+	state.paramAnnotations = []parameterAnnotation{}
+	state.resultAnnotations = []resultAnnotation{}
 }
 
 // QueryAnnotation represents a parsed sqlc-style annotation
 type QueryAnnotation struct {
 	Name string
-	Type QueryType
+	Type queryType
 }
 
 // parseAnnotation parses a sqlc-style annotation line
@@ -247,16 +246,16 @@ func (qp *QueryParser) parseAnnotation(line string) *QueryAnnotation {
 }
 
 // parseQueryType converts string to QueryType enum
-func (qp *QueryParser) parseQueryType(typeStr string) (QueryType, error) {
+func (qp *QueryParser) parseQueryType(typeStr string) (queryType, error) {
 	switch strings.ToLower(typeStr) {
 	case "one":
-		return QueryTypeOne, nil
+		return queryTypeOne, nil
 	case "many":
-		return QueryTypeMany, nil
+		return queryTypeMany, nil
 	case "exec":
-		return QueryTypeExec, nil
+		return queryTypeExec, nil
 	case "paginated":
-		return QueryTypePaginated, nil
+		return queryTypePaginated, nil
 	default:
 		return "", fmt.Errorf("invalid query type: %s (supported: one, many, exec, paginated)", typeStr)
 	}
@@ -264,7 +263,7 @@ func (qp *QueryParser) parseQueryType(typeStr string) (QueryType, error) {
 
 // parseParameterAnnotation parses a parameter type annotation
 // Expected format: -- param: $N parameter_name go_type
-func (qp *QueryParser) parseParameterAnnotation(line string) *ParameterAnnotation {
+func (qp *QueryParser) parseParameterAnnotation(line string) *parameterAnnotation {
 	// Regex to match: -- param: $N parameter_name go_type
 	// Type pattern allows: pointers (*), slices ([]), maps (map[]), and qualified names (pkg.Type)
 	paramRegex := regexp.MustCompile(`^--\s*param:\s*\$(\d+)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+(.+?)\s*$`)
@@ -285,7 +284,7 @@ func (qp *QueryParser) parseParameterAnnotation(line string) *ParameterAnnotatio
 		return nil
 	}
 
-	return &ParameterAnnotation{
+	return &parameterAnnotation{
 		Position: position,
 		Name:     paramName,
 		GoType:   goType,
@@ -294,7 +293,7 @@ func (qp *QueryParser) parseParameterAnnotation(line string) *ParameterAnnotatio
 
 // parseResultAnnotation parses a result column type annotation
 // Expected format: -- result: column_name go_type
-func (qp *QueryParser) parseResultAnnotation(line string) *ResultAnnotation {
+func (qp *QueryParser) parseResultAnnotation(line string) *resultAnnotation {
 	// Regex to match: -- result: column_name go_type
 	// Type pattern allows: pointers (*), slices ([]), maps (map[]), and qualified names (pkg.Type)
 	resultRegex := regexp.MustCompile(`^--\s*result:\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+(.+?)\s*$`)
@@ -311,14 +310,14 @@ func (qp *QueryParser) parseResultAnnotation(line string) *ResultAnnotation {
 		return nil
 	}
 
-	return &ResultAnnotation{
+	return &resultAnnotation{
 		ColumnName: columnName,
 		GoType:     goType,
 	}
 }
 
 // validateParameterAnnotations validates parameter annotations for a query
-func (qp *QueryParser) validateParameterAnnotations(query *Query) error {
+func (qp *QueryParser) validateParameterAnnotations(query *query) error {
 	if len(query.ParameterAnnotations) == 0 {
 		return nil
 	}
@@ -350,7 +349,7 @@ func (qp *QueryParser) validateParameterAnnotations(query *Query) error {
 }
 
 // validateResultAnnotations validates result annotations for a query
-func (qp *QueryParser) validateResultAnnotations(query *Query) error {
+func (qp *QueryParser) validateResultAnnotations(query *query) error {
 	if len(query.ResultAnnotations) == 0 {
 		return nil
 	}

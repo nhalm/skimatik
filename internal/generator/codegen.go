@@ -56,7 +56,7 @@ func NewCodeGenerator(config *Config, version string) *CodeGenerator {
 }
 
 // GenerateTableRepository generates a complete repository file for a table
-func (cg *CodeGenerator) GenerateTableRepository(table Table) error {
+func (cg *CodeGenerator) GenerateTableRepository(table table) error {
 	// Map column types
 	if err := cg.typeMapper.MapTableColumns(&table); err != nil {
 		return fmt.Errorf("failed to map column types: %w", err)
@@ -69,7 +69,7 @@ func (cg *CodeGenerator) GenerateTableRepository(table Table) error {
 	}
 
 	// Write to file
-	filename := cg.config.GetOutputPath(table.GoFileName())
+	filename := cg.config.GetOutputPath(table.goFileName())
 	if err := cg.writeCodeToFile(filename, code); err != nil {
 		return fmt.Errorf("failed to write code to file: %w", err)
 	}
@@ -78,7 +78,7 @@ func (cg *CodeGenerator) GenerateTableRepository(table Table) error {
 }
 
 // generateTableCode generates the complete Go code for a table
-func (cg *CodeGenerator) generateTableCode(table Table) (string, error) {
+func (cg *CodeGenerator) generateTableCode(table table) (string, error) {
 	// Get required imports from column types
 	typeImports := cg.typeMapper.GetRequiredImports(table.Columns)
 
@@ -150,7 +150,7 @@ func (cg *CodeGenerator) combineImports(lists ...[]string) []string {
 }
 
 // getQueryImports returns the imports needed for all queries
-func (cg *CodeGenerator) getQueryImports(queries []Query) []string {
+func (cg *CodeGenerator) getQueryImports(queries []query) []string {
 	importSet := make(map[string]bool)
 
 	hasPaginatedQueries := false
@@ -189,10 +189,10 @@ func (cg *CodeGenerator) getQueryImports(queries []Query) []string {
 }
 
 // convertParametersToColumns converts parameters to columns for import calculation
-func convertParametersToColumns(params []Parameter) []Column {
-	columns := make([]Column, 0, len(params))
+func convertParametersToColumns(params []parameter) []column {
+	columns := make([]column, 0, len(params))
 	for _, param := range params {
-		columns = append(columns, Column{
+		columns = append(columns, column{
 			Name:   param.Name,
 			Type:   param.Type,
 			GoType: param.GoType,
@@ -202,7 +202,7 @@ func convertParametersToColumns(params []Parameter) []Column {
 }
 
 // generateEnhancedFeatures generates enhanced pgxkit features (retry methods)
-func (cg *CodeGenerator) generateEnhancedFeatures(table Table) (string, error) {
+func (cg *CodeGenerator) generateEnhancedFeatures(table table) (string, error) {
 	var code strings.Builder
 
 	// Prepare template data
@@ -221,9 +221,9 @@ func (cg *CodeGenerator) generateEnhancedFeatures(table Table) (string, error) {
 }
 
 // generateStruct generates the Go struct for a table
-func (cg *CodeGenerator) generateStruct(table Table) (string, error) {
+func (cg *CodeGenerator) generateStruct(table table) (string, error) {
 	// Prepare template data
-	idColumn := table.GetPrimaryKeyColumn()
+	idColumn := table.getPrimaryKeyColumn()
 	data := struct {
 		StructName   string
 		TableName    string
@@ -236,10 +236,10 @@ func (cg *CodeGenerator) generateStruct(table Table) (string, error) {
 			Tag  string
 		}
 	}{
-		StructName:   table.GoStructName(),
+		StructName:   table.goStructName(),
 		TableName:    table.Name,
-		ReceiverName: strings.ToLower(table.GoStructName()[:1]),
-		IDField:      idColumn.GoFieldName(),
+		ReceiverName: strings.ToLower(table.goStructName()[:1]),
+		IDField:      idColumn.goFieldName(),
 		IDType:       idColumn.GoType,
 	}
 
@@ -250,9 +250,9 @@ func (cg *CodeGenerator) generateStruct(table Table) (string, error) {
 			Type string
 			Tag  string
 		}{
-			Name: col.GoFieldName(),
+			Name: col.goFieldName(),
 			Type: col.GoType,
-			Tag:  col.GoStructTag(),
+			Tag:  col.goStructTag(),
 		}
 		data.Fields = append(data.Fields, field)
 	}
@@ -262,8 +262,8 @@ func (cg *CodeGenerator) generateStruct(table Table) (string, error) {
 }
 
 // generateRepository generates the repository struct and constructor
-func (cg *CodeGenerator) generateRepository(table Table) (string, error) {
-	idColumn := table.GetPrimaryKeyColumn()
+func (cg *CodeGenerator) generateRepository(table table) (string, error) {
+	idColumn := table.getPrimaryKeyColumn()
 	if idColumn == nil {
 		return "", fmt.Errorf("table %s has no primary key", table.Name)
 	}
@@ -275,10 +275,10 @@ func (cg *CodeGenerator) generateRepository(table Table) (string, error) {
 		IDType         string
 		IsUUIDType     bool
 	}{
-		RepositoryName: table.GoStructName() + "Repository",
+		RepositoryName: table.goStructName() + "Repository",
 		TableName:      table.Name,
 		IDType:         idColumn.GoType,
-		IsUUIDType:     idColumn.IsUUID(),
+		IsUUIDType:     idColumn.isUUID(),
 	}
 
 	// Execute template using template manager
@@ -286,26 +286,32 @@ func (cg *CodeGenerator) generateRepository(table Table) (string, error) {
 }
 
 // generateCRUDOperations generates specified CRUD operations for a table
-func (cg *CodeGenerator) generateCRUDOperations(table Table) (string, error) {
+func (cg *CodeGenerator) generateCRUDOperations(table table) (string, error) {
 	var code strings.Builder
 
-	// Generate template data
 	data := cg.prepareCRUDTemplateData(table)
 
-	// Get the functions to generate for this table
 	functions := cg.config.GetTableFunctions(table.Name)
 
-	// Map function names to templates (using template manager)
+	// Audited tables route create/update through CTE-based templates. Delete
+	// is generated normally — whether deletion is permitted is a database
+	// policy concern enforced via Postgres roles, not by codegen.
+	createTemplate := TemplateCreate
+	updateTemplate := TemplateUpdate
+	if table.Audit {
+		createTemplate = TemplateCreateAudited
+		updateTemplate = TemplateUpdateAudited
+	}
+
 	operationTemplates := map[string]string{
 		"get":      TemplateGetByID,
-		"create":   TemplateCreate,
-		"update":   TemplateUpdate,
+		"create":   createTemplate,
+		"update":   updateTemplate,
 		"delete":   TemplateDelete,
 		"list":     TemplateList,
 		"paginate": TemplatePaginationSharedListPaginated,
 	}
 
-	// Generate each requested CRUD operation
 	first := true
 	for _, function := range functions {
 		templateStr, exists := operationTemplates[function]
@@ -348,18 +354,17 @@ func (cg *CodeGenerator) generateCRUDOperations(table Table) (string, error) {
 	return code.String(), nil
 }
 
-// prepareCRUDTemplateData prepares the data structure for CRUD templates.
-// All inputs come from already-validated schema introspection, so no error
-// path is required.
-func (cg *CodeGenerator) prepareCRUDTemplateData(table Table) map[string]any {
-	structName := table.GoStructName()
+// prepareCRUDTemplateData builds the template data shared by all CRUD
+// templates. Audited variants place the row ID at $1 so closed-audit and
+// parent-update CTEs share the placeholder, pushing SET assignments to $2..$N.
+func (cg *CodeGenerator) prepareCRUDTemplateData(table table) map[string]any {
+	structName := table.goStructName()
 	repositoryName := structName + "Repository"
 	receiverName := strings.ToLower(structName[:1])
-	idColumn := table.GetPrimaryKeyColumn()
+	idColumn := table.getPrimaryKeyColumn()
 	createParamIndex := 1
 	updateParamIndex := 1
 
-	// Build column lists
 	var selectColumns []string
 	var scanArgs []string
 	var createFields []map[string]string
@@ -369,71 +374,86 @@ func (cg *CodeGenerator) prepareCRUDTemplateData(table Table) map[string]any {
 	var insertArgs []string
 	var updateAssignments []string
 	var updateArgs []string
+	var auditedUpdateAssignments []string
 
-	// First, add ID column to insert lists
 	insertColumns = append(insertColumns, idColumn.Name)
 	insertPlaceholders = append(insertPlaceholders, fmt.Sprintf("$%d", createParamIndex))
 	insertArgs = append(insertArgs, "id")
 	createParamIndex++
 
 	for _, col := range table.Columns {
-		// Select columns and scan args (for all operations)
 		selectColumns = append(selectColumns, col.Name)
-		scanArgs = append(scanArgs, "&"+receiverName+"."+col.GoFieldName())
+		scanArgs = append(scanArgs, "&"+receiverName+"."+col.goFieldName())
 
-		// Skip ID column for create/update params (it's auto-generated in code)
 		if col.Name == idColumn.Name {
 			continue
 		}
 
-		// Create fields (exclude ID and columns with defaults)
 		if col.DefaultValue == "" {
 			createFields = append(createFields, map[string]string{
-				"Name": col.GoFieldName(),
+				"Name": col.goFieldName(),
 				"Type": col.GoType,
-				"Tag":  col.GoStructTag(),
+				"Tag":  col.goStructTag(),
 			})
 
 			insertColumns = append(insertColumns, col.Name)
 			insertPlaceholders = append(insertPlaceholders, fmt.Sprintf("$%d", createParamIndex))
-			insertArgs = append(insertArgs, "params."+col.GoFieldName())
+			insertArgs = append(insertArgs, "params."+col.goFieldName())
 			createParamIndex++
 		}
 
-		// Update fields (all non-ID columns)
 		updateFields = append(updateFields, map[string]string{
-			"Name": col.GoFieldName(),
+			"Name": col.goFieldName(),
 			"Type": col.GoType,
-			"Tag":  col.GoStructTag(),
+			"Tag":  col.goStructTag(),
 		})
 
 		updateAssignments = append(updateAssignments, fmt.Sprintf("%s = $%d", col.Name, updateParamIndex))
-		updateArgs = append(updateArgs, "params."+col.GoFieldName())
+		auditedUpdateAssignments = append(auditedUpdateAssignments, fmt.Sprintf("%s = $%d", col.Name, updateParamIndex+1))
+		updateArgs = append(updateArgs, "params."+col.goFieldName())
 		updateParamIndex++
 	}
 
-	// ID parameter comes last in update
+	// Non-audited update places ID last; audited variants place it first so
+	// the closed-audit and parent-update CTEs share $1.
 	updateArgs = append(updateArgs, "id")
 	idParamIndex := updateParamIndex
+	auditedUpdateArgs := append([]string{"id"}, updateArgs[:len(updateArgs)-1]...)
+
+	// Audited Create/Update generate the audit row id Go-side (UUIDv7) and
+	// pass it as the last positional parameter. createParamIndex and
+	// updateParamIndex are now the next free slot in their respective queries.
+	createAuditIDIndex := createParamIndex
+	updateAuditIDIndex := updateParamIndex + 1
+
+	auditedInsertArgs := append([]string{}, insertArgs...)
+	auditedInsertArgs = append(auditedInsertArgs, "auditID")
+	auditedUpdateArgs = append(auditedUpdateArgs, "auditID")
 
 	return map[string]any{
-		"StructName":         structName,
-		"RepositoryName":     repositoryName,
-		"ReceiverName":       receiverName,
-		"TableName":          table.Name,
-		"IDColumn":           idColumn.Name,
-		"IDColumnType":       idColumn.Type,
-		"IDType":             idColumn.GoType,
-		"IDParamIndex":       idParamIndex,
-		"SelectColumns":      strings.Join(selectColumns, ", "),
-		"ScanArgs":           strings.Join(scanArgs, ", "),
-		"CreateFields":       createFields,
-		"UpdateFields":       updateFields,
-		"InsertColumns":      strings.Join(insertColumns, ", "),
-		"InsertPlaceholders": strings.Join(insertPlaceholders, ", "),
-		"InsertArgs":         strings.Join(insertArgs, ", "),
-		"UpdateColumns":      strings.Join(updateAssignments, ", "),
-		"UpdateArgs":         strings.Join(updateArgs, ", "),
+		"StructName":           structName,
+		"RepositoryName":       repositoryName,
+		"ReceiverName":         receiverName,
+		"TableName":            table.Name,
+		"AuditTableName":       table.Name + "_audit",
+		"IDColumn":             idColumn.Name,
+		"IDColumnType":         idColumn.Type,
+		"IDType":               idColumn.GoType,
+		"IDParamIndex":         idParamIndex,
+		"SelectColumns":        strings.Join(selectColumns, ", "),
+		"ScanArgs":             strings.Join(scanArgs, ", "),
+		"CreateFields":         createFields,
+		"UpdateFields":         updateFields,
+		"InsertColumns":        strings.Join(insertColumns, ", "),
+		"InsertPlaceholders":   strings.Join(insertPlaceholders, ", "),
+		"InsertArgs":           strings.Join(insertArgs, ", "),
+		"UpdateColumns":        strings.Join(updateAssignments, ", "),
+		"UpdateArgs":           strings.Join(updateArgs, ", "),
+		"AuditedInsertArgs":    strings.Join(auditedInsertArgs, ", "),
+		"AuditedUpdateColumns": strings.Join(auditedUpdateAssignments, ", "),
+		"AuditedUpdateArgs":    strings.Join(auditedUpdateArgs, ", "),
+		"CreateAuditIDParam":   fmt.Sprintf("$%d", createAuditIDIndex),
+		"UpdateAuditIDParam":   fmt.Sprintf("$%d", updateAuditIDIndex),
 	}
 }
 
@@ -576,7 +596,7 @@ func (cg *CodeGenerator) writeCodeToFile(filename, code string) error {
 	return nil
 }
 
-func (cg *CodeGenerator) GenerateQueries(queries []Query) error {
+func (cg *CodeGenerator) GenerateQueries(queries []query) error {
 	if len(queries) == 0 {
 		return nil
 	}
@@ -595,8 +615,8 @@ func (cg *CodeGenerator) GenerateQueries(queries []Query) error {
 }
 
 // groupQueriesByFile groups queries by their source file
-func (cg *CodeGenerator) groupQueriesByFile(queries []Query) map[string][]Query {
-	groups := make(map[string][]Query)
+func (cg *CodeGenerator) groupQueriesByFile(queries []query) map[string][]query {
+	groups := make(map[string][]query)
 	for i := range queries {
 		groups[queries[i].SourceFile] = append(groups[queries[i].SourceFile], queries[i])
 	}
@@ -604,7 +624,7 @@ func (cg *CodeGenerator) groupQueriesByFile(queries []Query) map[string][]Query 
 }
 
 // generateQueryFile generates a complete Go file for a group of queries from the same source file
-func (cg *CodeGenerator) generateQueryFile(sourceFile string, queries []Query) error {
+func (cg *CodeGenerator) generateQueryFile(sourceFile string, queries []query) error {
 	if len(queries) == 0 {
 		return nil
 	}
@@ -618,7 +638,7 @@ func (cg *CodeGenerator) generateQueryFile(sourceFile string, queries []Query) e
 	}
 
 	// Get output filename from first query (they all have the same source file)
-	filename := cg.config.GetOutputPath(queries[0].GoFileName())
+	filename := cg.config.GetOutputPath(queries[0].goFileName())
 
 	// Write to file
 	if err := cg.writeCodeToFile(filename, code); err != nil {
@@ -629,7 +649,7 @@ func (cg *CodeGenerator) generateQueryFile(sourceFile string, queries []Query) e
 }
 
 // generateQueryCode generates the complete Go code for a group of queries from the same source file
-func (cg *CodeGenerator) generateQueryCode(sourceFile string, queries []Query) (string, error) {
+func (cg *CodeGenerator) generateQueryCode(sourceFile string, queries []query) (string, error) {
 	// Get required imports from all queries
 	allImports := cg.getQueryImports(queries)
 
@@ -643,7 +663,7 @@ func (cg *CodeGenerator) generateQueryCode(sourceFile string, queries []Query) (
 	// Check if any queries are paginated
 	hasPaginatedQueries := false
 	for i := range queries {
-		if queries[i].Type == QueryTypePaginated {
+		if queries[i].Type == queryTypePaginated {
 			hasPaginatedQueries = true
 			break
 		}
@@ -713,18 +733,18 @@ func (cg *CodeGenerator) generateQueryCode(sourceFile string, queries []Query) (
 // Query generation helper methods moved from query_templates.go
 
 // needsResultStruct determines if a query needs a custom result struct
-func (cg *CodeGenerator) needsResultStruct(query Query) bool {
+func (cg *CodeGenerator) needsResultStruct(query query) bool {
 	// Only SELECT queries (:one, :many, :paginated) need result structs
-	return query.Type == QueryTypeOne || query.Type == QueryTypeMany || query.Type == QueryTypePaginated
+	return query.Type == queryTypeOne || query.Type == queryTypeMany || query.Type == queryTypePaginated
 }
 
 // getQueryResultStructName returns the struct name for a query's result
-func (cg *CodeGenerator) getQueryResultStructName(query Query) string {
-	return query.GoFunctionName() + "Result"
+func (cg *CodeGenerator) getQueryResultStructName(query query) string {
+	return query.goFunctionName() + "Result"
 }
 
 // generateQueryResultStruct generates a result struct for a query
-func (cg *CodeGenerator) generateQueryResultStruct(query Query) (string, error) {
+func (cg *CodeGenerator) generateQueryResultStruct(query query) (string, error) {
 	if len(query.Columns) == 0 {
 		return "", fmt.Errorf("query %s has no columns for result struct", query.Name)
 	}
@@ -753,15 +773,15 @@ func (cg *CodeGenerator) generateQueryResultStruct(query Query) (string, error) 
 			Type string
 			Tag  string
 		}{
-			Name: col.GoFieldName(),
+			Name: col.goFieldName(),
 			Type: col.GoType,
-			Tag:  col.GoStructTag(),
+			Tag:  col.goStructTag(),
 		}
 		data.Fields = append(data.Fields, field)
 
 		// Use the first field named "id" or ending with "_id" as the ID field for pagination
 		if data.IDField == "" && (col.Name == "id" || strings.HasSuffix(col.Name, "_id")) {
-			data.IDField = col.GoFieldName()
+			data.IDField = col.goFieldName()
 			data.IDType = col.GoType
 			data.IDFieldIsPgtype = col.GoType == "pgtype.UUID"
 		}
@@ -772,7 +792,7 @@ func (cg *CodeGenerator) generateQueryResultStruct(query Query) (string, error) 
 }
 
 // generateQueryRepository generates the repository struct and constructor for queries
-func (cg *CodeGenerator) generateQueryRepository(sourceFile string, _ []Query) (string, error) {
+func (cg *CodeGenerator) generateQueryRepository(sourceFile string, _ []query) (string, error) {
 	// Extract base name from source file path for repository name
 	parts := strings.Split(sourceFile, "/")
 	filename := parts[len(parts)-1]
@@ -793,15 +813,15 @@ func (cg *CodeGenerator) generateQueryRepository(sourceFile string, _ []Query) (
 }
 
 // generateQueryFunction generates a Go function for a specific query
-func (cg *CodeGenerator) generateQueryFunction(query Query) (string, error) {
+func (cg *CodeGenerator) generateQueryFunction(query query) (string, error) {
 	switch query.Type {
-	case QueryTypeOne:
+	case queryTypeOne:
 		return cg.generateOneQueryFunction(query)
-	case QueryTypeMany:
+	case queryTypeMany:
 		return cg.generateManyQueryFunction(query)
-	case QueryTypeExec:
+	case queryTypeExec:
 		return cg.generateExecQueryFunction(query)
-	case QueryTypePaginated:
+	case queryTypePaginated:
 		return cg.generatePaginatedQueryFunction(query)
 	default:
 		return "", fmt.Errorf("unsupported query type: %s", query.Type)
@@ -809,25 +829,25 @@ func (cg *CodeGenerator) generateQueryFunction(query Query) (string, error) {
 }
 
 // generateOneQueryFunction generates a function that returns a single row
-func (cg *CodeGenerator) generateOneQueryFunction(query Query) (string, error) {
+func (cg *CodeGenerator) generateOneQueryFunction(query query) (string, error) {
 	data := cg.prepareQueryTemplateData(query)
 	return cg.templateMgr.ExecuteTemplate(TemplateQueryOne, data)
 }
 
 // generateManyQueryFunction generates a function that returns multiple rows
-func (cg *CodeGenerator) generateManyQueryFunction(query Query) (string, error) {
+func (cg *CodeGenerator) generateManyQueryFunction(query query) (string, error) {
 	data := cg.prepareQueryTemplateData(query)
 	return cg.templateMgr.ExecuteTemplate(TemplateQueryMany, data)
 }
 
 // generateExecQueryFunction generates a function that executes without returning rows
-func (cg *CodeGenerator) generateExecQueryFunction(query Query) (string, error) {
+func (cg *CodeGenerator) generateExecQueryFunction(query query) (string, error) {
 	data := cg.prepareQueryTemplateData(query)
 	return cg.templateMgr.ExecuteTemplate(TemplateQueryExec, data)
 }
 
 // generatePaginatedQueryFunction generates a function that returns paginated results
-func (cg *CodeGenerator) generatePaginatedQueryFunction(query Query) (string, error) {
+func (cg *CodeGenerator) generatePaginatedQueryFunction(query query) (string, error) {
 	data := cg.prepareQueryTemplateData(query)
 	return cg.templateMgr.ExecuteTemplate(TemplateQueryPaginated, data)
 }
@@ -835,7 +855,7 @@ func (cg *CodeGenerator) generatePaginatedQueryFunction(query Query) (string, er
 // prepareQueryTemplateData prepares common template data for query functions.
 // All inputs come from already-validated query analysis, so no error path
 // is required.
-func (cg *CodeGenerator) prepareQueryTemplateData(query Query) map[string]any {
+func (cg *CodeGenerator) prepareQueryTemplateData(query query) map[string]any {
 	// Extract base name from source file for repository name
 	parts := strings.Split(query.SourceFile, "/")
 	filename := parts[len(parts)-1]
@@ -884,12 +904,12 @@ func (cg *CodeGenerator) prepareQueryTemplateData(query Query) map[string]any {
 	// Build scan arguments for result columns
 	scanArgs := make([]string, 0, len(query.Columns))
 	for _, col := range query.Columns {
-		scanArgs = append(scanArgs, "&result."+col.GoFieldName())
+		scanArgs = append(scanArgs, "&result."+col.goFieldName())
 	}
 
 	// Determine result type
 	resultType := cg.getQueryResultStructName(query)
-	if query.Type == QueryTypeExec {
+	if query.Type == queryTypeExec {
 		resultType = "" // Exec queries don't return data
 	}
 
@@ -907,7 +927,7 @@ func (cg *CodeGenerator) prepareQueryTemplateData(query Query) map[string]any {
 	}
 
 	return map[string]any{
-		"FunctionName":          query.GoFunctionName(),
+		"FunctionName":          query.goFunctionName(),
 		"QueryName":             query.Name,
 		"RepositoryName":        repositoryName,
 		"SQL":                   query.SQL,

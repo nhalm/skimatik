@@ -328,6 +328,115 @@ tables:
 	}
 }
 
+func TestLoadConfig_TableAudit(t *testing.T) {
+	tests := []struct {
+		name        string
+		yamlContent string
+		tableName   string
+		expected    bool
+		description string
+	}{
+		{
+			name: "audit true",
+			yamlContent: `
+database:
+  dsn: "postgres://test"
+output:
+  directory: "./test"
+tables:
+  posts:
+    audit: true
+`,
+			tableName:   "posts",
+			expected:    true,
+			description: "audit: true should parse as true",
+		},
+		{
+			name: "audit omitted defaults to false",
+			yamlContent: `
+database:
+  dsn: "postgres://test"
+output:
+  directory: "./test"
+tables:
+  posts:
+`,
+			tableName:   "posts",
+			expected:    false,
+			description: "audit omitted should default to false",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			configPath := filepath.Join(tempDir, "config.yaml")
+
+			if err := os.WriteFile(configPath, []byte(tt.yamlContent), 0o644); err != nil {
+				t.Fatalf("failed to write test config file: %v", err)
+			}
+
+			cfg, err := LoadConfig(configPath)
+			if err != nil {
+				t.Fatalf("LoadConfig() failed: %v", err)
+			}
+
+			tc, ok := cfg.TableConfigs[tt.tableName]
+			if !ok {
+				t.Fatalf("expected TableConfigs[%q] to exist", tt.tableName)
+			}
+			if tc.Audit != tt.expected {
+				t.Errorf("TableConfigs[%q].Audit = %v, want %v\nDescription: %s",
+					tt.tableName, tc.Audit, tt.expected, tt.description)
+			}
+
+			if got := cfg.IsTableAudited(tt.tableName); got != tt.expected {
+				t.Errorf("IsTableAudited(%q) = %v, want %v",
+					tt.tableName, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestTableAuditPropagation(t *testing.T) {
+	cfg := &Config{
+		Include: []string{"posts", "comments"},
+		TableConfigs: map[string]TableConfig{
+			"posts":    {Audit: true},
+			"comments": {Audit: false},
+		},
+	}
+	g := &Generator{config: cfg}
+
+	introspected := []table{
+		{Name: "posts", Schema: "public"},
+		{Name: "comments", Schema: "public"},
+		{Name: "tags", Schema: "public"},
+	}
+
+	resolvedSlice := g.resolveTables(introspected)
+	resolved := make(map[string]table, len(resolvedSlice))
+	for _, tbl := range resolvedSlice {
+		resolved[tbl.Name] = tbl
+	}
+
+	if got := resolved["posts"].Audit; got != true {
+		t.Errorf("posts.Audit = %v, want true", got)
+	}
+	if got, ok := resolved["comments"]; !ok || got.Audit != false {
+		t.Errorf("comments.Audit = %v (present=%v), want false (present=true)", got.Audit, ok)
+	}
+	if _, ok := resolved["tags"]; ok {
+		t.Errorf("tags should be filtered out by Include")
+	}
+
+	for _, tbl := range introspected {
+		if tbl.Audit {
+			t.Errorf("resolveTables mutated input slice: %s.Audit=true", tbl.Name)
+		}
+	}
+}
+
 // Helper function to compare string slices
 func stringSlicesEqual(a, b []string) bool {
 	if len(a) != len(b) {

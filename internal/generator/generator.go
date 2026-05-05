@@ -80,16 +80,62 @@ func (g *Generator) shutdownDB() {
 	}
 }
 
-// generateTablesStage emits the shared support files plus per-table
-// repository code. It is the table-mode entry point used by Generate.
+// generateTablesStage emits the shared support files plus per-table repository
+// code. The audit pre-flight gate runs before any file is written; if
+// validation fails, the output directory is left untouched.
 func (g *Generator) generateTablesStage(ctx context.Context) error {
+	if g.config.Verbose {
+		slog.Info("Starting table introspection")
+	}
+	tables, err := g.introspect.getTables(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to introspect tables: %w", err)
+	}
+	if g.config.Verbose {
+		slog.Info("Found tables in schema", "count", len(tables), "schema", g.config.Schema)
+	}
+	resolved := g.resolveTables(tables)
+
+	if err := g.validateAuditTables(ctx, resolved); err != nil {
+		return err
+	}
+
 	if err := g.generateSharedFiles(true); err != nil {
 		return err
 	}
-	if err := g.generateTables(ctx); err != nil {
+
+	if err := g.generateTablesFromResolved(ctx, resolved); err != nil {
 		return fmt.Errorf("table generation failed: %w", err)
 	}
 	return nil
+}
+
+// validateAuditTables runs the audit pre-flight gate over already-resolved
+// tables. The validator's error contains a multi-line copy-pasteable DDL block;
+// it is returned unwrapped so the formatting reaches the user intact.
+func (g *Generator) validateAuditTables(ctx context.Context, resolved []table) error {
+	parents := make(map[string]table)
+	for i := range resolved {
+		if !resolved[i].Audit {
+			continue
+		}
+		parents[resolved[i].Name] = resolved[i]
+	}
+	if len(parents) == 0 {
+		return nil
+	}
+
+	auditNames := make([]string, 0, len(parents))
+	for name := range parents {
+		auditNames = append(auditNames, name+"_audit")
+	}
+
+	audits, err := g.introspect.getTablesByName(ctx, auditNames)
+	if err != nil {
+		return fmt.Errorf("audit pre-flight: failed to introspect audit tables: %w", err)
+	}
+
+	return ValidateAuditTables(parents, audits)
 }
 
 // generateQueriesStage emits any shared support files needed by query-only
@@ -143,47 +189,28 @@ func (g *Generator) connect(ctx context.Context) error {
 	return nil
 }
 
-// generateTables generates repositories for database tables
-func (g *Generator) generateTables(ctx context.Context) error {
+// generateTablesFromResolved emits per-table repository code for the supplied
+// resolved tables. Introspection and resolveTables filtering are the caller's
+// responsibility; this lets the table-generation stage interleave the audit
+// pre-flight gate between resolution and per-table codegen.
+func (g *Generator) generateTablesFromResolved(_ context.Context, resolved []table) error {
 	if g.config.Verbose {
-		slog.Info("Starting table introspection")
+		slog.Info("Generating code for tables after filtering", "count", len(resolved))
 	}
 
-	// Get all tables in the schema
-	tables, err := g.introspect.GetTables(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to introspect tables: %w", err)
-	}
-
-	if g.config.Verbose {
-		slog.Info("Found tables in schema", "count", len(tables), "schema", g.config.Schema)
-	}
-
-	// Filter tables based on include patterns
-	var filteredTables []Table
-	for _, table := range tables {
-		if g.config.ShouldIncludeTable(table.Name) {
-			filteredTables = append(filteredTables, table)
-		}
-	}
-
-	if g.config.Verbose {
-		slog.Info("Generating code for tables after filtering", "count", len(filteredTables))
-	}
-
-	// Generate code for each table
-	for _, table := range filteredTables {
+	for i := range resolved {
+		table := &resolved[i]
 		if g.config.Verbose {
 			slog.Info("Generating repository for table", "table", table.Name)
 		}
 
 		// Validate table has single-column primary key
-		if err := g.validateTablePrimaryKey(table); err != nil {
+		if err := g.validateTablePrimaryKey(*table); err != nil {
 			return fmt.Errorf("table %s validation failed: %w", table.Name, err)
 		}
 
 		// Generate repository code
-		if err := g.codegen.GenerateTableRepository(table); err != nil {
+		if err := g.codegen.GenerateTableRepository(*table); err != nil {
 			return fmt.Errorf("failed to generate repository for table %s: %w", table.Name, err)
 		}
 	}
@@ -219,7 +246,7 @@ func (g *Generator) generateQueries(ctx context.Context) error {
 
 	// Parse SQL files
 	parser := NewQueryParser(g.config.QueriesDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		return fmt.Errorf("failed to parse queries: %w", err)
 	}
@@ -248,8 +275,24 @@ func (g *Generator) generateQueries(ctx context.Context) error {
 	return nil
 }
 
+// resolveTables filters introspected tables by Include patterns and propagates
+// per-table configuration (e.g. Audit) onto the resolved values. The input
+// slice is not mutated.
+func (g *Generator) resolveTables(tables []table) []table {
+	resolved := make([]table, 0, len(tables))
+	for i := range tables {
+		if !g.config.ShouldIncludeTable(tables[i].Name) {
+			continue
+		}
+		t := tables[i]
+		t.Audit = g.config.IsTableAudited(t.Name)
+		resolved = append(resolved, t)
+	}
+	return resolved
+}
+
 // validateTablePrimaryKey ensures the table has a single-column primary key
-func (g *Generator) validateTablePrimaryKey(table Table) error {
+func (g *Generator) validateTablePrimaryKey(table table) error {
 	if len(table.PrimaryKey) == 0 {
 		return fmt.Errorf("table has no primary key")
 	}
@@ -259,7 +302,7 @@ func (g *Generator) validateTablePrimaryKey(table Table) error {
 	}
 
 	pkColumn := table.PrimaryKey[0]
-	column := table.GetColumn(pkColumn)
+	column := table.getColumn(pkColumn)
 	if column == nil {
 		return fmt.Errorf("primary key column %s not found", pkColumn)
 	}

@@ -27,11 +27,11 @@ func getTestDB(t *testing.T) *pgxkit.DB {
 }
 
 // getTestTable returns a standardized test table for code generation tests
-func getTestTable() Table {
-	return Table{
+func getTestTable() table {
+	return table{
 		Name:   "users",
 		Schema: "public",
-		Columns: []Column{
+		Columns: []column{
 			{
 				Name:         "id",
 				Type:         "uuid",
@@ -82,7 +82,7 @@ func getTestTable() Table {
 			},
 		},
 		PrimaryKey: []string{"id"},
-		Indexes:    []Index{},
+		Indexes:    []index{},
 	}
 }
 

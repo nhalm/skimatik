@@ -13,10 +13,13 @@ default_functions: "all"
 queries:
   directory: "./internal/repository/queries"
 
-# Also generate from tables
+# `audit: true` opts a parent table into SCD Type 2 history; the companion
+# `<table>_audit` table is created in migration 000005. See /docs/audit.md.
 tables:
   users:
+    audit: true
   posts:
+    audit: true
   comments:
 
 verbose: true 

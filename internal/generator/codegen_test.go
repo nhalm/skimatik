@@ -126,3 +126,51 @@ func TestCodeGenerator_GenerateTableRepository_Integration(t *testing.T) {
 		t.Error("Generated file seems too short")
 	}
 }
+
+// TestCodeGenerator_GenerateTableRepository_Audited verifies that flagging a
+// Table with Audit: true routes Create/Update through the CTE-based audited
+// templates while leaving Delete unchanged.
+func TestCodeGenerator_GenerateTableRepository_Audited(t *testing.T) {
+	config := getTestConfigWithTempDir(t)
+	cg := NewCodeGenerator(config, "test")
+
+	table := getTestTable()
+	table.Audit = true
+
+	if err := cg.GenerateTableRepository(table); err != nil {
+		t.Fatalf("GenerateTableRepository failed: %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(config.OutputDir, "users_generated.go"))
+	if err != nil {
+		t.Fatalf("Failed to read generated file: %v", err)
+	}
+	contentStr := string(content)
+
+	mustContain := []string{
+		"WITH closed AS",
+		"to_jsonb(updated.*)",
+		"to_jsonb(inserted.*)",
+		"auditID := UUIDv7()",
+		"users_audit",
+		"MAX(version)",
+	}
+	for _, sub := range mustContain {
+		if !strings.Contains(contentStr, sub) {
+			t.Errorf("expected generated source to contain %q; not found", sub)
+		}
+	}
+
+	// Audit row id must be parameterized, not gen_random_uuid().
+	if strings.Contains(contentStr, "gen_random_uuid()") {
+		t.Errorf("generated source still contains gen_random_uuid(); audit row IDs should be Go-generated UUIDv7")
+	}
+	// SELECT clause inside the audited INSERT-SELECT must lead with a positional
+	// parameter for the audit id, not a database-side function.
+	if !strings.Contains(contentStr, "to_jsonb(inserted.*), NOW() FROM inserted") {
+		t.Errorf("generated CREATE source missing canonical to_jsonb(inserted.*), NOW() FROM inserted shape")
+	}
+	if !strings.Contains(contentStr, ", auditID)") {
+		t.Errorf("generated source missing auditID arg threaded into ExecuteQueryRow call")
+	}
+}
