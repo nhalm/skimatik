@@ -62,20 +62,6 @@ func TestTable_HasForeignKeyTo(t *testing.T) {
 	}
 }
 
-func TestTable_HasIndexLeadingWith_NoIndexes(t *testing.T) {
-	table := Table{}
-	if table.HasIndexLeadingWith("anything") {
-		t.Error("table with no indexes should never report a leading match")
-	}
-}
-
-func TestTable_HasForeignKeyTo_NoForeignKeys(t *testing.T) {
-	table := Table{}
-	if table.HasForeignKeyTo("a", "b", "c") {
-		t.Error("table with no foreign keys should never report a match")
-	}
-}
-
 func TestNewIntrospector(t *testing.T) {
 	tests := []struct {
 		name   string

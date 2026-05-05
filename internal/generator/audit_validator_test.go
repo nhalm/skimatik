@@ -64,47 +64,10 @@ func TestValidateAuditTables_Errors(t *testing.T) {
 			wantContains: []string{"posts_audit not found"},
 		},
 		{
-			name:    "wrong column type",
-			parents: map[string]Table{"posts": parentFixture("posts")},
-			audits: func() map[string]Table {
-				a := auditFixture("posts")
-				for i := range a.Columns {
-					if a.Columns[i].Name == "snapshot" {
-						a.Columns[i].Type = "text"
-					}
-				}
-				return map[string]Table{"posts_audit": a}
-			}(),
-			wantContains: []string{"type mismatch"},
-		},
-		{
-			name:    "missing FK",
-			parents: map[string]Table{"posts": parentFixture("posts")},
-			audits: func() map[string]Table {
-				a := auditFixture("posts")
-				a.ForeignKeys = nil
-				return map[string]Table{"posts_audit": a}
-			}(),
-			wantContains: []string{"missing foreign key"},
-		},
-		{
-			name:    "missing unique index on (parent_id, version)",
-			parents: map[string]Table{"posts": parentFixture("posts")},
-			audits: func() map[string]Table {
-				a := auditFixture("posts")
-				kept := a.Indexes[:0]
-				for _, idx := range a.Indexes {
-					if !idx.IsUnique {
-						kept = append(kept, idx)
-					}
-				}
-				a.Indexes = kept
-				return map[string]Table{"posts_audit": a}
-			}(),
-			wantContains: []string{"missing UNIQUE index on (parent_id, version)"},
-		},
-		{
 			name: "aggregates two parents",
+			// posts_audit drops indexes AND foreign keys (covers missing index +
+			// missing FK legs). users_audit retains FK/indexes but mistypes
+			// the snapshot column (covers type-mismatch leg).
 			parents: map[string]Table{
 				"posts": parentFixture("posts"),
 				"users": parentFixture("users"),
@@ -112,6 +75,7 @@ func TestValidateAuditTables_Errors(t *testing.T) {
 			audits: func() map[string]Table {
 				posts := auditFixture("posts")
 				posts.Indexes = nil
+				posts.ForeignKeys = nil
 				users := auditFixture("users")
 				for i := range users.Columns {
 					if users.Columns[i].Name == "snapshot" {
@@ -123,6 +87,7 @@ func TestValidateAuditTables_Errors(t *testing.T) {
 			wantContains: []string{
 				"posts_audit missing index on (parent_id)",
 				"posts_audit missing UNIQUE index on (parent_id, version)",
+				"missing foreign key",
 				`users_audit column "snapshot" type mismatch`,
 				"CREATE TABLE posts_audit",
 				"CREATE TABLE users_audit",

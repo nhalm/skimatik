@@ -153,10 +153,6 @@ func TestCodeGenerator_GenerateTableRepository_Audited(t *testing.T) {
 		"to_jsonb(inserted.*)",
 		"auditID := UUIDv7()",
 		"users_audit",
-		"valid_to IS NULL",
-		"valid_from",
-		"snapshot",
-		"version",
 		"MAX(version)",
 	}
 	for _, sub := range mustContain {

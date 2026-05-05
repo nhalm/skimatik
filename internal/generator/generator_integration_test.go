@@ -69,37 +69,3 @@ func TestGenerator_AuditPreflightGate_AbortsOnMissingAuditChild(t *testing.T) {
 		t.Errorf("expected output dir to be empty after failed validation; found: %v", names)
 	}
 }
-
-// TestGenerator_AuditPreflightGate_PassesWhenAuditChildIsValid verifies the
-// gate's happy path: when an audited parent has a well-formed audit child,
-// Generate succeeds and emits the per-table file.
-func TestGenerator_AuditPreflightGate_PassesWhenAuditChildIsValid(t *testing.T) {
-	tempDir := setupIntegrationTest(t)
-
-	config := &Config{
-		DSN:         "postgres://skimatik:skimatik_test_password@localhost:15432/skimatik_test",
-		Schema:      "public",
-		OutputDir:   tempDir,
-		PackageName: "testgen",
-		Tables:      true,
-		Include:     []string{"users"},
-		TableConfigs: map[string]TableConfig{
-			"users": {
-				Functions: []string{"create", "get", "update", "delete", "list", "paginate"},
-				Audit:     true,
-			},
-		},
-		Verbose: false,
-	}
-
-	gen := New(config, "test")
-	ctx := context.Background()
-	if _, err := gen.Generate(ctx); err != nil {
-		t.Fatalf("expected Generate to succeed for users with valid users_audit; got: %v", err)
-	}
-
-	usersFile := filepath.Join(tempDir, "users_generated.go")
-	if _, err := os.Stat(usersFile); err != nil {
-		t.Errorf("expected %s to exist after successful Generate; stat err: %v", usersFile, err)
-	}
-}

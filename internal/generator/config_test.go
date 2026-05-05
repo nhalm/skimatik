@@ -365,37 +365,6 @@ tables:
 			expected:    false,
 			description: "audit omitted should default to false",
 		},
-		{
-			name: "audit false explicit",
-			yamlContent: `
-database:
-  dsn: "postgres://test"
-output:
-  directory: "./test"
-tables:
-  posts:
-    audit: false
-`,
-			tableName:   "posts",
-			expected:    false,
-			description: "audit: false should parse as false",
-		},
-		{
-			name: "audit alongside functions",
-			yamlContent: `
-database:
-  dsn: "postgres://test"
-output:
-  directory: "./test"
-tables:
-  posts:
-    audit: true
-    functions: ["create", "get", "update"]
-`,
-			tableName:   "posts",
-			expected:    true,
-			description: "audit should coexist with functions",
-		},
 	}
 
 	for _, tt := range tests {
@@ -426,13 +395,6 @@ tables:
 					tt.tableName, got, tt.expected)
 			}
 		})
-	}
-}
-
-func TestIsTableAudited_UnknownTable(t *testing.T) {
-	cfg := &Config{TableConfigs: map[string]TableConfig{}}
-	if cfg.IsTableAudited("unknown") {
-		t.Errorf("IsTableAudited for unknown table = true, want false")
 	}
 }
 

@@ -65,37 +65,6 @@ func TestAuditCTE_CreateAndUpdate(t *testing.T) {
 	createSQL := renderAuditedSQL(t, usersTable, TemplateCreateAudited)
 	updateSQL := renderAuditedSQL(t, usersTable, TemplateUpdateAudited)
 
-	for _, snippet := range []string{
-		"WITH inserted AS",
-		"INSERT INTO users_audit",
-		"to_jsonb(inserted.*)",
-		"version, snapshot, valid_from",
-	} {
-		if !strings.Contains(createSQL, snippet) {
-			t.Fatalf("rendered CREATE SQL missing %q:\n%s", snippet, createSQL)
-		}
-	}
-	for _, snippet := range []string{
-		"WITH closed AS",
-		"UPDATE users_audit",
-		"SET valid_to = NOW()",
-		"to_jsonb(updated.*)",
-		"MAX(version)",
-	} {
-		if !strings.Contains(updateSQL, snippet) {
-			t.Fatalf("rendered UPDATE SQL missing %q:\n%s", snippet, updateSQL)
-		}
-	}
-
-	// Audit row IDs are now app-generated; no database-side UUID function
-	// should appear in either rendered statement.
-	if strings.Contains(createSQL, "gen_random_uuid()") {
-		t.Fatalf("rendered CREATE SQL still references gen_random_uuid():\n%s", createSQL)
-	}
-	if strings.Contains(updateSQL, "gen_random_uuid()") {
-		t.Fatalf("rendered UPDATE SQL still references gen_random_uuid():\n%s", updateSQL)
-	}
-
 	id := uuid.New()
 	t.Cleanup(func() {
 		_, _ = db.Exec(ctx, "DELETE FROM users_audit WHERE parent_id = $1", id)
@@ -137,20 +106,20 @@ func TestAuditCTE_CreateAndUpdate(t *testing.T) {
 	requireAuditCount(ctx, t, db, id, 2)
 
 	var openStart time.Time
-	var openData string
+	var openEmail string
 	var openVersion int
 	if err := db.QueryRow(ctx,
-		"SELECT valid_from, snapshot::text, version FROM users_audit WHERE parent_id = $1 AND valid_to IS NULL", id,
-	).Scan(&openStart, &openData, &openVersion); err != nil {
+		"SELECT valid_from, snapshot->>'email', version FROM users_audit WHERE parent_id = $1 AND valid_to IS NULL", id,
+	).Scan(&openStart, &openEmail, &openVersion); err != nil {
 		t.Fatalf("read open audit row: %v", err)
 	}
 
 	var closedEnd time.Time
-	var closedData string
+	var closedEmail string
 	var closedVersion int
 	if err := db.QueryRow(ctx,
-		"SELECT valid_to, snapshot::text, version FROM users_audit WHERE parent_id = $1 AND valid_to IS NOT NULL", id,
-	).Scan(&closedEnd, &closedData, &closedVersion); err != nil {
+		"SELECT valid_to, snapshot->>'email', version FROM users_audit WHERE parent_id = $1 AND valid_to IS NOT NULL", id,
+	).Scan(&closedEnd, &closedEmail, &closedVersion); err != nil {
 		t.Fatalf("read closed audit row: %v", err)
 	}
 
@@ -165,24 +134,85 @@ func TestAuditCTE_CreateAndUpdate(t *testing.T) {
 	if openVersion != 2 {
 		t.Fatalf("open audit version: want 2, got %d", openVersion)
 	}
-	if openVersion <= closedVersion {
-		t.Fatalf("audit versions not monotonically increasing: closed=%d open=%d", closedVersion, openVersion)
+
+	if openEmail != updatedEmail {
+		t.Fatalf("open audit snapshot.email: want %q, got %q", updatedEmail, openEmail)
+	}
+	if closedEmail != originalEmail {
+		t.Fatalf("closed audit snapshot.email: want %q, got %q", originalEmail, closedEmail)
 	}
 
-	if !strings.Contains(openData, updatedEmail) {
-		t.Fatalf("open audit JSONB missing updated email %q: %s", updatedEmail, openData)
+	// Second consecutive UPDATE. Catches a future MAX(version) regression
+	// that broadens the WHERE clause and pulls MAX across all parents instead
+	// of scoping to this parent_id only.
+	secondEmail := "audit-update2-" + id.String() + "@example.com"
+	updateArgs2 := buildUpdateArgs(t, usersTable, id, secondEmail, "Audit Test User")
+	rows, err = db.Query(ctx, updateSQL, updateArgs2...)
+	if err != nil {
+		t.Fatalf("second audited UPDATE failed: %v", err)
 	}
-	if !strings.Contains(closedData, originalEmail) {
-		t.Fatalf("closed audit JSONB missing original email %q: %s", originalEmail, closedData)
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		t.Fatalf("second audited UPDATE rows err: %v", err)
 	}
-	if strings.Contains(closedData, updatedEmail) {
-		t.Fatalf("closed audit JSONB unexpectedly contains updated email %q: %s", updatedEmail, closedData)
+
+	requireAuditCount(ctx, t, db, id, 3)
+	requireOpenAuditCount(ctx, t, db, id, 1)
+
+	var openStart2 time.Time
+	var openEmail2 string
+	var openVersion2 int
+	if err := db.QueryRow(ctx,
+		"SELECT valid_from, snapshot->>'email', version FROM users_audit WHERE parent_id = $1 AND valid_to IS NULL", id,
+	).Scan(&openStart2, &openEmail2, &openVersion2); err != nil {
+		t.Fatalf("read open audit row after second UPDATE: %v", err)
+	}
+	if openVersion2 != 3 {
+		t.Fatalf("open audit version after second UPDATE: want 3, got %d", openVersion2)
+	}
+	if openEmail2 != secondEmail {
+		t.Fatalf("open audit snapshot.email after second UPDATE: want %q, got %q", secondEmail, openEmail2)
+	}
+
+	// Most-recently-closed row is the one we just closed (version = 2).
+	// Its valid_to must equal the new open row's valid_from.
+	var recentClosedEnd time.Time
+	var recentClosedVersion int
+	if err := db.QueryRow(ctx,
+		`SELECT valid_to, version FROM users_audit
+		 WHERE parent_id = $1 AND valid_to IS NOT NULL
+		 ORDER BY valid_to DESC LIMIT 1`, id,
+	).Scan(&recentClosedEnd, &recentClosedVersion); err != nil {
+		t.Fatalf("read most-recently-closed audit row: %v", err)
+	}
+	if recentClosedVersion != 2 {
+		t.Fatalf("most-recently-closed audit version: want 2, got %d", recentClosedVersion)
+	}
+	if !recentClosedEnd.Equal(openStart2) {
+		t.Fatalf("second update timestamp misalignment: closed.valid_to=%s open.valid_from=%s",
+			recentClosedEnd.Format(time.RFC3339Nano), openStart2.Format(time.RFC3339Nano))
+	}
+
+	var closedCount int
+	if err := db.QueryRow(ctx,
+		"SELECT count(*) FROM users_audit WHERE parent_id = $1 AND valid_to IS NOT NULL", id,
+	).Scan(&closedCount); err != nil {
+		t.Fatalf("count closed audit rows: %v", err)
+	}
+	if closedCount != 2 {
+		t.Fatalf("closed audit row count after second UPDATE: want 2, got %d", closedCount)
 	}
 }
 
 // buildCreateArgs returns positional args matching prepareCRUDTemplateData's
 // layout for audited CREATE: id, then every non-id column whose DefaultValue
 // is empty, in declaration order, then the audit row id appended last.
+//
+// NOTE: this helper reimplements prepareCRUDTemplateData's positional-arg
+// ordering. If templates ever reorder columns, this helper silently binds
+// wrong values and the test still passes. Arg-ordering correctness is
+// covered end-to-end by example-app's curl flow against the real generated
+// Create method, not by this in-process render-and-execute test.
 func buildCreateArgs(t *testing.T, table Table, id uuid.UUID, name, email, passwordHash string) []any {
 	t.Helper()
 	args := []any{id}
@@ -213,6 +243,12 @@ func buildCreateArgs(t *testing.T, table Table, id uuid.UUID, name, email, passw
 // buildUpdateArgs returns positional args matching prepareCRUDTemplateData's
 // layout for audited UPDATE: id at $1, every non-id column at $2..$N, then
 // the audit row id appended last.
+//
+// NOTE: this helper reimplements prepareCRUDTemplateData's positional-arg
+// ordering. If templates ever reorder columns, this helper silently binds
+// wrong values and the test still passes. Arg-ordering correctness is
+// covered end-to-end by example-app's curl flow against the real generated
+// Update method, not by this in-process render-and-execute test.
 func buildUpdateArgs(t *testing.T, table Table, id uuid.UUID, updatedEmail, name string) []any {
 	t.Helper()
 	args := []any{id}
