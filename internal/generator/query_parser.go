@@ -20,7 +20,6 @@ func NewQueryParser(dir string) *QueryParser {
 	return &QueryParser{dir: dir}
 }
 
-// parseQueries parses all SQL files in the directory and returns Query objects
 func (qp *QueryParser) parseQueries() ([]query, error) {
 	if qp.dir == "" {
 		return nil, fmt.Errorf("queries directory not specified")

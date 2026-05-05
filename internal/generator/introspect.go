@@ -21,7 +21,6 @@ func NewIntrospector(db *pgxkit.DB, schema string) *Introspector {
 	}
 }
 
-// getTables retrieves all tables in the schema with their columns and metadata
 func (i *Introspector) getTables(ctx context.Context) ([]table, error) {
 	tableNames, err := i.getTableNames(ctx)
 	if err != nil {
