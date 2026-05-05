@@ -18,7 +18,7 @@ func NewSQLParser() *SQLParser {
 
 // QueryInfo contains extracted metadata from SQL query
 type QueryInfo struct {
-	Type          QueryType
+	Type          queryType
 	Parameters    []ParameterInfo
 	SelectTargets []SelectTarget
 	Tables        []TableRef
@@ -97,8 +97,8 @@ func (sp *SQLParser) Parse(sql string) (*QueryInfo, error) {
 	return sp.extractInfo(result)
 }
 
-// ExtractOrderBy extracts ORDER BY columns from the outermost SELECT statement
-func (sp *SQLParser) ExtractOrderBy(sql string) ([]OrderByColumn, error) {
+// extractOrderBy extracts ORDER BY columns from the outermost SELECT statement
+func (sp *SQLParser) extractOrderBy(sql string) ([]orderByColumn, error) {
 	result, err := pg_query.Parse(sql)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse SQL: %w", err)
@@ -122,7 +122,7 @@ func (sp *SQLParser) ExtractOrderBy(sql string) ([]OrderByColumn, error) {
 		return nil, nil
 	}
 
-	var orderByColumns []OrderByColumn
+	var orderByColumns []orderByColumn
 
 	for _, sortNode := range selectStmt.SortClause {
 		sortBy := sortNode.GetSortBy()
@@ -147,7 +147,7 @@ func (sp *SQLParser) ExtractOrderBy(sql string) ([]OrderByColumn, error) {
 			direction = "DESC"
 		}
 
-		orderByColumns = append(orderByColumns, OrderByColumn{
+		orderByColumns = append(orderByColumns, orderByColumn{
 			Name:      columnName,
 			Direction: direction,
 		})
@@ -346,20 +346,20 @@ func (sp *SQLParser) extractInfo(result *pg_query_go.ParseResult) (*QueryInfo, e
 }
 
 // determineQueryType determines QueryType from parse tree node
-func (sp *SQLParser) determineQueryType(stmt *pg_query_go.Node) QueryType {
+func (sp *SQLParser) determineQueryType(stmt *pg_query_go.Node) queryType {
 	if stmt.GetSelectStmt() != nil {
-		return QueryTypeMany
+		return queryTypeMany
 	}
 	if stmt.GetInsertStmt() != nil {
-		return QueryTypeExec
+		return queryTypeExec
 	}
 	if stmt.GetUpdateStmt() != nil {
-		return QueryTypeExec
+		return queryTypeExec
 	}
 	if stmt.GetDeleteStmt() != nil {
-		return QueryTypeExec
+		return queryTypeExec
 	}
-	return QueryTypeMany
+	return queryTypeMany
 }
 
 // extractJoins extracts JOIN information from SELECT statement
@@ -1111,7 +1111,7 @@ func (sp *SQLParser) makeSubqueryTableRef(rangeSubselect *pg_query_go.RangeSubse
 // extractInfoFromSelectStmt extracts QueryInfo from a SelectStmt node
 func (sp *SQLParser) extractInfoFromSelectStmt(selectStmt *pg_query_go.SelectStmt) *QueryInfo {
 	info := &QueryInfo{
-		Type:          QueryTypeMany,
+		Type:          queryTypeMany,
 		SelectTargets: sp.extractSelectTargets(selectStmt),
 		Joins:         sp.extractJoins(selectStmt),
 		Tables:        sp.extractTablesFromSelect(selectStmt),

@@ -6,8 +6,8 @@ import (
 )
 
 func TestTable_HasIndexLeadingWith(t *testing.T) {
-	table := Table{
-		Indexes: []Index{
+	table := table{
+		Indexes: []index{
 			{Name: "idx_users_email", Columns: []string{"email"}},
 			{Name: "idx_users_active_created", Columns: []string{"is_active", "created_at"}},
 			{Name: "idx_users_expr", Columns: []string{""}}, // expression index, no leading column
@@ -28,7 +28,7 @@ func TestTable_HasIndexLeadingWith(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := table.HasIndexLeadingWith(tt.column); got != tt.want {
+			if got := table.hasIndexLeadingWith(tt.column); got != tt.want {
 				t.Errorf("HasIndexLeadingWith(%q) = %v, want %v", tt.column, got, tt.want)
 			}
 		})
@@ -36,9 +36,9 @@ func TestTable_HasIndexLeadingWith(t *testing.T) {
 }
 
 func TestTable_HasForeignKeyTo(t *testing.T) {
-	table := Table{
+	table := table{
 		Name: "users_audit",
-		ForeignKeys: []ForeignKey{
+		ForeignKeys: []foreignKey{
 			{
 				ConstraintName:   "users_audit_parent_id_fkey",
 				ColumnName:       "parent_id",
@@ -48,16 +48,16 @@ func TestTable_HasForeignKeyTo(t *testing.T) {
 		},
 	}
 
-	if !table.HasForeignKeyTo("parent_id", "users", "id") {
+	if !table.hasForeignKeyTo("parent_id", "users", "id") {
 		t.Error("expected HasForeignKeyTo to find parent_id -> users.id")
 	}
-	if table.HasForeignKeyTo("parent_id", "users", "name") {
+	if table.hasForeignKeyTo("parent_id", "users", "name") {
 		t.Error("HasForeignKeyTo should reject mismatched referenced column")
 	}
-	if table.HasForeignKeyTo("parent_id", "posts", "id") {
+	if table.hasForeignKeyTo("parent_id", "posts", "id") {
 		t.Error("HasForeignKeyTo should reject mismatched referenced table")
 	}
-	if table.HasForeignKeyTo("user_id", "users", "id") {
+	if table.hasForeignKeyTo("user_id", "users", "id") {
 		t.Error("HasForeignKeyTo should reject mismatched child column")
 	}
 }
@@ -215,10 +215,10 @@ func TestIntrospector_ResultStructure(t *testing.T) {
 	// This doesn't require a database connection
 
 	t.Run("table structure validation", func(t *testing.T) {
-		table := Table{
+		table := table{
 			Name:   "users",
 			Schema: "public",
-			Columns: []Column{
+			Columns: []column{
 				{
 					Name:       "id",
 					Type:       "uuid",
@@ -233,7 +233,7 @@ func TestIntrospector_ResultStructure(t *testing.T) {
 				},
 			},
 			PrimaryKey: []string{"id"},
-			Indexes: []Index{
+			Indexes: []index{
 				{
 					Name:     "idx_users_name",
 					Columns:  []string{"name"},

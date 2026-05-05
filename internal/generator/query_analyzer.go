@@ -41,7 +41,7 @@ func NewQueryAnalyzer(db *pgxkit.DB, schema string) *QueryAnalyzer {
 // - Parameter type inference via PREPARE
 // - Nullability detection from schema and query structure
 // - Query syntax validation
-func (qa *QueryAnalyzer) AnalyzeQuery(ctx context.Context, query *Query) error {
+func (qa *QueryAnalyzer) AnalyzeQuery(ctx context.Context, query *query) error {
 	if query == nil {
 		return fmt.Errorf("query cannot be nil")
 	}
@@ -90,7 +90,7 @@ func (qa *QueryAnalyzer) AnalyzeQuery(ctx context.Context, query *Query) error {
 	}
 
 	// For :paginated queries, extract ORDER BY columns
-	if query.Type == QueryTypePaginated {
+	if query.Type == queryTypePaginated {
 		if err := qa.extractOrderByColumns(query); err != nil {
 			return fmt.Errorf("failed to extract ORDER BY columns: %w", err)
 		}
@@ -100,9 +100,9 @@ func (qa *QueryAnalyzer) AnalyzeQuery(ctx context.Context, query *Query) error {
 }
 
 // extractOrderByColumns extracts ORDER BY columns and resolves their types
-func (qa *QueryAnalyzer) extractOrderByColumns(query *Query) error {
+func (qa *QueryAnalyzer) extractOrderByColumns(query *query) error {
 	// Extract ORDER BY from SQL
-	orderByCols, err := qa.sqlParser.ExtractOrderBy(query.SQL)
+	orderByCols, err := qa.sqlParser.extractOrderBy(query.SQL)
 	if err != nil {
 		return fmt.Errorf("failed to parse ORDER BY: %w", err)
 	}
@@ -136,7 +136,7 @@ func (qa *QueryAnalyzer) extractOrderByColumns(query *Query) error {
 }
 
 // applyResultAnnotations applies result type annotations to override automatically detected types
-func (qa *QueryAnalyzer) applyResultAnnotations(query *Query) error {
+func (qa *QueryAnalyzer) applyResultAnnotations(query *query) error {
 	if len(query.ResultAnnotations) == 0 {
 		return nil
 	}
@@ -174,7 +174,7 @@ func (qa *QueryAnalyzer) applyResultAnnotations(query *Query) error {
 }
 
 // extractParameters extracts parameter placeholders from the SQL query
-func (qa *QueryAnalyzer) extractParameters(query *Query) error {
+func (qa *QueryAnalyzer) extractParameters(query *query) error {
 	// Use SQLParser to extract parameters
 	queryInfo, err := qa.sqlParser.Parse(query.SQL)
 	if err != nil {
@@ -186,7 +186,7 @@ func (qa *QueryAnalyzer) extractParameters(query *Query) error {
 	}
 
 	if len(queryInfo.Parameters) == 0 {
-		query.Parameters = []Parameter{}
+		query.Parameters = []parameter{}
 		return nil
 	}
 
@@ -197,9 +197,9 @@ func (qa *QueryAnalyzer) extractParameters(query *Query) error {
 	}
 
 	// Create parameter list from the parameters found
-	var parameters []Parameter
+	var parameters []parameter
 	for paramNum := range paramMap {
-		param := Parameter{
+		param := parameter{
 			Name:   fmt.Sprintf("param%d", paramNum),
 			Type:   "text",
 			GoType: "string",
@@ -218,7 +218,7 @@ func (qa *QueryAnalyzer) extractParameters(query *Query) error {
 }
 
 // extractParametersRegex is a fallback regex-based parameter extraction
-func (qa *QueryAnalyzer) extractParametersRegex(query *Query) error {
+func (qa *QueryAnalyzer) extractParametersRegex(query *query) error {
 	// Remove string literals and quoted identifiers to avoid false positives
 	cleanSQL := qa.removeQuotedContent(query.SQL)
 
@@ -240,14 +240,14 @@ func (qa *QueryAnalyzer) extractParametersRegex(query *Query) error {
 	}
 
 	if len(paramMap) == 0 {
-		query.Parameters = []Parameter{}
+		query.Parameters = []parameter{}
 		return nil
 	}
 
 	// Create parameter list
-	var parameters []Parameter
+	var parameters []parameter
 	for paramNum := range paramMap {
-		param := Parameter{
+		param := parameter{
 			Name:   fmt.Sprintf("param%d", paramNum),
 			Type:   "text",
 			GoType: "string",
@@ -267,7 +267,7 @@ func (qa *QueryAnalyzer) extractParametersRegex(query *Query) error {
 // inferParameterNames infers semantic parameter names from SQL context using the SQL parser.
 // SQL parser failures are tolerated — parameters keep their default "paramN" names — so the
 // function never returns an error.
-func (qa *QueryAnalyzer) inferParameterNames(query *Query) {
+func (qa *QueryAnalyzer) inferParameterNames(query *query) {
 	if len(query.Parameters) == 0 {
 		return
 	}
@@ -352,7 +352,7 @@ func isLikeOperator(op string) bool {
 // applyInferredParameterInfo writes inferred names, columns and tables onto
 // query.Parameters, keying by Parameter.Index.
 func (qa *QueryAnalyzer) applyInferredParameterInfo(
-	query *Query,
+	query *query,
 	inferredNames, inferredColumns, inferredTables map[int]string,
 ) {
 	for i := range query.Parameters {
@@ -396,7 +396,7 @@ func toCamelCase(s string) string {
 // Failures to look up an individual column are tolerated (the parameter may be
 // an alias or an expression with no schema column) — the function never returns
 // an error.
-func (qa *QueryAnalyzer) inferParameterNullability(ctx context.Context, query *Query) {
+func (qa *QueryAnalyzer) inferParameterNullability(ctx context.Context, query *query) {
 	for i := range query.Parameters {
 		param := &query.Parameters[i]
 
@@ -520,19 +520,19 @@ func (qa *QueryAnalyzer) blankLineComment(result []rune, i int) int {
 }
 
 // isSelectQuery checks if the query type requires column analysis
-func (qa *QueryAnalyzer) isSelectQuery(queryType QueryType) bool {
-	return queryType == QueryTypeOne || queryType == QueryTypeMany || queryType == QueryTypePaginated
+func (qa *QueryAnalyzer) isSelectQuery(queryType queryType) bool {
+	return queryType == queryTypeOne || queryType == queryTypeMany || queryType == queryTypePaginated
 }
 
 // analyzeSelectQuery analyzes a SELECT query and determines column types
-func (qa *QueryAnalyzer) analyzeSelectQuery(ctx context.Context, query *Query) error {
+func (qa *QueryAnalyzer) analyzeSelectQuery(ctx context.Context, query *query) error {
 	// Analyze query columns by executing with NULL parameters
 	// This approach works for all queries including those with parameters in HAVING, WHERE, etc.
 	return qa.analyzeQueryColumns(ctx, query)
 }
 
 // analyzeQueryColumns analyzes the columns returned by a SELECT query
-func (qa *QueryAnalyzer) analyzeQueryColumns(ctx context.Context, query *Query) error {
+func (qa *QueryAnalyzer) analyzeQueryColumns(ctx context.Context, query *query) error {
 	// Remove trailing semicolon if present
 	sql := strings.TrimSpace(query.SQL)
 	sql = strings.TrimSuffix(sql, ";")
@@ -552,7 +552,7 @@ func (qa *QueryAnalyzer) analyzeQueryColumns(ctx context.Context, query *Query) 
 
 	// Get column descriptions
 	fieldDescriptions := rows.FieldDescriptions()
-	var columns []Column
+	var columns []column
 
 	for _, field := range fieldDescriptions {
 		// Detect if this is an array type
@@ -577,7 +577,7 @@ func (qa *QueryAnalyzer) analyzeQueryColumns(ctx context.Context, query *Query) 
 			return fmt.Errorf("empty GoType generated for column %s (pgType=%s, nullable=%v, array=%v)", field.Name, pgType, isNullable, isArray)
 		}
 
-		column := Column{
+		column := column{
 			Name:       field.Name,
 			Type:       pgType,
 			GoType:     goType,
@@ -885,7 +885,7 @@ func (qa *QueryAnalyzer) isArrayOID(oid uint32) bool {
 }
 
 // validateQuerySyntax validates that the query is syntactically correct
-func (qa *QueryAnalyzer) validateQuerySyntax(ctx context.Context, query *Query) error {
+func (qa *QueryAnalyzer) validateQuerySyntax(ctx context.Context, query *query) error {
 	// For SELECT queries, we already validated them in analyzeQueryColumns
 	// For EXEC queries, we validate via PREPARE in inferParameterTypesFromPrepare
 	return nil
@@ -893,7 +893,7 @@ func (qa *QueryAnalyzer) validateQuerySyntax(ctx context.Context, query *Query) 
 
 // inferParameterTypesFromPrepare uses PostgreSQL PREPARE to infer parameter types for all query types.
 // It creates a temporary prepared statement and extracts parameter OIDs, then maps them to Go types.
-func (qa *QueryAnalyzer) inferParameterTypesFromPrepare(ctx context.Context, query *Query) error {
+func (qa *QueryAnalyzer) inferParameterTypesFromPrepare(ctx context.Context, query *query) error {
 	// Skip if no parameters
 	if len(query.Parameters) == 0 {
 		return nil

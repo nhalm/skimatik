@@ -14,12 +14,12 @@ func TestIntrospector_GetTables_ForeignKeys(t *testing.T) {
 	ctx := context.Background()
 
 	introspector := NewIntrospector(testDB, "public")
-	tables, err := introspector.GetTables(ctx)
+	tables, err := introspector.getTables(ctx)
 	if err != nil {
 		t.Fatalf("GetTables failed: %v", err)
 	}
 
-	byName := make(map[string]Table, len(tables))
+	byName := make(map[string]table, len(tables))
 	for _, tbl := range tables {
 		byName[tbl.Name] = tbl
 	}
@@ -47,7 +47,7 @@ func TestIntrospector_GetTables_ForeignKeys(t *testing.T) {
 			if !ok {
 				t.Fatalf("expected table %q in introspection results", tc.table)
 			}
-			if !tbl.HasForeignKeyTo(tc.childCol, tc.referencedTbl, tc.referencedCol) {
+			if !tbl.hasForeignKeyTo(tc.childCol, tc.referencedTbl, tc.referencedCol) {
 				t.Errorf("expected FK %s.%s -> %s.%s; got %+v",
 					tc.table, tc.childCol, tc.referencedTbl, tc.referencedCol, tbl.ForeignKeys)
 			}
@@ -68,46 +68,46 @@ func TestIntrospector_GetTables_IndexColumnOrder(t *testing.T) {
 	ctx := context.Background()
 
 	introspector := NewIntrospector(testDB, "public")
-	tables, err := introspector.GetTables(ctx)
+	tables, err := introspector.getTables(ctx)
 	if err != nil {
 		t.Fatalf("GetTables failed: %v", err)
 	}
 
-	byName := make(map[string]Table, len(tables))
+	byName := make(map[string]table, len(tables))
 	for _, tbl := range tables {
 		byName[tbl.Name] = tbl
 	}
 
 	// idx_users_active_created is (is_active, created_at).
 	users := byName["users"]
-	if !users.HasIndexLeadingWith("is_active") {
+	if !users.hasIndexLeadingWith("is_active") {
 		t.Errorf("expected users to have index leading with is_active; got indexes=%+v", users.Indexes)
 	}
-	if users.HasIndexLeadingWith("created_at") {
+	if users.hasIndexLeadingWith("created_at") {
 		t.Errorf("created_at is not the leading column on any users index; got indexes=%+v", users.Indexes)
 	}
-	if !users.HasIndexLeadingWith("email") {
+	if !users.hasIndexLeadingWith("email") {
 		t.Errorf("expected users to have index leading with email; got indexes=%+v", users.Indexes)
 	}
 
 	// idx_posts_user_status is (user_id, status).
 	posts := byName["posts"]
-	if !posts.HasIndexLeadingWith("user_id") {
+	if !posts.hasIndexLeadingWith("user_id") {
 		t.Errorf("expected posts to have index leading with user_id; got indexes=%+v", posts.Indexes)
 	}
 
 	// idx_posts_published is a partial index on (published_at); the introspector
 	// must surface partial indexes and ignore the WHERE predicate.
-	if !posts.HasIndexLeadingWith("published_at") {
+	if !posts.hasIndexLeadingWith("published_at") {
 		t.Errorf("expected posts to have partial index leading with published_at; got indexes=%+v", posts.Indexes)
 	}
 
 	// idx_comments_post_parent is (post_id, parent_id).
 	comments := byName["comments"]
-	if !comments.HasIndexLeadingWith("post_id") {
+	if !comments.hasIndexLeadingWith("post_id") {
 		t.Errorf("expected comments to have index leading with post_id; got indexes=%+v", comments.Indexes)
 	}
-	if comments.HasIndexLeadingWith("parent_id") {
+	if comments.hasIndexLeadingWith("parent_id") {
 		t.Errorf("parent_id is not the leading column on any comments index; got indexes=%+v", comments.Indexes)
 	}
 }
@@ -121,7 +121,7 @@ func TestIntrospector_GetTablesByName(t *testing.T) {
 
 	introspector := NewIntrospector(testDB, "public")
 
-	empty, err := introspector.GetTablesByName(ctx, nil)
+	empty, err := introspector.getTablesByName(ctx, nil)
 	if err != nil {
 		t.Fatalf("GetTablesByName(nil) failed: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestIntrospector_GetTablesByName(t *testing.T) {
 		t.Errorf("expected empty map for nil input; got %+v", empty)
 	}
 
-	got, err := introspector.GetTablesByName(ctx, []string{"users_audit", "definitely_not_a_real_table"})
+	got, err := introspector.getTablesByName(ctx, []string{"users_audit", "definitely_not_a_real_table"})
 	if err != nil {
 		t.Fatalf("GetTablesByName failed: %v", err)
 	}
@@ -146,21 +146,21 @@ func TestIntrospector_GetTablesByName(t *testing.T) {
 	if len(tbl.PrimaryKey) != 1 || tbl.PrimaryKey[0] != "id" {
 		t.Errorf("expected users_audit PK = [id]; got %v", tbl.PrimaryKey)
 	}
-	if !tbl.HasForeignKeyTo("parent_id", "users", "id") {
+	if !tbl.hasForeignKeyTo("parent_id", "users", "id") {
 		t.Errorf("expected users_audit.parent_id -> users.id FK; got %+v", tbl.ForeignKeys)
 	}
-	if !tbl.HasIndexLeadingWith("parent_id") {
+	if !tbl.hasIndexLeadingWith("parent_id") {
 		t.Errorf("expected users_audit to have index leading with parent_id; got %+v", tbl.Indexes)
 	}
 
 	for _, name := range []string{"id", "parent_id", "version", "snapshot", "valid_from", "valid_to"} {
-		if tbl.GetColumn(name) == nil {
+		if tbl.getColumn(name) == nil {
 			t.Errorf("expected users_audit column %q; got %+v", name, tbl.Columns)
 		}
 	}
 }
 
-func mapKeys(m map[string]Table) []string {
+func mapKeys(m map[string]table) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)
@@ -178,12 +178,12 @@ func TestIntrospector_GetTables_CompositeForeignKey(t *testing.T) {
 	ctx := context.Background()
 
 	introspector := NewIntrospector(testDB, "public")
-	tables, err := introspector.GetTables(ctx)
+	tables, err := introspector.getTables(ctx)
 	if err != nil {
 		t.Fatalf("GetTables failed: %v", err)
 	}
 
-	var child Table
+	var child table
 	for _, tbl := range tables {
 		if tbl.Name == "composite_fk_child" {
 			child = tbl
@@ -195,7 +195,7 @@ func TestIntrospector_GetTables_CompositeForeignKey(t *testing.T) {
 	}
 
 	const wantConstraint = "composite_fk_child_parent_fkey"
-	var rows []ForeignKey
+	var rows []foreignKey
 	for _, fk := range child.ForeignKeys {
 		if fk.ConstraintName == wantConstraint {
 			rows = append(rows, fk)
@@ -222,10 +222,10 @@ func TestIntrospector_GetTables_CompositeForeignKey(t *testing.T) {
 		t.Errorf("parent_code should map to %q; got %q (full pairs=%+v)", want, got, pairs)
 	}
 
-	if !child.HasForeignKeyTo("tenant_id", "composite_uk_parent", "tenant_id") {
+	if !child.hasForeignKeyTo("tenant_id", "composite_uk_parent", "tenant_id") {
 		t.Errorf("HasForeignKeyTo failed for tenant_id leg of composite FK")
 	}
-	if !child.HasForeignKeyTo("parent_code", "composite_uk_parent", "code") {
+	if !child.hasForeignKeyTo("parent_code", "composite_uk_parent", "code") {
 		t.Errorf("HasForeignKeyTo failed for parent_code leg of composite FK")
 	}
 }

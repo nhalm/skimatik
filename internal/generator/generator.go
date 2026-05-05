@@ -87,7 +87,7 @@ func (g *Generator) generateTablesStage(ctx context.Context) error {
 	if g.config.Verbose {
 		slog.Info("Starting table introspection")
 	}
-	tables, err := g.introspect.GetTables(ctx)
+	tables, err := g.introspect.getTables(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to introspect tables: %w", err)
 	}
@@ -113,8 +113,8 @@ func (g *Generator) generateTablesStage(ctx context.Context) error {
 // validateAuditTables runs the audit pre-flight gate over already-resolved
 // tables. The validator's error contains a multi-line copy-pasteable DDL block;
 // it is returned unwrapped so the formatting reaches the user intact.
-func (g *Generator) validateAuditTables(ctx context.Context, resolved []Table) error {
-	parents := make(map[string]Table)
+func (g *Generator) validateAuditTables(ctx context.Context, resolved []table) error {
+	parents := make(map[string]table)
 	for i := range resolved {
 		if !resolved[i].Audit {
 			continue
@@ -130,7 +130,7 @@ func (g *Generator) validateAuditTables(ctx context.Context, resolved []Table) e
 		auditNames = append(auditNames, name+"_audit")
 	}
 
-	audits, err := g.introspect.GetTablesByName(ctx, auditNames)
+	audits, err := g.introspect.getTablesByName(ctx, auditNames)
 	if err != nil {
 		return fmt.Errorf("audit pre-flight: failed to introspect audit tables: %w", err)
 	}
@@ -193,7 +193,7 @@ func (g *Generator) connect(ctx context.Context) error {
 // resolved tables. Introspection and resolveTables filtering are the caller's
 // responsibility; this lets the table-generation stage interleave the audit
 // pre-flight gate between resolution and per-table codegen.
-func (g *Generator) generateTablesFromResolved(_ context.Context, resolved []Table) error {
+func (g *Generator) generateTablesFromResolved(_ context.Context, resolved []table) error {
 	if g.config.Verbose {
 		slog.Info("Generating code for tables after filtering", "count", len(resolved))
 	}
@@ -246,7 +246,7 @@ func (g *Generator) generateQueries(ctx context.Context) error {
 
 	// Parse SQL files
 	parser := NewQueryParser(g.config.QueriesDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		return fmt.Errorf("failed to parse queries: %w", err)
 	}
@@ -278,8 +278,8 @@ func (g *Generator) generateQueries(ctx context.Context) error {
 // resolveTables filters introspected tables by Include patterns and propagates
 // per-table configuration (e.g. Audit) onto the resolved values. The input
 // slice is not mutated.
-func (g *Generator) resolveTables(tables []Table) []Table {
-	resolved := make([]Table, 0, len(tables))
+func (g *Generator) resolveTables(tables []table) []table {
+	resolved := make([]table, 0, len(tables))
 	for i := range tables {
 		if !g.config.ShouldIncludeTable(tables[i].Name) {
 			continue
@@ -292,7 +292,7 @@ func (g *Generator) resolveTables(tables []Table) []Table {
 }
 
 // validateTablePrimaryKey ensures the table has a single-column primary key
-func (g *Generator) validateTablePrimaryKey(table Table) error {
+func (g *Generator) validateTablePrimaryKey(table table) error {
 	if len(table.PrimaryKey) == 0 {
 		return fmt.Errorf("table has no primary key")
 	}
@@ -302,7 +302,7 @@ func (g *Generator) validateTablePrimaryKey(table Table) error {
 	}
 
 	pkColumn := table.PrimaryKey[0]
-	column := table.GetColumn(pkColumn)
+	column := table.getColumn(pkColumn)
 	if column == nil {
 		return fmt.Errorf("primary key column %s not found", pkColumn)
 	}

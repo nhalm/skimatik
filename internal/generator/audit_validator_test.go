@@ -5,12 +5,12 @@ import (
 	"testing"
 )
 
-func auditFixture(parentName string) Table {
+func auditFixture(parentName string) table {
 	auditName := parentName + "_audit"
-	return Table{
+	return table{
 		Name:   auditName,
 		Schema: "public",
-		Columns: []Column{
+		Columns: []column{
 			{Name: "id", Type: "uuid", IsNullable: false},
 			{Name: "parent_id", Type: "uuid", IsNullable: false},
 			{Name: "version", Type: "integer", IsNullable: false},
@@ -19,11 +19,11 @@ func auditFixture(parentName string) Table {
 			{Name: "valid_to", Type: "timestamptz", IsNullable: true},
 		},
 		PrimaryKey: []string{"id"},
-		Indexes: []Index{
+		Indexes: []index{
 			{Name: "idx_" + auditName + "_parent", Columns: []string{"parent_id"}},
 			{Name: "uq_" + auditName + "_parent_version", Columns: []string{"parent_id", "version"}, IsUnique: true},
 		},
-		ForeignKeys: []ForeignKey{{
+		ForeignKeys: []foreignKey{{
 			ConstraintName:   auditName + "_parent_fk",
 			ColumnName:       "parent_id",
 			ReferencedTable:  parentName,
@@ -32,19 +32,19 @@ func auditFixture(parentName string) Table {
 	}
 }
 
-func parentFixture(name string) Table {
-	return Table{
+func parentFixture(name string) table {
+	return table{
 		Name:       name,
 		Schema:     "public",
-		Columns:    []Column{{Name: "id", Type: "uuid", IsNullable: false}},
+		Columns:    []column{{Name: "id", Type: "uuid", IsNullable: false}},
 		PrimaryKey: []string{"id"},
 		Audit:      true,
 	}
 }
 
 func TestValidateAuditTables_OK(t *testing.T) {
-	parents := map[string]Table{"users": parentFixture("users")}
-	audits := map[string]Table{"users_audit": auditFixture("users")}
+	parents := map[string]table{"users": parentFixture("users")}
+	audits := map[string]table{"users_audit": auditFixture("users")}
 	if err := ValidateAuditTables(parents, audits); err != nil {
 		t.Fatalf("expected nil error; got %v", err)
 	}
@@ -53,14 +53,14 @@ func TestValidateAuditTables_OK(t *testing.T) {
 func TestValidateAuditTables_Errors(t *testing.T) {
 	cases := []struct {
 		name         string
-		parents      map[string]Table
-		audits       map[string]Table
+		parents      map[string]table
+		audits       map[string]table
 		wantContains []string
 	}{
 		{
 			name:         "missing audit table",
-			parents:      map[string]Table{"posts": parentFixture("posts")},
-			audits:       map[string]Table{},
+			parents:      map[string]table{"posts": parentFixture("posts")},
+			audits:       map[string]table{},
 			wantContains: []string{"posts_audit not found"},
 		},
 		{
@@ -68,11 +68,11 @@ func TestValidateAuditTables_Errors(t *testing.T) {
 			// posts_audit drops indexes AND foreign keys (covers missing index +
 			// missing FK legs). users_audit retains FK/indexes but mistypes
 			// the snapshot column (covers type-mismatch leg).
-			parents: map[string]Table{
+			parents: map[string]table{
 				"posts": parentFixture("posts"),
 				"users": parentFixture("users"),
 			},
-			audits: func() map[string]Table {
+			audits: func() map[string]table {
 				posts := auditFixture("posts")
 				posts.Indexes = nil
 				posts.ForeignKeys = nil
@@ -82,7 +82,7 @@ func TestValidateAuditTables_Errors(t *testing.T) {
 						users.Columns[i].Type = "text"
 					}
 				}
-				return map[string]Table{"posts_audit": posts, "users_audit": users}
+				return map[string]table{"posts_audit": posts, "users_audit": users}
 			}(),
 			wantContains: []string{
 				"posts_audit missing index on (parent_id)",

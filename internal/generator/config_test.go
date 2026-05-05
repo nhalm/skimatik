@@ -408,14 +408,14 @@ func TestTableAuditPropagation(t *testing.T) {
 	}
 	g := &Generator{config: cfg}
 
-	introspected := []Table{
+	introspected := []table{
 		{Name: "posts", Schema: "public"},
 		{Name: "comments", Schema: "public"},
 		{Name: "tags", Schema: "public"},
 	}
 
 	resolvedSlice := g.resolveTables(introspected)
-	resolved := make(map[string]Table, len(resolvedSlice))
+	resolved := make(map[string]table, len(resolvedSlice))
 	for _, tbl := range resolvedSlice {
 		resolved[tbl.Name] = tbl
 	}

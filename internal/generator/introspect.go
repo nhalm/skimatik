@@ -21,15 +21,15 @@ func NewIntrospector(db *pgxkit.DB, schema string) *Introspector {
 	}
 }
 
-// GetTables retrieves all tables in the schema with their columns and metadata
-func (i *Introspector) GetTables(ctx context.Context) ([]Table, error) {
+// getTables retrieves all tables in the schema with their columns and metadata
+func (i *Introspector) getTables(ctx context.Context) ([]table, error) {
 	tableNames, err := i.getTableNames(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get table names: %w", err)
 	}
 
 	if len(tableNames) == 0 {
-		return []Table{}, nil
+		return []table{}, nil
 	}
 
 	columnsMap, err := i.getAllTableColumns(ctx, tableNames)
@@ -52,9 +52,9 @@ func (i *Introspector) GetTables(ctx context.Context) ([]Table, error) {
 		return nil, fmt.Errorf("failed to get foreign keys: %w", err)
 	}
 
-	tables := make([]Table, 0, len(tableNames))
+	tables := make([]table, 0, len(tableNames))
 	for _, tableName := range tableNames {
-		table := Table{
+		table := table{
 			Name:        tableName,
 			Schema:      i.schema,
 			Columns:     columnsMap[tableName],
@@ -68,14 +68,14 @@ func (i *Introspector) GetTables(ctx context.Context) ([]Table, error) {
 	return tables, nil
 }
 
-// GetTablesByName retrieves the named tables from the configured schema,
+// getTablesByName retrieves the named tables from the configured schema,
 // bypassing any include/exclude filters. The returned map is keyed by table
 // name; names that do not exist in the schema are silently omitted rather
 // than surfaced as zero-value Table structs. An empty input slice
 // short-circuits to an empty map without touching the database.
-func (i *Introspector) GetTablesByName(ctx context.Context, names []string) (map[string]Table, error) {
+func (i *Introspector) getTablesByName(ctx context.Context, names []string) (map[string]table, error) {
 	if len(names) == 0 {
-		return map[string]Table{}, nil
+		return map[string]table{}, nil
 	}
 
 	existing, err := i.filterExistingTableNames(ctx, names)
@@ -83,7 +83,7 @@ func (i *Introspector) GetTablesByName(ctx context.Context, names []string) (map
 		return nil, fmt.Errorf("failed to resolve table names: %w", err)
 	}
 	if len(existing) == 0 {
-		return map[string]Table{}, nil
+		return map[string]table{}, nil
 	}
 
 	columnsMap, err := i.getAllTableColumns(ctx, existing)
@@ -106,9 +106,9 @@ func (i *Introspector) GetTablesByName(ctx context.Context, names []string) (map
 		return nil, fmt.Errorf("failed to get foreign keys: %w", err)
 	}
 
-	result := make(map[string]Table, len(existing))
+	result := make(map[string]table, len(existing))
 	for _, tableName := range existing {
-		result[tableName] = Table{
+		result[tableName] = table{
 			Name:        tableName,
 			Schema:      i.schema,
 			Columns:     columnsMap[tableName],
@@ -178,7 +178,7 @@ func (i *Introspector) getTableNames(ctx context.Context) ([]string, error) {
 }
 
 // getAllTableColumns retrieves all columns for all tables in a single query
-func (i *Introspector) getAllTableColumns(ctx context.Context, tableNames []string) (map[string][]Column, error) {
+func (i *Introspector) getAllTableColumns(ctx context.Context, tableNames []string) (map[string][]column, error) {
 	query := `
 		SELECT
 			table_name,
@@ -214,10 +214,10 @@ func (i *Introspector) getAllTableColumns(ctx context.Context, tableNames []stri
 	}
 	defer rows.Close()
 
-	columnsMap := make(map[string][]Column)
+	columnsMap := make(map[string][]column)
 	for rows.Next() {
 		var tableName string
-		var col Column
+		var col column
 		var isNullable string
 		var defaultValue *string
 		var maxLength *int
@@ -298,7 +298,7 @@ func (i *Introspector) getAllTablePrimaryKeys(ctx context.Context, tableNames []
 // the empty string; INCLUDE-clause covering columns are excluded via
 // pos < indnkeyatts; concurrently-built or otherwise unusable indexes are
 // filtered via indisvalid AND indisready.
-func (i *Introspector) getAllTableIndexes(ctx context.Context, tableNames []string) (map[string][]Index, error) {
+func (i *Introspector) getAllTableIndexes(ctx context.Context, tableNames []string) (map[string][]index, error) {
 	query := `
 		WITH idx AS (
 			SELECT
@@ -369,11 +369,11 @@ func (i *Introspector) getAllTableIndexes(ctx context.Context, tableNames []stri
 		return nil, err
 	}
 
-	indexesMap := make(map[string][]Index, len(order))
+	indexesMap := make(map[string][]index, len(order))
 	for tableName, names := range order {
 		for _, name := range names {
 			e := seen[key{tableName, name}]
-			indexesMap[tableName] = append(indexesMap[tableName], Index{
+			indexesMap[tableName] = append(indexesMap[tableName], index{
 				Name:     name,
 				Columns:  e.columns,
 				IsUnique: e.isUnique,
@@ -388,7 +388,7 @@ func (i *Introspector) getAllTableIndexes(ctx context.Context, tableNames []stri
 // the configured schema. Returns one row per FK column; composite FKs surface
 // as multiple rows sharing a ConstraintName. Only same-schema references are
 // returned.
-func (i *Introspector) getAllTableForeignKeys(ctx context.Context, tableNames []string) (map[string][]ForeignKey, error) {
+func (i *Introspector) getAllTableForeignKeys(ctx context.Context, tableNames []string) (map[string][]foreignKey, error) {
 	query := `
 		SELECT
 			tc.table_name        AS child_table,
@@ -428,7 +428,7 @@ func (i *Introspector) getAllTableForeignKeys(ctx context.Context, tableNames []
 	}
 	defer rows.Close()
 
-	fkMap := make(map[string][]ForeignKey)
+	fkMap := make(map[string][]foreignKey)
 	for rows.Next() {
 		var (
 			childTable       string
@@ -450,7 +450,7 @@ func (i *Introspector) getAllTableForeignKeys(ctx context.Context, tableNames []
 			return nil, err
 		}
 
-		fkMap[childTable] = append(fkMap[childTable], ForeignKey{
+		fkMap[childTable] = append(fkMap[childTable], foreignKey{
 			ConstraintName:   constraintName,
 			ColumnName:       childColumn,
 			ReferencedTable:  referencedTable,

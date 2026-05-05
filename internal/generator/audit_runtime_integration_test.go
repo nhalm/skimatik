@@ -17,7 +17,7 @@ import (
 // tags and matches only the multi-line CTE SQL.
 var auditedSQLRE = regexp.MustCompile("(?s)query := `([^`]+)`")
 
-func renderAuditedSQL(t *testing.T, table Table, templateName string) string {
+func renderAuditedSQL(t *testing.T, table table, templateName string) string {
 	t.Helper()
 
 	cg := NewCodeGenerator(getTestConfig(), "test")
@@ -51,7 +51,7 @@ func TestAuditCTE_CreateAndUpdate(t *testing.T) {
 	ctx := context.Background()
 
 	introspector := NewIntrospector(testDB.DB, "public")
-	tables, err := introspector.GetTablesByName(ctx, []string{"users"})
+	tables, err := introspector.getTablesByName(ctx, []string{"users"})
 	if err != nil {
 		t.Fatalf("introspect users: %v", err)
 	}
@@ -212,7 +212,7 @@ func TestAuditCTE_CreateAndUpdate(t *testing.T) {
 // wrong values and the test still passes. Arg-ordering correctness is
 // covered end-to-end by example-app's curl flow against the real generated
 // Create method, not by this in-process render-and-execute test.
-func buildCreateArgs(t *testing.T, table Table, id uuid.UUID, name, email, passwordHash string) []any {
+func buildCreateArgs(t *testing.T, table table, id uuid.UUID, name, email, passwordHash string) []any {
 	t.Helper()
 	args := []any{id}
 	for _, col := range table.Columns {
@@ -248,7 +248,7 @@ func buildCreateArgs(t *testing.T, table Table, id uuid.UUID, name, email, passw
 // wrong values and the test still passes. Arg-ordering correctness is
 // covered end-to-end by example-app's curl flow against the real generated
 // Update method, not by this in-process render-and-execute test.
-func buildUpdateArgs(t *testing.T, table Table, id uuid.UUID, updatedEmail, name string) []any {
+func buildUpdateArgs(t *testing.T, table table, id uuid.UUID, updatedEmail, name string) []any {
 	t.Helper()
 	args := []any{id}
 	for _, col := range table.Columns {

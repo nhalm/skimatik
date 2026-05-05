@@ -219,15 +219,15 @@ func TestSystem_ArrayColumnSupport(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		query          *Query
+		query          *query
 		expectedArrays map[string]bool
 		expectedTypes  map[string]string
 	}{
 		{
 			name: "data_types_test_array_columns",
-			query: &Query{
+			query: &query{
 				Name: "GetDataTypesArrays",
-				Type: QueryTypeMany,
+				Type: queryTypeMany,
 				SQL:  "SELECT id, text_array_field, integer_array_field, uuid_array_field FROM data_types_test",
 			},
 			expectedArrays: map[string]bool{
@@ -245,9 +245,9 @@ func TestSystem_ArrayColumnSupport(t *testing.T) {
 		},
 		{
 			name: "posts_tags_array",
-			query: &Query{
+			query: &query{
 				Name: "GetPostTags",
-				Type: QueryTypeMany,
+				Type: queryTypeMany,
 				SQL:  "SELECT id, title, tags FROM posts",
 			},
 			expectedArrays: map[string]bool{
@@ -343,16 +343,16 @@ func TestIssue90_CTEDeleteWithLimitParameter(t *testing.T) {
 	analyzer := NewQueryAnalyzer(db, "public")
 
 	// Exact query pattern from issue #90
-	query := &Query{
+	query := &query{
 		Name: "DeleteOldUsersBatch",
-		Type: QueryTypeOne,
+		Type: queryTypeOne,
 		SQL: `WITH deleted AS (
   DELETE FROM users WHERE id IN (
     SELECT id FROM users WHERE is_active = false LIMIT $1
   ) RETURNING id
 )
 SELECT count(*) as deleted_count FROM deleted`,
-		ParameterAnnotations: []ParameterAnnotation{
+		ParameterAnnotations: []parameterAnnotation{
 			{Position: 1, Name: "limit", GoType: "int"},
 		},
 	}
@@ -389,9 +389,9 @@ func TestCTEUpdateWithParameter(t *testing.T) {
 
 	analyzer := NewQueryAnalyzer(db, "public")
 
-	query := &Query{
+	query := &query{
 		Name: "UpdateAndCountUsers",
-		Type: QueryTypeOne,
+		Type: queryTypeOne,
 		SQL: `WITH updated AS (
   UPDATE users SET is_active = $1 WHERE name LIKE $2 RETURNING id
 )
@@ -421,9 +421,9 @@ func TestCTEInsertWithParameter(t *testing.T) {
 
 	analyzer := NewQueryAnalyzer(db, "public")
 
-	query := &Query{
+	query := &query{
 		Name: "InsertAndReturnUser",
-		Type: QueryTypeOne,
+		Type: queryTypeOne,
 		SQL: `WITH inserted AS (
   INSERT INTO users (id, name, email) VALUES ($1, $2, $3) RETURNING id, name
 )
@@ -454,9 +454,9 @@ func TestComplexMultiCTE(t *testing.T) {
 	analyzer := NewQueryAnalyzer(db, "public")
 
 	// Complex query with multiple CTEs: DELETE, UPDATE, INSERT - each with params
-	query := &Query{
+	query := &query{
 		Name: "ComplexMultiCTEOperation",
-		Type: QueryTypeOne,
+		Type: queryTypeOne,
 		SQL: `WITH
 deleted AS (
   DELETE FROM users WHERE id IN (

@@ -12,7 +12,7 @@ import (
 // with a copy-pasteable CREATE TABLE DDL block appended once per affected
 // parent. Returns nil if all audited parents have a well-formed audit child.
 // Performs no I/O.
-func ValidateAuditTables(parents, audits map[string]Table) error {
+func ValidateAuditTables(parents, audits map[string]table) error {
 	parentNames := make([]string, 0, len(parents))
 	for name := range parents {
 		t := parents[name]
@@ -46,10 +46,10 @@ func ValidateAuditTables(parents, audits map[string]Table) error {
 	return errors.Join(errs...)
 }
 
-func validateAuditTableForParent(parent Table, audits map[string]Table) []error {
+func validateAuditTableForParent(parent table, audits map[string]table) []error {
 	auditName := parent.Name + "_audit"
 
-	pkCol := parent.GetPrimaryKeyColumn()
+	pkCol := parent.getPrimaryKeyColumn()
 	if pkCol == nil {
 		return []error{fmt.Errorf(
 			"audit: %s has no single-column primary key; cannot validate %s",
@@ -75,7 +75,7 @@ type auditColumnSpec struct {
 	primaryKey bool
 }
 
-func validateAuditColumns(audit Table, auditName, parentPKType string) []error {
+func validateAuditColumns(audit table, auditName, parentPKType string) []error {
 	required := []auditColumnSpec{
 		{"id", "uuid", false, true},
 		{"parent_id", parentPKType, false, false},
@@ -92,8 +92,8 @@ func validateAuditColumns(audit Table, auditName, parentPKType string) []error {
 	return errs
 }
 
-func validateAuditColumn(audit Table, auditName string, req auditColumnSpec) []error {
-	col := audit.GetColumn(req.name)
+func validateAuditColumn(audit table, auditName string, req auditColumnSpec) []error {
+	col := audit.getColumn(req.name)
 	if col == nil {
 		return []error{fmt.Errorf(
 			"audit: %s missing column %q (expected %s %s)",
@@ -124,19 +124,19 @@ func validateAuditColumn(audit Table, auditName string, req auditColumnSpec) []e
 	return errs
 }
 
-func validateAuditFKAndIndex(audit Table, auditName, parentName, parentPKCol string) []error {
-	if audit.GetColumn("parent_id") == nil {
+func validateAuditFKAndIndex(audit table, auditName, parentName, parentPKCol string) []error {
+	if audit.getColumn("parent_id") == nil {
 		return nil
 	}
 
 	var errs []error
-	if !audit.HasForeignKeyTo("parent_id", parentName, parentPKCol) {
+	if !audit.hasForeignKeyTo("parent_id", parentName, parentPKCol) {
 		errs = append(errs, fmt.Errorf(
 			"audit: %s missing foreign key on parent_id referencing %s(%s)",
 			auditName, parentName, parentPKCol,
 		))
 	}
-	if !audit.HasIndexLeadingWith("parent_id") {
+	if !audit.hasIndexLeadingWith("parent_id") {
 		errs = append(errs, fmt.Errorf(
 			"audit: %s missing index on (parent_id)",
 			auditName,
@@ -151,7 +151,7 @@ func validateAuditFKAndIndex(audit Table, auditName, parentName, parentPKCol str
 	return errs
 }
 
-func hasUniqueIndexOn(t Table, cols ...string) bool {
+func hasUniqueIndexOn(t table, cols ...string) bool {
 	for i := range t.Indexes {
 		idx := &t.Indexes[i]
 		if !idx.IsUnique || len(idx.Columns) != len(cols) {
@@ -197,7 +197,7 @@ func nullabilityWord(nullable bool) string {
 	return "NOT NULL"
 }
 
-func columnIsPrimaryKey(t Table, name string) bool {
+func columnIsPrimaryKey(t table, name string) bool {
 	for _, pk := range t.PrimaryKey {
 		if pk == name {
 			return true
@@ -206,8 +206,8 @@ func columnIsPrimaryKey(t Table, name string) bool {
 	return false
 }
 
-func expectedAuditDDL(parent Table) string {
-	pkCol := parent.GetPrimaryKeyColumn()
+func expectedAuditDDL(parent table) string {
+	pkCol := parent.getPrimaryKeyColumn()
 	pkType := "UUID"
 	pkName := "id"
 	if pkCol != nil {

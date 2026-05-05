@@ -39,7 +39,7 @@ WHERE user_id = $1;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -120,7 +120,7 @@ WHERE post_id = $1;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -215,7 +215,7 @@ ORDER BY post_count DESC;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -331,7 +331,7 @@ ORDER BY post_count DESC;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -413,7 +413,7 @@ WHERE status = $1;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -517,7 +517,7 @@ WHERE id = $1;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -604,7 +604,7 @@ WHERE id = $1;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -682,7 +682,7 @@ WHERE id = $1;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -757,7 +757,7 @@ WHERE id = $1;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -840,7 +840,7 @@ WHERE id = $1;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -925,7 +925,7 @@ WHERE p.status = 'published';`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -1030,7 +1030,7 @@ LEFT JOIN posts p ON u.id = p.user_id;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -1149,7 +1149,7 @@ WHERE p.status = 'published';`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -1255,7 +1255,7 @@ LEFT JOIN posts p ON pc.post_id = p.id;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -1339,7 +1339,7 @@ LEFT JOIN posts p ON pc.post_id = p.id;`
 }
 
 // findColumn finds a column by name in a slice of columns
-func findColumn(columns []Column, name string) *Column {
+func findColumn(columns []column, name string) *column {
 	for i := range columns {
 		if columns[i].Name == name {
 			return &columns[i]
@@ -1379,7 +1379,7 @@ WHERE user_id = $1;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -1461,7 +1461,7 @@ WHERE status = 'published';`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -1535,7 +1535,7 @@ ORDER BY published_at;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -1630,7 +1630,7 @@ WHERE status = 'published';`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -1720,7 +1720,7 @@ ORDER BY p.user_id, p.view_count DESC;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -1846,7 +1846,7 @@ FROM active_users;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -1936,7 +1936,7 @@ INNER JOIN (
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -2049,7 +2049,7 @@ LEFT JOIN comment_stats cs ON cs.post_id = pd.id;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -2177,7 +2177,7 @@ ORDER BY up.id, c.created_at;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -2289,7 +2289,7 @@ WHERE user_id = $1;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -2360,7 +2360,7 @@ WHERE user_id = $1;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -2431,7 +2431,7 @@ WHERE id = $1;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
@@ -2480,7 +2480,7 @@ SELECT view_count, like_count FROM posts WHERE id = $1;`
 	}
 
 	parser := NewQueryParser(sqlDir)
-	queries, err := parser.ParseQueries()
+	queries, err := parser.parseQueries()
 	if err != nil {
 		t.Fatalf("Failed to parse queries: %v", err)
 	}
