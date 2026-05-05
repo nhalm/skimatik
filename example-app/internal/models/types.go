@@ -36,8 +36,6 @@ type UserStats struct {
 }
 
 // UserAuditEntry represents a single SCD Type 2 audit row from users_audit.
-// Used to surface the audit history maintained by skimatik's CTE-based
-// Create/Update on the parent users table.
 type UserAuditEntry struct {
 	ID        uuid.UUID `json:"id"`
 	ParentID  uuid.UUID `json:"parent_id"`

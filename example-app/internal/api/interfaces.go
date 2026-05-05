@@ -18,8 +18,6 @@ type UserService interface {
 	DeactivateUser(ctx context.Context, userID uuid.UUID) error
 	GetUser(ctx context.Context, userID uuid.UUID) (*models.UserDetail, error)
 
-	// CreateUser/UpdateUser exercise the audited generated CRUD methods so the
-	// example-app's curl smoke test can demonstrate the audit CTE end-to-end.
 	CreateUser(ctx context.Context, name, email string, bio *string) (*models.UserSummary, error)
 	UpdateUserName(ctx context.Context, userID uuid.UUID, name string) (*models.UserSummary, error)
 	GetUserAuditHistory(ctx context.Context, userID uuid.UUID) ([]models.UserAuditEntry, error)

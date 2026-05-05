@@ -437,9 +437,6 @@ func TestIsTableAudited_UnknownTable(t *testing.T) {
 }
 
 func TestTableAuditPropagation(t *testing.T) {
-	// Drives Generator.resolveTables — the same code path generateTables uses —
-	// to confirm that introspected Table values pick up their Audit flag from
-	// TableConfigs and that non-included tables are dropped.
 	cfg := &Config{
 		Include: []string{"posts", "comments"},
 		TableConfigs: map[string]TableConfig{
@@ -452,7 +449,7 @@ func TestTableAuditPropagation(t *testing.T) {
 	introspected := []Table{
 		{Name: "posts", Schema: "public"},
 		{Name: "comments", Schema: "public"},
-		{Name: "tags", Schema: "public"}, // not configured at all
+		{Name: "tags", Schema: "public"},
 	}
 
 	resolvedSlice := g.resolveTables(introspected)
@@ -471,8 +468,6 @@ func TestTableAuditPropagation(t *testing.T) {
 		t.Errorf("tags should be filtered out by Include")
 	}
 
-	// resolveTables must not mutate the caller's slice — the introspector's
-	// returned values should keep Audit at its zero default.
 	for _, tbl := range introspected {
 		if tbl.Audit {
 			t.Errorf("resolveTables mutated input slice: %s.Audit=true", tbl.Name)

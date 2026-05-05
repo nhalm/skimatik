@@ -289,16 +289,13 @@ func (cg *CodeGenerator) generateRepository(table Table) (string, error) {
 func (cg *CodeGenerator) generateCRUDOperations(table Table) (string, error) {
 	var code strings.Builder
 
-	// Generate template data
 	data := cg.prepareCRUDTemplateData(table)
 
-	// Get the functions to generate for this table
 	functions := cg.config.GetTableFunctions(table.Name)
 
-	// Audited tables route create/update through CTE-based templates that
-	// maintain the parallel <table>_audit history alongside the parent
-	// mutation. Delete is generated normally — whether deletion is permitted
-	// is a database-level concern enforced via Postgres roles, not by codegen.
+	// Audited tables route create/update through CTE-based templates. Delete
+	// is generated normally — whether deletion is permitted is a database
+	// policy concern enforced via Postgres roles, not by codegen.
 	createTemplate := TemplateCreate
 	updateTemplate := TemplateUpdate
 	if table.Audit {
@@ -306,7 +303,6 @@ func (cg *CodeGenerator) generateCRUDOperations(table Table) (string, error) {
 		updateTemplate = TemplateUpdateAudited
 	}
 
-	// Map function names to templates (using template manager)
 	operationTemplates := map[string]string{
 		"get":      TemplateGetByID,
 		"create":   createTemplate,
@@ -316,7 +312,6 @@ func (cg *CodeGenerator) generateCRUDOperations(table Table) (string, error) {
 		"paginate": TemplatePaginationSharedListPaginated,
 	}
 
-	// Generate each requested CRUD operation
 	first := true
 	for _, function := range functions {
 		templateStr, exists := operationTemplates[function]
@@ -359,9 +354,9 @@ func (cg *CodeGenerator) generateCRUDOperations(table Table) (string, error) {
 	return code.String(), nil
 }
 
-// prepareCRUDTemplateData prepares the data structure for CRUD templates.
-// All inputs come from already-validated schema introspection, so no error
-// path is required.
+// prepareCRUDTemplateData builds the template data shared by all CRUD
+// templates. Audited variants place the row ID at $1 so closed-audit and
+// parent-update CTEs share the placeholder, pushing SET assignments to $2..$N.
 func (cg *CodeGenerator) prepareCRUDTemplateData(table Table) map[string]any {
 	structName := table.GoStructName()
 	repositoryName := structName + "Repository"
@@ -370,7 +365,6 @@ func (cg *CodeGenerator) prepareCRUDTemplateData(table Table) map[string]any {
 	createParamIndex := 1
 	updateParamIndex := 1
 
-	// Build column lists
 	var selectColumns []string
 	var scanArgs []string
 	var createFields []map[string]string
@@ -380,28 +374,21 @@ func (cg *CodeGenerator) prepareCRUDTemplateData(table Table) map[string]any {
 	var insertArgs []string
 	var updateAssignments []string
 	var updateArgs []string
-	// Audited variants reserve $1 for the row ID so the same placeholder can
-	// be used in both the closed-audit and parent-update WHERE clauses,
-	// pushing SET assignments to $2..$N.
 	var auditedUpdateAssignments []string
 
-	// First, add ID column to insert lists
 	insertColumns = append(insertColumns, idColumn.Name)
 	insertPlaceholders = append(insertPlaceholders, fmt.Sprintf("$%d", createParamIndex))
 	insertArgs = append(insertArgs, "id")
 	createParamIndex++
 
 	for _, col := range table.Columns {
-		// Select columns and scan args (for all operations)
 		selectColumns = append(selectColumns, col.Name)
 		scanArgs = append(scanArgs, "&"+receiverName+"."+col.GoFieldName())
 
-		// Skip ID column for create/update params (it's auto-generated in code)
 		if col.Name == idColumn.Name {
 			continue
 		}
 
-		// Create fields (exclude ID and columns with defaults)
 		if col.DefaultValue == "" {
 			createFields = append(createFields, map[string]string{
 				"Name": col.GoFieldName(),
@@ -415,7 +402,6 @@ func (cg *CodeGenerator) prepareCRUDTemplateData(table Table) map[string]any {
 			createParamIndex++
 		}
 
-		// Update fields (all non-ID columns)
 		updateFields = append(updateFields, map[string]string{
 			"Name": col.GoFieldName(),
 			"Type": col.GoType,
@@ -428,8 +414,8 @@ func (cg *CodeGenerator) prepareCRUDTemplateData(table Table) map[string]any {
 		updateParamIndex++
 	}
 
-	// ID parameter comes last in the non-audited update; audited variants
-	// place it first so closed/updated CTEs share $1.
+	// Non-audited update places ID last; audited variants place it first so
+	// the closed-audit and parent-update CTEs share $1.
 	updateArgs = append(updateArgs, "id")
 	idParamIndex := updateParamIndex
 	auditedUpdateArgs := append([]string{"id"}, updateArgs[:len(updateArgs)-1]...)

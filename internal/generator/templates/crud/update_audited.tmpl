@@ -3,19 +3,18 @@ type Update{{.StructName}}Params struct {
 {{range .UpdateFields}}	{{.Name}} {{.Type}} `{{.Tag}}`
 {{end}}}
 
-// Update updates an existing {{.StructName}} and maintains its audit history in
-// {{.AuditTableName}}. A single statement closes the previous open audit row,
-// applies the parent UPDATE, and inserts a new audit row capturing the post-image.
-// All three operations share the same statement-level NOW() timestamp.
+// Update mutates an existing {{.StructName}} and maintains its audit history
+// in {{.AuditTableName}}. A single CTE closes the open audit row, applies the
+// parent UPDATE, and inserts the new audit row, all sharing one
+// statement-level NOW() timestamp.
 //
-// Concurrency: the new row's `version` is computed as
+// Concurrency: `version` is computed as
 //   COALESCE((SELECT MAX(version) FROM {{.AuditTableName}} WHERE parent_id = updated.id), 0) + 1
-// This is race-safe because the parent UPDATE in this same statement row-locks
-// the parent (`{{.TableName}}`) row, serializing concurrent updates to the same
-// parent. By the time a second transaction's MAX subquery runs, the first
-// transaction has committed and its audit row is visible. The UNIQUE index on
-// ({{.AuditTableName}}.parent_id, version) is the defensive backstop in case
-// the lock assumption is ever wrong.
+// This is race-safe because the parent UPDATE in the same statement row-locks
+// the parent ({{.TableName}}) row, serializing concurrent updates to the same
+// parent; a second transaction's MAX subquery runs only after the first has
+// committed. The UNIQUE index on ({{.AuditTableName}}.parent_id, version) is
+// the defensive backstop in case the lock assumption is ever wrong.
 func (r *{{.RepositoryName}}) Update(ctx context.Context, db pgxkit.Executor, id {{.IDType}}, params Update{{.StructName}}Params) (*{{.StructName}}, error) {
 	query := `
 		WITH closed AS (

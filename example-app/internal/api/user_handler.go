@@ -156,11 +156,6 @@ type UpdateUserNameRequest struct {
 }
 
 // CreateUser handles POST /api/users.
-//
-// This is the entry point exercised by the example-app curl smoke test that
-// proves skimatik's audited Create CTE works end-to-end: a 201-equivalent
-// response here means a row was written to both `users` and `users_audit` in
-// a single statement.
 func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var req CreateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -187,10 +182,6 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateUserName handles PATCH /api/users/{id}/name.
-//
-// Pairs with CreateUser to demonstrate the audit Update CTE: the previously
-// open audit row is closed and a new one is opened, sharing a single
-// statement-level NOW() timestamp.
 func (h *UserHandler) UpdateUserName(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	userID, err := uuid.Parse(idStr)
@@ -223,10 +214,6 @@ func (h *UserHandler) UpdateUserName(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetUserAuditHistory handles GET /api/users/{id}/audit.
-//
-// Surfaces the audit trail kept by skimatik's CTE-based Create/Update.
-// Useful for the smoke test to assert "after one Create + one Update we
-// have exactly two audit rows, one closed and one open."
 func (h *UserHandler) GetUserAuditHistory(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	userID, err := uuid.Parse(idStr)

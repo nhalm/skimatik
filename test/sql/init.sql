@@ -192,11 +192,7 @@ CREATE TABLE composite_pk_table (
     PRIMARY KEY (tenant_id, user_id)
 );
 
--- Composite-FK fixture: a parent table with a 2-column UNIQUE key, plus a
--- junction table that references those two columns together. Exercises the
--- introspector's `position_in_unique_constraint` ordinal-alignment logic so
--- we can verify the (child_col, parent_col) pairs come back correctly aligned
--- and share a single ConstraintName.
+-- Composite-FK fixture: child references the parent's 2-column UNIQUE key.
 CREATE TABLE composite_uk_parent (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
     tenant_id UUID NOT NULL,
@@ -218,12 +214,7 @@ CREATE TABLE composite_fk_child (
         ON DELETE CASCADE
 );
 
--- Audit fixture: a well-formed audit child for users so the introspector's
--- GetTablesByName method can be exercised end-to-end against a table that is
--- intentionally NOT part of the default include/exclude set used by config
--- tests. Shape mirrors the canonical SCD Type 2 audit DDL (id PK, parent_id
--- FK, version INTEGER, jsonb snapshot, valid_from NOT NULL, valid_to
--- NULLABLE, regular index on parent_id, UNIQUE index on (parent_id, version)).
+-- Audit fixture: a well-formed SCD Type 2 audit child for users.
 CREATE TABLE users_audit (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
     parent_id UUID NOT NULL REFERENCES users(id),

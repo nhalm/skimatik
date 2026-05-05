@@ -80,12 +80,9 @@ func (g *Generator) shutdownDB() {
 	}
 }
 
-// generateTablesStage emits the shared support files plus per-table
-// repository code. It is the table-mode entry point used by Generate.
-//
-// The audit pre-flight gate runs before any file is written: introspect →
-// resolve → validate. If validation fails, the stage aborts with the
-// validator's error verbatim and the output directory is left untouched.
+// generateTablesStage emits the shared support files plus per-table repository
+// code. The audit pre-flight gate runs before any file is written; if
+// validation fails, the output directory is left untouched.
 func (g *Generator) generateTablesStage(ctx context.Context) error {
 	if g.config.Verbose {
 		slog.Info("Starting table introspection")
@@ -113,17 +110,9 @@ func (g *Generator) generateTablesStage(ctx context.Context) error {
 	return nil
 }
 
-// validateAuditTables runs the audit pre-flight gate over the already-resolved
-// tables. It selects parents flagged for audit, fetches their expected
-// `<parent>_audit` siblings via GetTablesByName (bypassing include/exclude so
-// users do not have to list audit children in their config), and delegates
-// shape validation to ValidateAuditTables.
-//
-// The validator's error already contains a multi-line, copy-pasteable DDL
-// block; we return it unwrapped so the formatting reaches the user intact.
-//
-// Iterates resolved by index to avoid gocritic.rangeValCopy on the multi-slice
-// Table struct, matching the pattern in resolveTables.
+// validateAuditTables runs the audit pre-flight gate over already-resolved
+// tables. The validator's error contains a multi-line copy-pasteable DDL block;
+// it is returned unwrapped so the formatting reaches the user intact.
 func (g *Generator) validateAuditTables(ctx context.Context, resolved []Table) error {
 	parents := make(map[string]Table)
 	for i := range resolved {
@@ -203,10 +192,7 @@ func (g *Generator) connect(ctx context.Context) error {
 // generateTablesFromResolved emits per-table repository code for the supplied
 // resolved tables. Introspection and resolveTables filtering are the caller's
 // responsibility; this lets the table-generation stage interleave the audit
-// pre-flight gate between resolution and per-table codegen without
-// re-introspecting the schema.
-//
-// Iterates by index to avoid gocritic.rangeValCopy on the multi-slice Table.
+// pre-flight gate between resolution and per-table codegen.
 func (g *Generator) generateTablesFromResolved(_ context.Context, resolved []Table) error {
 	if g.config.Verbose {
 		slog.Info("Generating code for tables after filtering", "count", len(resolved))
@@ -289,13 +275,9 @@ func (g *Generator) generateQueries(ctx context.Context) error {
 	return nil
 }
 
-// resolveTables filters introspected tables by Include/Exclude patterns and
-// propagates per-table configuration (e.g. Audit) onto the resolved values.
-// The input slice is not mutated; each surviving Table is copied with its
-// Audit flag set from the configuration. Single-pass: filter and propagate
-// happen together so we never carry a partially-populated Table forward.
-//
-// Iterates by index to avoid gocritic.rangeValCopy on the multi-slice Table.
+// resolveTables filters introspected tables by Include patterns and propagates
+// per-table configuration (e.g. Audit) onto the resolved values. The input
+// slice is not mutated.
 func (g *Generator) resolveTables(tables []Table) []Table {
 	resolved := make([]Table, 0, len(tables))
 	for i := range tables {

@@ -13,14 +13,8 @@ default_functions: "all"
 queries:
   directory: "./internal/repository/queries"
 
-# Also generate from tables.
-#
-# `audit: true` opts a parent table into SCD Type 2 history maintained via
-# CTE-based Create/Update. The companion `<table>_audit` table must already
-# exist in the schema (see migration 000005). See /docs/audit.md for the
-# canonical DDL and what gets generated. Delete is generated normally for
-# audited tables — whether deletion is permitted is enforced via Postgres
-# roles, not by codegen.
+# `audit: true` opts a parent table into SCD Type 2 history; the companion
+# `<table>_audit` table is created in migration 000005. See /docs/audit.md.
 tables:
   users:
     audit: true

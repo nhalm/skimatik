@@ -129,10 +129,7 @@ func TestCodeGenerator_GenerateTableRepository_Integration(t *testing.T) {
 
 // TestCodeGenerator_GenerateTableRepository_Audited verifies that flagging a
 // Table with Audit: true routes Create/Update through the CTE-based audited
-// templates. Delete is generated normally on audited tables — whether
-// deletion is permitted is a database-level policy concern (Postgres roles),
-// not a codegen one. Step 6 covers the end-to-end runtime test against a live
-// database.
+// templates while leaving Delete unchanged.
 func TestCodeGenerator_GenerateTableRepository_Audited(t *testing.T) {
 	config := getTestConfigWithTempDir(t)
 	cg := NewCodeGenerator(config, "test")

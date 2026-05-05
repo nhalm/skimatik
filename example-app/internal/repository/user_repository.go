@@ -115,9 +115,7 @@ func (r *UserRepository) GetUser(ctx context.Context, userID uuid.UUID) (*models
 	return userDetail, nil
 }
 
-// CreateUser routes through the audited generated Create. Skimatik's CTE
-// inserts the parent row and an open audit row in a single statement; we
-// call the embedded UsersRepository.Create directly via method promotion.
+// CreateUser delegates to the audited generated Create.
 func (r *UserRepository) CreateUser(ctx context.Context, name, email string, bio *string) (*models.UserSummary, error) {
 	user, err := r.Create(ctx, executorFromContext(ctx, r.db), generated.CreateUsersParams{
 		Name:  name,
@@ -135,13 +133,11 @@ func (r *UserRepository) CreateUser(ctx context.Context, name, email string, bio
 	}, nil
 }
 
-// UpdateUserName routes through the audited generated Update. The CTE closes
-// the previously open audit row, applies the parent UPDATE, and opens a new
-// audit row, all sharing one statement-level NOW() timestamp.
+// UpdateUserName delegates to the audited generated Update, mutating only the
+// name field. The current row is read first so the audit CTE captures a
+// faithful post-image of the unchanged columns.
 func (r *UserRepository) UpdateUserName(ctx context.Context, userID uuid.UUID, name string) (*models.UserSummary, error) {
 	exec := executorFromContext(ctx, r.db)
-	// Read the current row so we can pass a faithful post-image to the
-	// audit CTE; only the name field is mutated for this demo.
 	current, err := r.Get(ctx, exec, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read user before update: %w", err)
@@ -166,10 +162,8 @@ func (r *UserRepository) UpdateUserName(ctx context.Context, userID uuid.UUID, n
 	}, nil
 }
 
-// GetUserAuditHistory queries users_audit directly (the audit table is owned
-// by the application — skimatik validates its shape but does not generate a
-// repository for it). Rows are ordered by `version` ascending so callers see
-// the original row first and the currently open row last.
+// GetUserAuditHistory returns the SCD Type 2 history rows for a user, ordered
+// from oldest to newest version.
 func (r *UserRepository) GetUserAuditHistory(ctx context.Context, userID uuid.UUID) ([]models.UserAuditEntry, error) {
 	const q = `
 		SELECT id, parent_id, version, snapshot::text, valid_from, valid_to

@@ -3,9 +3,8 @@ type Create{{.StructName}}Params struct {
 {{range .CreateFields}}	{{.Name}} {{.Type}} `{{.Tag}}`
 {{end}}}
 
-// Create creates a new {{.StructName}} and writes an audit row to {{.AuditTableName}}.
-// The parent INSERT and audit INSERT execute as a single CTE so they share the same
-// statement-level NOW() timestamp and either both succeed or both fail.
+// Create inserts a new {{.StructName}} and writes the initial audit row to
+// {{.AuditTableName}} in a single CTE.
 func (r *{{.RepositoryName}}) Create(ctx context.Context, db pgxkit.Executor, params Create{{.StructName}}Params) (*{{.StructName}}, error) {
 	id := r.generateIdFunc()
 	query := `

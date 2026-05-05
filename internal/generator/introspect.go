@@ -69,29 +69,15 @@ func (i *Introspector) GetTables(ctx context.Context) ([]Table, error) {
 }
 
 // GetTablesByName retrieves the named tables from the configured schema,
-// bypassing any include/exclude filters that the caller may have applied to
-// GetTables. It is intended for resolving auxiliary tables (e.g. audit
-// children) that the user has not explicitly listed in their config but that
-// must still be introspected for validation purposes.
-//
-// The returned map is keyed by table name. Names that do not exist in the
-// schema are simply absent from the map — this is not an error, since callers
-// (like the audit pre-flight gate) want to surface "missing audit table" as
-// a domain-level validation failure rather than an introspection failure.
-//
-// An empty input slice short-circuits to an empty map without touching the
-// database. The underlying loaders (columns, primary keys, indexes, foreign
-// keys) all accept a name list and are reused verbatim — there is no separate
-// query path for "by name" introspection.
+// bypassing any include/exclude filters. The returned map is keyed by table
+// name; names that do not exist in the schema are silently omitted rather
+// than surfaced as zero-value Table structs. An empty input slice
+// short-circuits to an empty map without touching the database.
 func (i *Introspector) GetTablesByName(ctx context.Context, names []string) (map[string]Table, error) {
 	if len(names) == 0 {
 		return map[string]Table{}, nil
 	}
 
-	// Resolve which of the requested names actually exist in the schema.
-	// Loaders accept a name list, but if a name is missing from
-	// information_schema we want to omit it from the result map rather than
-	// emit a Table struct with empty columns/PK/etc.
 	existing, err := i.filterExistingTableNames(ctx, names)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve table names: %w", err)
@@ -135,9 +121,7 @@ func (i *Introspector) GetTablesByName(ctx context.Context, names []string) (map
 }
 
 // filterExistingTableNames returns the subset of `names` that exist as base
-// tables in the configured schema. Used by GetTablesByName so that callers
-// receive a map containing only real tables; non-existent names are silently
-// dropped rather than surfaced as Table structs with zero columns.
+// tables in the configured schema.
 func (i *Introspector) filterExistingTableNames(ctx context.Context, names []string) ([]string, error) {
 	query := `
 		SELECT table_name
@@ -309,15 +293,11 @@ func (i *Introspector) getAllTablePrimaryKeys(ctx context.Context, tableNames []
 }
 
 // getAllTableIndexes retrieves all indexes for all tables in a single query.
-//
-// Column ordering is taken from pg_index.indkey (the authoritative source) so
-// callers can reliably ask "is column X the leading column of any index on
-// this table?" — important for the audit pre-flight gate. Expression columns
-// (e.g. LOWER(email)) are emitted as the empty string at the matching
-// position; partial-predicate clauses are ignored. INCLUDE-clause covering
-// columns are excluded via pos < indnkeyatts so only true key columns surface,
-// and concurrently-built or otherwise unusable indexes are filtered out via
-// indisvalid AND indisready.
+// Column ordering is taken from pg_index.indkey so callers can reliably check
+// the leading-column identity of each index. Expression columns surface as
+// the empty string; INCLUDE-clause covering columns are excluded via
+// pos < indnkeyatts; concurrently-built or otherwise unusable indexes are
+// filtered via indisvalid AND indisready.
 func (i *Introspector) getAllTableIndexes(ctx context.Context, tableNames []string) (map[string][]Index, error) {
 	query := `
 		WITH idx AS (
@@ -405,17 +385,9 @@ func (i *Introspector) getAllTableIndexes(ctx context.Context, tableNames []stri
 }
 
 // getAllTableForeignKeys retrieves foreign-key constraints for all tables in
-// the configured schema. Returns one row per FK column. Composite FKs surface
-// as multiple rows sharing a ConstraintName; group by ConstraintName to
-// reconstitute composites.
-//
-// Joins information_schema.table_constraints + key_column_usage +
-// referential_constraints + constraint_column_usage. All joins include
-// table_schema to prevent cross-schema bleed when two FKs of the same name
-// exist in different schemas. The referenced column is pulled from
-// constraint_column_usage and aligned by ordinal_position so composite-FK
-// rows pair the correct (child, parent) columns. Only same-schema references
-// are returned (v1 audit contract).
+// the configured schema. Returns one row per FK column; composite FKs surface
+// as multiple rows sharing a ConstraintName. Only same-schema references are
+// returned.
 func (i *Introspector) getAllTableForeignKeys(ctx context.Context, tableNames []string) (map[string][]ForeignKey, error) {
 	query := `
 		SELECT

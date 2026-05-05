@@ -5,7 +5,6 @@ import (
 	"testing"
 )
 
-// auditFixture returns a well-formed UUID-keyed audit child Table; tests mutate it to inject failures.
 func auditFixture(parentName string) Table {
 	auditName := parentName + "_audit"
 	return Table{
@@ -33,7 +32,6 @@ func auditFixture(parentName string) Table {
 	}
 }
 
-// parentFixture returns a minimal UUID-keyed parent Table flagged for audit.
 func parentFixture(name string) Table {
 	return Table{
 		Name:       name,
@@ -94,7 +92,6 @@ func TestValidateAuditTables_Errors(t *testing.T) {
 			parents: map[string]Table{"posts": parentFixture("posts")},
 			audits: func() map[string]Table {
 				a := auditFixture("posts")
-				// Drop only the unique index; keep the parent_id index.
 				kept := a.Indexes[:0]
 				for _, idx := range a.Indexes {
 					if !idx.IsUnique {
