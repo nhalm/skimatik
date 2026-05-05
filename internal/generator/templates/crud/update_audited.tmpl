@@ -7,12 +7,21 @@ type Update{{.StructName}}Params struct {
 // {{.AuditTableName}}. A single statement closes the previous open audit row,
 // applies the parent UPDATE, and inserts a new audit row capturing the post-image.
 // All three operations share the same statement-level NOW() timestamp.
+//
+// Concurrency: the new row's `version` is computed as
+//   COALESCE((SELECT MAX(version) FROM {{.AuditTableName}} WHERE parent_id = updated.id), 0) + 1
+// This is race-safe because the parent UPDATE in this same statement row-locks
+// the parent (`{{.TableName}}`) row, serializing concurrent updates to the same
+// parent. By the time a second transaction's MAX subquery runs, the first
+// transaction has committed and its audit row is visible. The UNIQUE index on
+// ({{.AuditTableName}}.parent_id, version) is the defensive backstop in case
+// the lock assumption is ever wrong.
 func (r *{{.RepositoryName}}) Update(ctx context.Context, db pgxkit.Executor, id {{.IDType}}, params Update{{.StructName}}Params) (*{{.StructName}}, error) {
 	query := `
 		WITH closed AS (
 			UPDATE {{.AuditTableName}}
-			SET end_date = NOW()
-			WHERE parent_id = $1 AND end_date IS NULL
+			SET valid_to = NOW()
+			WHERE parent_id = $1 AND valid_to IS NULL
 		),
 		updated AS (
 			UPDATE {{.TableName}}
@@ -21,8 +30,12 @@ func (r *{{.RepositoryName}}) Update(ctx context.Context, db pgxkit.Executor, id
 			RETURNING {{.SelectColumns}}
 		),
 		audited AS (
-			INSERT INTO {{.AuditTableName}} (id, parent_id, data, start_date)
-			SELECT gen_random_uuid(), id, to_jsonb(updated.*), NOW() FROM updated
+			INSERT INTO {{.AuditTableName}} (id, parent_id, version, snapshot, valid_from)
+			SELECT gen_random_uuid(), updated.id,
+			       COALESCE((SELECT MAX(version) FROM {{.AuditTableName}} WHERE parent_id = updated.id), 0) + 1,
+			       to_jsonb(updated.*),
+			       NOW()
+			FROM updated
 		)
 		SELECT {{.SelectColumns}} FROM updated
 	`

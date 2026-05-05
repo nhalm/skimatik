@@ -93,8 +93,10 @@ test: setup generate
 		echo "$$AUDIT_AFTER_UPDATE" | grep -q '"count":2' || { echo "expected 2 audit rows after update"; exit 1; }; \
 		echo "$$AUDIT_AFTER_UPDATE" | grep -q 'Audit Demo Original' || { echo "expected closed audit row to retain original name"; exit 1; }; \
 		echo "$$AUDIT_AFTER_UPDATE" | grep -q 'Audit Demo Renamed' || { echo "expected open audit row to carry new name"; exit 1; }; \
-		echo "$$AUDIT_AFTER_UPDATE" | grep -q '"end_date":"' || { echo "expected one closed audit row with non-null end_date"; exit 1; }; \
-		echo "$$AUDIT_AFTER_UPDATE" | grep -q '"end_date":null' || { echo "expected one open audit row with null end_date"; exit 1; }; \
+		echo "$$AUDIT_AFTER_UPDATE" | grep -q '"valid_to":"' || { echo "expected one closed audit row with non-null valid_to"; exit 1; }; \
+		echo "$$AUDIT_AFTER_UPDATE" | grep -q '"valid_to":null' || { echo "expected one open audit row with null valid_to"; exit 1; }; \
+		echo "$$AUDIT_AFTER_UPDATE" | grep -q '"version":1' || { echo "expected closed audit row with version=1"; exit 1; }; \
+		echo "$$AUDIT_AFTER_UPDATE" | grep -q '"version":2' || { echo "expected open audit row with version=2"; exit 1; }; \
 		FINAL_USER=$$(curl -sf "http://localhost:8080/api/users/$$USER_ID"); \
 		echo "Final user: $$FINAL_USER"; \
 		echo "$$FINAL_USER" | grep -q '"name":"Audit Demo Renamed"' || { echo "expected GET user to show updated name"; exit 1; }; \

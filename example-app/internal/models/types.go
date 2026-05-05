@@ -41,9 +41,10 @@ type UserStats struct {
 type UserAuditEntry struct {
 	ID        uuid.UUID `json:"id"`
 	ParentID  uuid.UUID `json:"parent_id"`
-	Data      string    `json:"data"`
-	StartDate string    `json:"start_date"`
-	EndDate   *string   `json:"end_date"`
+	Version   int       `json:"version"`
+	Snapshot  string    `json:"snapshot"`
+	ValidFrom string    `json:"valid_from"`
+	ValidTo   *string   `json:"valid_to"`
 }
 
 // Post types

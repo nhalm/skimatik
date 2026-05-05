@@ -175,7 +175,7 @@ func TestIntrospector_GetTablesByName(t *testing.T) {
 	}
 
 	// Required columns should all be present.
-	for _, name := range []string{"id", "parent_id", "data", "start_date", "end_date"} {
+	for _, name := range []string{"id", "parent_id", "version", "snapshot", "valid_from", "valid_to"} {
 		if tbl.GetColumn(name) == nil {
 			t.Errorf("expected users_audit column %q; got %+v", name, tbl.Columns)
 		}

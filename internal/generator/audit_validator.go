@@ -9,20 +9,31 @@ import (
 
 // ValidateAuditTables enforces the audit pre-flight contract documented in
 // issue #144: every parent in `parents` flagged with Audit==true must have a
-// sibling `<parent>_audit` table in `audits` with the canonical shape:
+// sibling `<parent>_audit` table in `audits` with the canonical SCD Type 2
+// shape:
 //
 //	id          UUID PRIMARY KEY
 //	parent_id   <parent-PK-type> NOT NULL  REFERENCES <parent>(<pk>)
-//	data        JSONB NOT NULL
-//	start_date  TIMESTAMPTZ NOT NULL
-//	end_date    TIMESTAMPTZ NULL
-//	+ an index leading with parent_id
+//	version     INTEGER NOT NULL
+//	snapshot    JSONB NOT NULL
+//	valid_from  TIMESTAMPTZ NOT NULL
+//	valid_to    TIMESTAMPTZ NULL
+//	+ a regular index on (parent_id)
+//	+ a UNIQUE index on (parent_id, version)
 //
-// The function is permissive about extra columns — only the five required
+// The function is permissive about extra columns — only the six required
 // ones are validated. All errors across all audited tables are aggregated and
 // returned via errors.Join so the user can fix everything in one pass; each
 // affected audit table's expected DDL is appended once at the end of the
 // joined message so users can copy-paste a working schema.
+//
+// Concurrency note: the audited Update CTE computes the next version with
+// `COALESCE((SELECT MAX(version) FROM <parent>_audit WHERE parent_id = ?),
+// 0) + 1`. This is race-safe because the parent UPDATE in the same statement
+// row-locks the parent row, serializing concurrent updates to the same
+// parent. The MAX subquery on the second transaction sees the first
+// transaction's commit. The UNIQUE index on (parent_id, version) is the
+// defensive backstop in case the lock assumption is ever wrong.
 //
 // Parents are processed in lexical order so the joined error message is
 // stable; this matters for golden tests and for users diffing CI output.
@@ -93,10 +104,10 @@ func validateAuditTableForParent(parent Table, audits map[string]Table) []error 
 		return []error{fmt.Errorf("audit: %s not found", auditName)}
 	}
 
-	// Five required columns + up to two FK/index issues = 7 worst-case
+	// Six required columns + up to three FK/index issues = 9 worst-case
 	// failures. Preallocate to silence prealloc and avoid repeated
 	// growth in the (common) multi-failure path.
-	errs := make([]error, 0, 7)
+	errs := make([]error, 0, 9)
 	errs = append(errs, validateAuditColumns(audit, auditName, pkCol.Type)...)
 	errs = append(errs, validateAuditFKAndIndex(audit, auditName, parent.Name, pkCol.Name)...)
 	return errs
@@ -110,16 +121,19 @@ type auditColumnSpec struct {
 	primaryKey bool
 }
 
-// validateAuditColumns checks the five canonical audit columns. parentPKType
+// validateAuditColumns checks the six canonical audit columns. parentPKType
 // is the PostgreSQL type of the parent table's primary key column, which
-// drives the expected type of `parent_id`.
+// drives the expected type of `parent_id`. Column order here mirrors the
+// canonical DDL (id, parent_id, version, snapshot, valid_from, valid_to) so
+// error messages align with what users see in expectedAuditDDL.
 func validateAuditColumns(audit Table, auditName, parentPKType string) []error {
 	required := []auditColumnSpec{
 		{"id", "uuid", false, true},
 		{"parent_id", parentPKType, false, false},
-		{"data", "jsonb", false, false},
-		{"start_date", "timestamptz", false, false},
-		{"end_date", "timestamptz", true, false},
+		{"version", "integer", false, false},
+		{"snapshot", "jsonb", false, false},
+		{"valid_from", "timestamptz", false, false},
+		{"valid_to", "timestamptz", true, false},
 	}
 
 	errs := make([]error, 0, len(required))
@@ -162,10 +176,16 @@ func validateAuditColumn(audit Table, auditName string, req auditColumnSpec) []e
 }
 
 // validateAuditFKAndIndex enforces the FK constraint from parent_id to the
-// parent's primary key column and the leading-column index requirement on
-// parent_id. If parent_id is missing entirely the column-level error from
-// validateAuditColumns is enough; we don't pile on with FK/index complaints
-// for a column that doesn't exist.
+// parent's primary key column, the regular-index requirement on parent_id,
+// and the unique-index requirement on (parent_id, version). If parent_id is
+// missing entirely the column-level error from validateAuditColumns is
+// enough; we don't pile on with FK/index complaints for a column that
+// doesn't exist.
+//
+// The unique index on (parent_id, version) is checked even when `version` is
+// missing — the column-level error explains the missing column, and the
+// missing-index error tells the user the index is required regardless. Both
+// errors point to the same fix.
 func validateAuditFKAndIndex(audit Table, auditName, parentName, parentPKCol string) []error {
 	if audit.GetColumn("parent_id") == nil {
 		return nil
@@ -184,7 +204,36 @@ func validateAuditFKAndIndex(audit Table, auditName, parentName, parentPKCol str
 			auditName,
 		))
 	}
+	if !hasUniqueIndexOn(audit, "parent_id", "version") {
+		errs = append(errs, fmt.Errorf(
+			"audit: %s missing UNIQUE index on (parent_id, version)",
+			auditName,
+		))
+	}
 	return errs
+}
+
+// hasUniqueIndexOn reports whether the table has a UNIQUE index whose key
+// columns are exactly the supplied columns in order. PostgreSQL UNIQUE
+// constraints are backed by UNIQUE indexes and surface here the same way.
+func hasUniqueIndexOn(t Table, cols ...string) bool {
+	for i := range t.Indexes {
+		idx := &t.Indexes[i]
+		if !idx.IsUnique || len(idx.Columns) != len(cols) {
+			continue
+		}
+		match := true
+		for j, c := range cols {
+			if idx.Columns[j] != c {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
 }
 
 // pgTypeEquivalent reports whether two PostgreSQL type names refer to the
@@ -254,12 +303,16 @@ func expectedAuditDDL(parent Table) string {
 	b.WriteString("(")
 	b.WriteString(pkName)
 	b.WriteString("),\n")
-	b.WriteString("    data        JSONB        NOT NULL,\n")
-	b.WriteString("    start_date  TIMESTAMPTZ  NOT NULL,\n")
-	b.WriteString("    end_date    TIMESTAMPTZ\n")
+	b.WriteString("    version     INTEGER      NOT NULL,\n")
+	b.WriteString("    snapshot    JSONB        NOT NULL,\n")
+	b.WriteString("    valid_from  TIMESTAMPTZ  NOT NULL,\n")
+	b.WriteString("    valid_to    TIMESTAMPTZ\n")
 	b.WriteString("  );\n")
 	b.WriteString("  CREATE INDEX ON ")
 	b.WriteString(auditName)
-	b.WriteString(" (parent_id);")
+	b.WriteString(" (parent_id);\n")
+	b.WriteString("  CREATE UNIQUE INDEX ON ")
+	b.WriteString(auditName)
+	b.WriteString(" (parent_id, version);")
 	return b.String()
 }

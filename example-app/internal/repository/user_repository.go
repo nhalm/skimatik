@@ -168,14 +168,14 @@ func (r *UserRepository) UpdateUserName(ctx context.Context, userID uuid.UUID, n
 
 // GetUserAuditHistory queries users_audit directly (the audit table is owned
 // by the application — skimatik validates its shape but does not generate a
-// repository for it). Rows are ordered oldest-first so callers can see the
-// open row last.
+// repository for it). Rows are ordered by `version` ascending so callers see
+// the original row first and the currently open row last.
 func (r *UserRepository) GetUserAuditHistory(ctx context.Context, userID uuid.UUID) ([]models.UserAuditEntry, error) {
 	const q = `
-		SELECT id, parent_id, data::text, start_date, end_date
+		SELECT id, parent_id, version, snapshot::text, valid_from, valid_to
 		FROM users_audit
 		WHERE parent_id = $1
-		ORDER BY start_date ASC, id ASC
+		ORDER BY version ASC
 	`
 	rows, err := executorFromContext(ctx, r.db).Query(ctx, q, userID)
 	if err != nil {
@@ -191,13 +191,13 @@ func (r *UserRepository) GetUserAuditHistory(ctx context.Context, userID uuid.UU
 			start  time.Time
 			endPtr *time.Time
 		)
-		if err := rows.Scan(&entry.ID, &entry.ParentID, &entry.Data, &start, &endPtr); err != nil {
+		if err := rows.Scan(&entry.ID, &entry.ParentID, &entry.Version, &entry.Snapshot, &start, &endPtr); err != nil {
 			return nil, fmt.Errorf("failed to scan audit row: %w", err)
 		}
-		entry.StartDate = start.Format(tsLayout)
+		entry.ValidFrom = start.Format(tsLayout)
 		if endPtr != nil {
 			s := endPtr.Format(tsLayout)
-			entry.EndDate = &s
+			entry.ValidTo = &s
 		}
 		entries = append(entries, entry)
 	}

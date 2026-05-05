@@ -221,16 +221,19 @@ CREATE TABLE composite_fk_child (
 -- Audit fixture: a well-formed audit child for users so the introspector's
 -- GetTablesByName method can be exercised end-to-end against a table that is
 -- intentionally NOT part of the default include/exclude set used by config
--- tests. Shape mirrors the canonical audit DDL (id PK, parent_id FK, jsonb
--- data, start_date NOT NULL, end_date NULLABLE, plus an index on parent_id).
+-- tests. Shape mirrors the canonical SCD Type 2 audit DDL (id PK, parent_id
+-- FK, version INTEGER, jsonb snapshot, valid_from NOT NULL, valid_to
+-- NULLABLE, regular index on parent_id, UNIQUE index on (parent_id, version)).
 CREATE TABLE users_audit (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
     parent_id UUID NOT NULL REFERENCES users(id),
-    data JSONB NOT NULL,
-    start_date TIMESTAMP WITH TIME ZONE NOT NULL,
-    end_date TIMESTAMP WITH TIME ZONE
+    version INTEGER NOT NULL,
+    snapshot JSONB NOT NULL,
+    valid_from TIMESTAMP WITH TIME ZONE NOT NULL,
+    valid_to TIMESTAMP WITH TIME ZONE
 );
 CREATE INDEX idx_users_audit_parent ON users_audit (parent_id);
+CREATE UNIQUE INDEX uq_users_audit_parent_version ON users_audit (parent_id, version);
 
 -- Indexes for performance testing
 CREATE INDEX idx_users_email ON users(email);

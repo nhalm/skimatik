@@ -15,8 +15,8 @@ func (r *{{.RepositoryName}}) Create(ctx context.Context, db pgxkit.Executor, pa
 			RETURNING {{.SelectColumns}}
 		),
 		audited AS (
-			INSERT INTO {{.AuditTableName}} (id, parent_id, data, start_date)
-			SELECT gen_random_uuid(), id, to_jsonb(inserted.*), NOW() FROM inserted
+			INSERT INTO {{.AuditTableName}} (id, parent_id, version, snapshot, valid_from)
+			SELECT gen_random_uuid(), id, 1, to_jsonb(inserted.*), NOW() FROM inserted
 		)
 		SELECT {{.SelectColumns}} FROM inserted
 	`

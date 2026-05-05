@@ -2,7 +2,7 @@
 
 ## Overview
 
-Skimatik can generate Go repositories that maintain an SCD Type 2 audit history alongside any parent table. When a table is opted in via `audit: true`, every Create and Update on that table is rewritten as a single PostgreSQL CTE so the parent row and a row in the companion `<table>_audit` table are written atomically. The resulting history records the full pre- and post-image of every mutation, with each version of a row delimited by a `start_date`/`end_date` window.
+Skimatik can generate Go repositories that maintain an SCD Type 2 audit history alongside any parent table. When a table is opted in via `audit: true`, every Create and Update on that table is rewritten as a single PostgreSQL CTE so the parent row and a row in the companion `<table>_audit` table are written atomically. The resulting history records the full pre- and post-image of every mutation; each version of a row carries a monotonically increasing `version` counter and is delimited by a `valid_from`/`valid_to` window.
 
 The audit child is a normal table you own: skimatik validates its shape but does not create or migrate it. This keeps audit history visible to your migration tooling, your DBAs, and any downstream consumers (analytics, archives, GDPR exports) that already consume your schema.
 
@@ -29,18 +29,22 @@ You own the audit table. Add it through your normal migration tooling. The shape
 CREATE TABLE <parent>_audit (
   id          UUID         PRIMARY KEY,
   parent_id   <parent_pk>  NOT NULL REFERENCES <parent>(<pk_col>),
-  data        JSONB        NOT NULL,
-  start_date  TIMESTAMPTZ  NOT NULL,
-  end_date    TIMESTAMPTZ
+  version     INTEGER      NOT NULL,
+  snapshot    JSONB        NOT NULL,
+  valid_from  TIMESTAMPTZ  NOT NULL,
+  valid_to    TIMESTAMPTZ
 );
 CREATE INDEX ON <parent>_audit (parent_id);
+CREATE UNIQUE INDEX ON <parent>_audit (parent_id, version);
 ```
 
 Notes:
 - `parent_id` must match the parent's primary key type. For a `BIGINT`-keyed parent, `parent_id` is `BIGINT`; for `UUID`-keyed it is `UUID`.
-- `data` carries the post-image of the parent row as JSONB (`to_jsonb(parent.*)`).
-- `end_date IS NULL` means the row is the currently open version; on Update, the previously open row's `end_date` is set to `NOW()` and a new open row is inserted.
+- `version` is a monotonically increasing 1-based counter scoped to a single `parent_id`. Create writes `version = 1`; each Update writes `version = MAX(prior) + 1`.
+- `snapshot` carries the post-image of the parent row as JSONB (`to_jsonb(parent.*)`).
+- `valid_to IS NULL` means the row is the currently open version; on Update, the previously open row's `valid_to` is set to `NOW()` and a new open row is inserted.
 - The leading-column index on `parent_id` is required because every audit lookup filters by it.
+- The UNIQUE index on `(parent_id, version)` is required as a defensive backstop. The audited Update CTE relies on the parent UPDATE row-locking the parent row to serialize concurrent updates; the unique constraint guarantees correctness even if that assumption is ever wrong (and surfaces a hard error rather than silently double-numbering).
 
 Skimatik does **not** generate this DDL. The application owns the migration so the audit table participates fully in your schema-management workflow.
 
@@ -48,7 +52,7 @@ Skimatik does **not** generate this DDL. The application owns the migration so t
 
 For an audited parent table, skimatik emits CTE-based mutations:
 
-**Create** — single statement, parent INSERT and audit INSERT share `NOW()`:
+**Create** — single statement, parent INSERT and audit INSERT share `NOW()`. Initial `version` is hardcoded to `1`:
 
 ```sql
 WITH inserted AS (
@@ -57,19 +61,19 @@ WITH inserted AS (
     RETURNING id, name, email, ...
 ),
 audited AS (
-    INSERT INTO users_audit (id, parent_id, data, start_date)
-    SELECT gen_random_uuid(), id, to_jsonb(inserted.*), NOW() FROM inserted
+    INSERT INTO users_audit (id, parent_id, version, snapshot, valid_from)
+    SELECT gen_random_uuid(), id, 1, to_jsonb(inserted.*), NOW() FROM inserted
 )
 SELECT id, name, email, ... FROM inserted
 ```
 
-**Update** — single statement, closes the prior open audit row, applies the parent UPDATE, opens a new audit row, all sharing one statement-level `NOW()`:
+**Update** — single statement, closes the prior open audit row, applies the parent UPDATE, opens a new audit row with `version = MAX(prior) + 1`, all sharing one statement-level `NOW()`:
 
 ```sql
 WITH closed AS (
     UPDATE users_audit
-    SET end_date = NOW()
-    WHERE parent_id = $1 AND end_date IS NULL
+    SET valid_to = NOW()
+    WHERE parent_id = $1 AND valid_to IS NULL
 ),
 updated AS (
     UPDATE users
@@ -78,11 +82,17 @@ updated AS (
     RETURNING id, name, email, ...
 ),
 audited AS (
-    INSERT INTO users_audit (id, parent_id, data, start_date)
-    SELECT gen_random_uuid(), id, to_jsonb(updated.*), NOW() FROM updated
+    INSERT INTO users_audit (id, parent_id, version, snapshot, valid_from)
+    SELECT gen_random_uuid(), updated.id,
+           COALESCE((SELECT MAX(version) FROM users_audit WHERE parent_id = updated.id), 0) + 1,
+           to_jsonb(updated.*),
+           NOW()
+    FROM updated
 )
 SELECT id, name, email, ... FROM updated
 ```
+
+The `COALESCE(MAX(version), 0) + 1` pattern is concurrency-safe because the parent UPDATE in the same statement row-locks the parent row, serializing concurrent updates to the same `parent_id`. By the time a second transaction's MAX subquery runs, the first transaction has committed and its audit row is visible. The UNIQUE index on `(parent_id, version)` is the defensive backstop in case the lock assumption is ever wrong.
 
 **Get / List / Paginate**: unchanged. They read the parent table only.
 
@@ -97,11 +107,12 @@ Before any code is generated, skimatik validates each audited parent's companion
 The validator checks:
 
 - The `<parent>_audit` table exists.
-- It has exactly the five required columns: `id`, `parent_id`, `data`, `start_date`, `end_date`.
-- Each column has the expected type and nullability (`id` and `parent_id` and `data` and `start_date` are NOT NULL; `end_date` is NULL).
+- It has the six required columns: `id`, `parent_id`, `version`, `snapshot`, `valid_from`, `valid_to`.
+- Each column has the expected type and nullability (`id`, `parent_id`, `version`, `snapshot`, `valid_from` are NOT NULL; `valid_to` is NULL).
 - `id` is the primary key.
 - `parent_id` carries a foreign-key constraint referencing `<parent>(<pk_col>)`.
 - An index leads with `parent_id`.
+- A UNIQUE index covers `(parent_id, version)`.
 
 The validator is permissive about extra columns — your audit table is allowed to have additional columns (a `who` field, a `request_id`, etc.). Only the canonical contract is enforced.
 
@@ -110,7 +121,7 @@ The validator is permissive about extra columns — your audit table is allowed 
 - **One audit per parent.** A parent table has at most one companion audit table; the `<parent>_audit` naming is fixed and not configurable.
 - **`gen_random_uuid()` is required.** Audit row IDs are generated via `gen_random_uuid()`, which is built into PostgreSQL 13+ (no extension needed).
 - **Single-column primary keys only.** Audit follows skimatik's general constraint that parent tables must have a single-column primary key.
-- **Audit rows are append-only by design.** The Update CTE never UPDATEs `data` on a prior row — it only sets `end_date`. The post-image lives on a fresh row.
+- **Audit rows are append-only by design.** The Update CTE never UPDATEs `snapshot` on a prior row — it only sets `valid_to`. The post-image lives on a fresh row.
 - **`:paginated`, `:one`, `:many`, `:exec` queries are not audited.** Custom `.sql` queries do not flow through CRUD templates and are emitted unchanged.
 
 ## Example-App Demonstration

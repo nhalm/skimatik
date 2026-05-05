@@ -156,7 +156,11 @@ func TestCodeGenerator_GenerateTableRepository_Audited(t *testing.T) {
 		"to_jsonb(inserted.*)",
 		"gen_random_uuid()",
 		"users_audit",
-		"end_date IS NULL",
+		"valid_to IS NULL",
+		"valid_from",
+		"snapshot",
+		"version",
+		"MAX(version)",
 	}
 	for _, sub := range mustContain {
 		if !strings.Contains(contentStr, sub) {

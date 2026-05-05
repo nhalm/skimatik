@@ -14,13 +14,15 @@ func auditFixture(parentName string) Table {
 		Columns: []Column{
 			{Name: "id", Type: "uuid", IsNullable: false},
 			{Name: "parent_id", Type: "uuid", IsNullable: false},
-			{Name: "data", Type: "jsonb", IsNullable: false},
-			{Name: "start_date", Type: "timestamptz", IsNullable: false},
-			{Name: "end_date", Type: "timestamptz", IsNullable: true},
+			{Name: "version", Type: "integer", IsNullable: false},
+			{Name: "snapshot", Type: "jsonb", IsNullable: false},
+			{Name: "valid_from", Type: "timestamptz", IsNullable: false},
+			{Name: "valid_to", Type: "timestamptz", IsNullable: true},
 		},
 		PrimaryKey: []string{"id"},
 		Indexes: []Index{
 			{Name: "idx_" + auditName + "_parent", Columns: []string{"parent_id"}},
+			{Name: "uq_" + auditName + "_parent_version", Columns: []string{"parent_id", "version"}, IsUnique: true},
 		},
 		ForeignKeys: []ForeignKey{{
 			ConstraintName:   auditName + "_parent_fk",
@@ -69,7 +71,7 @@ func TestValidateAuditTables_Errors(t *testing.T) {
 			audits: func() map[string]Table {
 				a := auditFixture("posts")
 				for i := range a.Columns {
-					if a.Columns[i].Name == "data" {
+					if a.Columns[i].Name == "snapshot" {
 						a.Columns[i].Type = "text"
 					}
 				}
@@ -88,6 +90,23 @@ func TestValidateAuditTables_Errors(t *testing.T) {
 			wantContains: []string{"missing foreign key"},
 		},
 		{
+			name:    "missing unique index on (parent_id, version)",
+			parents: map[string]Table{"posts": parentFixture("posts")},
+			audits: func() map[string]Table {
+				a := auditFixture("posts")
+				// Drop only the unique index; keep the parent_id index.
+				kept := a.Indexes[:0]
+				for _, idx := range a.Indexes {
+					if !idx.IsUnique {
+						kept = append(kept, idx)
+					}
+				}
+				a.Indexes = kept
+				return map[string]Table{"posts_audit": a}
+			}(),
+			wantContains: []string{"missing UNIQUE index on (parent_id, version)"},
+		},
+		{
 			name: "aggregates two parents",
 			parents: map[string]Table{
 				"posts": parentFixture("posts"),
@@ -98,7 +117,7 @@ func TestValidateAuditTables_Errors(t *testing.T) {
 				posts.Indexes = nil
 				users := auditFixture("users")
 				for i := range users.Columns {
-					if users.Columns[i].Name == "data" {
+					if users.Columns[i].Name == "snapshot" {
 						users.Columns[i].Type = "text"
 					}
 				}
@@ -106,9 +125,11 @@ func TestValidateAuditTables_Errors(t *testing.T) {
 			}(),
 			wantContains: []string{
 				"posts_audit missing index on (parent_id)",
-				`users_audit column "data" type mismatch`,
+				"posts_audit missing UNIQUE index on (parent_id, version)",
+				`users_audit column "snapshot" type mismatch`,
 				"CREATE TABLE posts_audit",
 				"CREATE TABLE users_audit",
+				"CREATE UNIQUE INDEX",
 			},
 		},
 	}

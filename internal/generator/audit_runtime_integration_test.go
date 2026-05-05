@@ -56,8 +56,8 @@ func renderAuditedSQL(t *testing.T, table Table, templateName string) string {
 // TestAuditCTE_CreateAndUpdate verifies the runtime semantics of the CTE
 // pattern emitted by create_audited.tmpl and update_audited.tmpl by
 // executing the *template-rendered* SQL against a live Postgres. It asserts
-// audit invariants: row counts, end_date alignment, and JSONB pre/post
-// images.
+// audit invariants: row counts, valid_from/valid_to alignment, monotonic
+// `version` numbering, and JSONB pre/post images.
 func TestAuditCTE_CreateAndUpdate(t *testing.T) {
 	testDB := pgxkit.RequireDB(t)
 	if err := testDB.Setup(); err != nil {
@@ -87,12 +87,23 @@ func TestAuditCTE_CreateAndUpdate(t *testing.T) {
 	// Sanity-check that the rendered SQL really is the audited CTE shape.
 	// If a future template change moves the audit insert out of the CTE,
 	// these checks fire before any DB execution.
-	for _, snippet := range []string{"WITH inserted AS", "INSERT INTO users_audit", "to_jsonb(inserted.*)"} {
+	for _, snippet := range []string{
+		"WITH inserted AS",
+		"INSERT INTO users_audit",
+		"to_jsonb(inserted.*)",
+		"version, snapshot, valid_from",
+	} {
 		if !strings.Contains(createSQL, snippet) {
 			t.Fatalf("rendered CREATE SQL missing %q:\n%s", snippet, createSQL)
 		}
 	}
-	for _, snippet := range []string{"WITH closed AS", "UPDATE users_audit", "SET end_date = NOW()", "to_jsonb(updated.*)"} {
+	for _, snippet := range []string{
+		"WITH closed AS",
+		"UPDATE users_audit",
+		"SET valid_to = NOW()",
+		"to_jsonb(updated.*)",
+		"MAX(version)",
+	} {
 		if !strings.Contains(updateSQL, snippet) {
 			t.Fatalf("rendered UPDATE SQL missing %q:\n%s", snippet, updateSQL)
 		}
@@ -120,10 +131,12 @@ func TestAuditCTE_CreateAndUpdate(t *testing.T) {
 		t.Fatalf("audited CREATE rows err: %v", err)
 	}
 
-	// 1 audit row, 1 open (end_date IS NULL), JSONB carries original email.
+	// 1 audit row, 1 open (valid_to IS NULL), JSONB carries original email.
 	requireAuditCount(ctx, t, db, id, 1)
 	requireOpenAuditCount(ctx, t, db, id, 1)
 	requireOpenAuditDataContains(ctx, t, db, id, originalEmail)
+	// Initial version after Create is hardcoded to 1.
+	requireOpenAuditVersion(ctx, t, db, id, 1)
 
 	// UPDATE: closes the open row, applies parent UPDATE, inserts new audit
 	// row — all sharing one statement-level NOW(). prepareCRUDTemplateData
@@ -145,23 +158,37 @@ func TestAuditCTE_CreateAndUpdate(t *testing.T) {
 
 	var openStart time.Time
 	var openData string
+	var openVersion int
 	if err := db.QueryRow(ctx,
-		"SELECT start_date, data::text FROM users_audit WHERE parent_id = $1 AND end_date IS NULL", id,
-	).Scan(&openStart, &openData); err != nil {
+		"SELECT valid_from, snapshot::text, version FROM users_audit WHERE parent_id = $1 AND valid_to IS NULL", id,
+	).Scan(&openStart, &openData, &openVersion); err != nil {
 		t.Fatalf("read open audit row: %v", err)
 	}
 
 	var closedEnd time.Time
 	var closedData string
+	var closedVersion int
 	if err := db.QueryRow(ctx,
-		"SELECT end_date, data::text FROM users_audit WHERE parent_id = $1 AND end_date IS NOT NULL", id,
-	).Scan(&closedEnd, &closedData); err != nil {
+		"SELECT valid_to, snapshot::text, version FROM users_audit WHERE parent_id = $1 AND valid_to IS NOT NULL", id,
+	).Scan(&closedEnd, &closedData, &closedVersion); err != nil {
 		t.Fatalf("read closed audit row: %v", err)
 	}
 
 	if !closedEnd.Equal(openStart) {
-		t.Fatalf("audit timestamp misalignment: closed.end_date=%s open.start_date=%s",
+		t.Fatalf("audit timestamp misalignment: closed.valid_to=%s open.valid_from=%s",
 			closedEnd.Format(time.RFC3339Nano), openStart.Format(time.RFC3339Nano))
+	}
+
+	// Versions must be monotonically increasing: closed=1 (the original
+	// Create), open=2 (the Update).
+	if closedVersion != 1 {
+		t.Fatalf("closed audit version: want 1, got %d", closedVersion)
+	}
+	if openVersion != 2 {
+		t.Fatalf("open audit version: want 2, got %d", openVersion)
+	}
+	if openVersion <= closedVersion {
+		t.Fatalf("audit versions not monotonically increasing: closed=%d open=%d", closedVersion, openVersion)
 	}
 
 	if !strings.Contains(openData, updatedEmail) {
@@ -248,7 +275,7 @@ func requireOpenAuditCount(ctx context.Context, t *testing.T, db *pgxkit.DB, id 
 	t.Helper()
 	var got int
 	if err := db.QueryRow(ctx,
-		"SELECT count(*) FROM users_audit WHERE parent_id = $1 AND end_date IS NULL", id,
+		"SELECT count(*) FROM users_audit WHERE parent_id = $1 AND valid_to IS NULL", id,
 	).Scan(&got); err != nil {
 		t.Fatalf("count open audit rows: %v", err)
 	}
@@ -261,11 +288,24 @@ func requireOpenAuditDataContains(ctx context.Context, t *testing.T, db *pgxkit.
 	t.Helper()
 	var data string
 	if err := db.QueryRow(ctx,
-		"SELECT data::text FROM users_audit WHERE parent_id = $1 AND end_date IS NULL", id,
+		"SELECT snapshot::text FROM users_audit WHERE parent_id = $1 AND valid_to IS NULL", id,
 	).Scan(&data); err != nil {
 		t.Fatalf("read open audit data: %v", err)
 	}
 	if !strings.Contains(data, want) {
 		t.Fatalf("open audit JSONB missing %q: %s", want, data)
+	}
+}
+
+func requireOpenAuditVersion(ctx context.Context, t *testing.T, db *pgxkit.DB, id uuid.UUID, want int) {
+	t.Helper()
+	var got int
+	if err := db.QueryRow(ctx,
+		"SELECT version FROM users_audit WHERE parent_id = $1 AND valid_to IS NULL", id,
+	).Scan(&got); err != nil {
+		t.Fatalf("read open audit version: %v", err)
+	}
+	if got != want {
+		t.Fatalf("open audit version: want %d, got %d", want, got)
 	}
 }
