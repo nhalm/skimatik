@@ -215,28 +215,14 @@ func expectedAuditDDL(parent Table) string {
 		pkName = pkCol.Name
 	}
 	auditName := parent.Name + "_audit"
-	var b strings.Builder
-	b.WriteString("  CREATE TABLE ")
-	b.WriteString(auditName)
-	b.WriteString(" (\n")
-	b.WriteString("    id          UUID         PRIMARY KEY,\n")
-	b.WriteString("    parent_id   ")
-	b.WriteString(pkType)
-	b.WriteString(" NOT NULL REFERENCES ")
-	b.WriteString(parent.Name)
-	b.WriteString("(")
-	b.WriteString(pkName)
-	b.WriteString("),\n")
-	b.WriteString("    version     INTEGER      NOT NULL,\n")
-	b.WriteString("    snapshot    JSONB        NOT NULL,\n")
-	b.WriteString("    valid_from  TIMESTAMPTZ  NOT NULL,\n")
-	b.WriteString("    valid_to    TIMESTAMPTZ\n")
-	b.WriteString("  );\n")
-	b.WriteString("  CREATE INDEX ON ")
-	b.WriteString(auditName)
-	b.WriteString(" (parent_id);\n")
-	b.WriteString("  CREATE UNIQUE INDEX ON ")
-	b.WriteString(auditName)
-	b.WriteString(" (parent_id, version);")
-	return b.String()
+	return fmt.Sprintf(`  CREATE TABLE %[1]s (
+    id          UUID         PRIMARY KEY,
+    parent_id   %[2]s NOT NULL REFERENCES %[3]s(%[4]s),
+    version     INTEGER      NOT NULL,
+    snapshot    JSONB        NOT NULL,
+    valid_from  TIMESTAMPTZ  NOT NULL,
+    valid_to    TIMESTAMPTZ
+  );
+  CREATE INDEX ON %[1]s (parent_id);
+  CREATE UNIQUE INDEX ON %[1]s (parent_id, version);`, auditName, pkType, parent.Name, pkName)
 }

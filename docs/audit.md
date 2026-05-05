@@ -126,22 +126,6 @@ The validator is permissive about extra columns — your audit table is allowed 
 - **Audit rows are append-only by design.** The Update CTE never UPDATEs `snapshot` on a prior row — it only sets `valid_to`. The post-image lives on a fresh row.
 - **`:paginated`, `:one`, `:many`, `:exec` queries are not audited.** Custom `.sql` queries do not flow through CRUD templates and are emitted unchanged.
 
-## Example-App Demonstration
-
-The example-app demonstrates audit end-to-end on two parent tables with different shapes:
-
-- Migration: [`example-app/internal/database/migrations/000005_add_audit_tables.up.sql`](https://github.com/nhalm/skimatik/tree/main/example-app/internal/database/migrations/000005_add_audit_tables.up.sql) — creates `users_audit` and `posts_audit`.
-- Configuration: [`example-app/skimatik.yaml`](https://github.com/nhalm/skimatik/tree/main/example-app/skimatik.yaml) — sets `audit: true` on `users` and `posts`.
-- Generated code: `example-app/internal/repository/generated/users_generated.go` and `posts_generated.go` (regenerated on `make generate`) — contain the CTE-based Create and Update.
-- Runtime exercise: `example-app/Makefile`'s `test` target — POSTs a new user, PATCHes the name, then GETs `/api/users/{id}/audit` and asserts that exactly two audit rows exist (one closed, one open) carrying the original and updated payloads.
-
-To run the demonstration locally:
-
-```bash
-cd example-app
-make test
-```
-
 ## Related Documentation
 
 - [Configuration Reference](configuration-reference) — full `skimatik.yaml` schema.
