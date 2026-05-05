@@ -5,7 +5,6 @@ package generator
 import (
 	"context"
 	"regexp"
-	"strings"
 	"testing"
 	"time"
 
@@ -87,7 +86,7 @@ func TestAuditCTE_CreateAndUpdate(t *testing.T) {
 
 	requireAuditCount(ctx, t, db, id, 1)
 	requireOpenAuditCount(ctx, t, db, id, 1)
-	requireOpenAuditDataContains(ctx, t, db, id, originalEmail)
+	requireOpenAuditEmail(ctx, t, db, id, originalEmail)
 	requireOpenAuditVersion(ctx, t, db, id, 1)
 
 	updatedEmail := "audit-update-" + id.String() + "@example.com"
@@ -297,16 +296,16 @@ func requireOpenAuditCount(ctx context.Context, t *testing.T, db *pgxkit.DB, id 
 	}
 }
 
-func requireOpenAuditDataContains(ctx context.Context, t *testing.T, db *pgxkit.DB, id uuid.UUID, want string) {
+func requireOpenAuditEmail(ctx context.Context, t *testing.T, db *pgxkit.DB, id uuid.UUID, want string) {
 	t.Helper()
-	var data string
+	var got string
 	if err := db.QueryRow(ctx,
-		"SELECT snapshot::text FROM users_audit WHERE parent_id = $1 AND valid_to IS NULL", id,
-	).Scan(&data); err != nil {
-		t.Fatalf("read open audit data: %v", err)
+		"SELECT snapshot->>'email' FROM users_audit WHERE parent_id = $1 AND valid_to IS NULL", id,
+	).Scan(&got); err != nil {
+		t.Fatalf("read open audit email: %v", err)
 	}
-	if !strings.Contains(data, want) {
-		t.Fatalf("open audit JSONB missing %q: %s", want, data)
+	if got != want {
+		t.Fatalf("open audit email: want %q, got %q", want, got)
 	}
 }
 
