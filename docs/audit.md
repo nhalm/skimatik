@@ -52,7 +52,9 @@ Skimatik does **not** generate this DDL. The application owns the migration so t
 
 For an audited parent table, skimatik emits CTE-based mutations:
 
-**Create** — single statement, parent INSERT and audit INSERT share `NOW()`. Initial `version` is hardcoded to `1`:
+Audit row IDs are app-generated UUIDv7, matching the convention skimatik uses for parent row IDs. The Create/Update method bodies call `UUIDv7()` and pass the value as the last positional parameter, so audit IDs are time-sortable and don't depend on a database-side function.
+
+**Create** — single statement, parent INSERT and audit INSERT share `NOW()`. Initial `version` is hardcoded to `1`. `$1` carries the parent id (Go-generated), `$2..$N` carry the column values, and `$N+1` carries the audit row id (Go-generated):
 
 ```sql
 WITH inserted AS (
@@ -62,12 +64,12 @@ WITH inserted AS (
 ),
 audited AS (
     INSERT INTO users_audit (id, parent_id, version, snapshot, valid_from)
-    SELECT gen_random_uuid(), id, 1, to_jsonb(inserted.*), NOW() FROM inserted
+    SELECT $N+1, id, 1, to_jsonb(inserted.*), NOW() FROM inserted
 )
 SELECT id, name, email, ... FROM inserted
 ```
 
-**Update** — single statement, closes the prior open audit row, applies the parent UPDATE, opens a new audit row with `version = MAX(prior) + 1`, all sharing one statement-level `NOW()`:
+**Update** — single statement, closes the prior open audit row, applies the parent UPDATE, opens a new audit row with `version = MAX(prior) + 1`, all sharing one statement-level `NOW()`. `$1` is the parent id, `$2..$N` are the update columns, `$N+1` is the audit row id:
 
 ```sql
 WITH closed AS (
@@ -83,7 +85,7 @@ updated AS (
 ),
 audited AS (
     INSERT INTO users_audit (id, parent_id, version, snapshot, valid_from)
-    SELECT gen_random_uuid(), updated.id,
+    SELECT $N+1, updated.id,
            COALESCE((SELECT MAX(version) FROM users_audit WHERE parent_id = updated.id), 0) + 1,
            to_jsonb(updated.*),
            NOW()
@@ -119,7 +121,7 @@ The validator is permissive about extra columns — your audit table is allowed 
 ## Constraints and Known Limits
 
 - **One audit per parent.** A parent table has at most one companion audit table; the `<parent>_audit` naming is fixed and not configurable.
-- **`gen_random_uuid()` is required.** Audit row IDs are generated via `gen_random_uuid()`, which is built into PostgreSQL 13+ (no extension needed).
+- **Audit row IDs are app-generated UUIDv7.** Generated Go code calls `UUIDv7()` for the audit row id and passes it as a positional parameter, mirroring how parent row IDs are generated. No database-side UUID function (e.g., `gen_random_uuid()`) is required.
 - **Single-column primary keys only.** Audit follows skimatik's general constraint that parent tables must have a single-column primary key.
 - **Audit rows are append-only by design.** The Update CTE never UPDATEs `snapshot` on a prior row — it only sets `valid_to`. The post-image lives on a fresh row.
 - **`:paginated`, `:one`, `:many`, `:exec` queries are not audited.** Custom `.sql` queries do not flow through CRUD templates and are emitted unchanged.

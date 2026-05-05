@@ -151,7 +151,7 @@ func TestCodeGenerator_GenerateTableRepository_Audited(t *testing.T) {
 		"WITH closed AS",
 		"to_jsonb(updated.*)",
 		"to_jsonb(inserted.*)",
-		"gen_random_uuid()",
+		"auditID := UUIDv7()",
 		"users_audit",
 		"valid_to IS NULL",
 		"valid_from",
@@ -163,5 +163,18 @@ func TestCodeGenerator_GenerateTableRepository_Audited(t *testing.T) {
 		if !strings.Contains(contentStr, sub) {
 			t.Errorf("expected generated source to contain %q; not found", sub)
 		}
+	}
+
+	// Audit row id must be parameterized, not gen_random_uuid().
+	if strings.Contains(contentStr, "gen_random_uuid()") {
+		t.Errorf("generated source still contains gen_random_uuid(); audit row IDs should be Go-generated UUIDv7")
+	}
+	// SELECT clause inside the audited INSERT-SELECT must lead with a positional
+	// parameter for the audit id, not a database-side function.
+	if !strings.Contains(contentStr, "to_jsonb(inserted.*), NOW() FROM inserted") {
+		t.Errorf("generated CREATE source missing canonical to_jsonb(inserted.*), NOW() FROM inserted shape")
+	}
+	if !strings.Contains(contentStr, ", auditID)") {
+		t.Errorf("generated source missing auditID arg threaded into ExecuteQueryRow call")
 	}
 }

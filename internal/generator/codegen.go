@@ -420,6 +420,16 @@ func (cg *CodeGenerator) prepareCRUDTemplateData(table Table) map[string]any {
 	idParamIndex := updateParamIndex
 	auditedUpdateArgs := append([]string{"id"}, updateArgs[:len(updateArgs)-1]...)
 
+	// Audited Create/Update generate the audit row id Go-side (UUIDv7) and
+	// pass it as the last positional parameter. createParamIndex and
+	// updateParamIndex are now the next free slot in their respective queries.
+	createAuditIDIndex := createParamIndex
+	updateAuditIDIndex := updateParamIndex + 1
+
+	auditedInsertArgs := append([]string{}, insertArgs...)
+	auditedInsertArgs = append(auditedInsertArgs, "auditID")
+	auditedUpdateArgs = append(auditedUpdateArgs, "auditID")
+
 	return map[string]any{
 		"StructName":           structName,
 		"RepositoryName":       repositoryName,
@@ -439,8 +449,11 @@ func (cg *CodeGenerator) prepareCRUDTemplateData(table Table) map[string]any {
 		"InsertArgs":           strings.Join(insertArgs, ", "),
 		"UpdateColumns":        strings.Join(updateAssignments, ", "),
 		"UpdateArgs":           strings.Join(updateArgs, ", "),
+		"AuditedInsertArgs":    strings.Join(auditedInsertArgs, ", "),
 		"AuditedUpdateColumns": strings.Join(auditedUpdateAssignments, ", "),
 		"AuditedUpdateArgs":    strings.Join(auditedUpdateArgs, ", "),
+		"CreateAuditIDParam":   fmt.Sprintf("$%d", createAuditIDIndex),
+		"UpdateAuditIDParam":   fmt.Sprintf("$%d", updateAuditIDIndex),
 	}
 }
 

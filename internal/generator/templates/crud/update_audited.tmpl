@@ -16,6 +16,7 @@ type Update{{.StructName}}Params struct {
 // committed. The UNIQUE index on ({{.AuditTableName}}.parent_id, version) is
 // the defensive backstop in case the lock assumption is ever wrong.
 func (r *{{.RepositoryName}}) Update(ctx context.Context, db pgxkit.Executor, id {{.IDType}}, params Update{{.StructName}}Params) (*{{.StructName}}, error) {
+	auditID := UUIDv7()
 	query := `
 		WITH closed AS (
 			UPDATE {{.AuditTableName}}
@@ -30,7 +31,7 @@ func (r *{{.RepositoryName}}) Update(ctx context.Context, db pgxkit.Executor, id
 		),
 		audited AS (
 			INSERT INTO {{.AuditTableName}} (id, parent_id, version, snapshot, valid_from)
-			SELECT gen_random_uuid(), updated.id,
+			SELECT {{.UpdateAuditIDParam}}, updated.id,
 			       COALESCE((SELECT MAX(version) FROM {{.AuditTableName}} WHERE parent_id = updated.id), 0) + 1,
 			       to_jsonb(updated.*),
 			       NOW()

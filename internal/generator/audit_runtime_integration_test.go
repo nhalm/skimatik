@@ -87,6 +87,15 @@ func TestAuditCTE_CreateAndUpdate(t *testing.T) {
 		}
 	}
 
+	// Audit row IDs are now app-generated; no database-side UUID function
+	// should appear in either rendered statement.
+	if strings.Contains(createSQL, "gen_random_uuid()") {
+		t.Fatalf("rendered CREATE SQL still references gen_random_uuid():\n%s", createSQL)
+	}
+	if strings.Contains(updateSQL, "gen_random_uuid()") {
+		t.Fatalf("rendered UPDATE SQL still references gen_random_uuid():\n%s", updateSQL)
+	}
+
 	id := uuid.New()
 	t.Cleanup(func() {
 		_, _ = db.Exec(ctx, "DELETE FROM users_audit WHERE parent_id = $1", id)
@@ -173,7 +182,7 @@ func TestAuditCTE_CreateAndUpdate(t *testing.T) {
 
 // buildCreateArgs returns positional args matching prepareCRUDTemplateData's
 // layout for audited CREATE: id, then every non-id column whose DefaultValue
-// is empty, in declaration order.
+// is empty, in declaration order, then the audit row id appended last.
 func buildCreateArgs(t *testing.T, table Table, id uuid.UUID, name, email, passwordHash string) []any {
 	t.Helper()
 	args := []any{id}
@@ -195,11 +204,15 @@ func buildCreateArgs(t *testing.T, table Table, id uuid.UUID, name, email, passw
 			args = append(args, nil)
 		}
 	}
+	// Audit row id is generated app-side; uuid.New() is sufficient for the
+	// runtime test since we only assert audit invariants, not id ordering.
+	args = append(args, uuid.New())
 	return args
 }
 
 // buildUpdateArgs returns positional args matching prepareCRUDTemplateData's
-// layout for audited UPDATE: id at $1, every non-id column at $2..$N.
+// layout for audited UPDATE: id at $1, every non-id column at $2..$N, then
+// the audit row id appended last.
 func buildUpdateArgs(t *testing.T, table Table, id uuid.UUID, updatedEmail, name string) []any {
 	t.Helper()
 	args := []any{id}
@@ -218,6 +231,7 @@ func buildUpdateArgs(t *testing.T, table Table, id uuid.UUID, updatedEmail, name
 			args = append(args, nil)
 		}
 	}
+	args = append(args, uuid.New())
 	return args
 }
 
