@@ -1,6 +1,7 @@
 # Build artifacts
 bin/
 *.exe
+/blog
 
 # Go modules
 vendor/
