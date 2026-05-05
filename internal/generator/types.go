@@ -11,6 +11,28 @@ type Table struct {
 	Columns    []Column `json:"columns"`
 	PrimaryKey []string `json:"primary_key"`
 	Indexes    []Index  `json:"indexes"`
+	// ForeignKeys lists every FK column on this table. One entry per FK
+	// column. Composite FKs surface as multiple rows sharing
+	// ConstraintName; group by it to reconstitute. Cross-schema references
+	// are not surfaced (v1 audit contract is same-schema-only).
+	ForeignKeys []ForeignKey `json:"foreign_keys"`
+	// Audit indicates that this table is configured to maintain an
+	// SCD Type 2 audit history via a parallel <table>_audit table.
+	// Sourced from the per-table TableConfig.Audit setting.
+	Audit bool `json:"audit"`
+}
+
+// ForeignKey represents one column of a foreign-key constraint discovered via
+// information_schema. Composite (multi-column) foreign keys surface as
+// multiple ForeignKey entries sharing the same ConstraintName; callers that
+// need composite-key awareness should group by ConstraintName. The referenced
+// table is in the same schema as the owning table (v1 audit contract is
+// same-schema-only).
+type ForeignKey struct {
+	ConstraintName   string `json:"constraint_name"`
+	ColumnName       string `json:"column_name"`
+	ReferencedTable  string `json:"referenced_table"`
+	ReferencedColumn string `json:"referenced_column"`
 }
 
 // Column represents a database column with its type and constraints
@@ -101,6 +123,43 @@ func (t *Table) GetPrimaryKeyColumn() *Column {
 		return nil
 	}
 	return t.GetColumn(t.PrimaryKey[0])
+}
+
+// HasIndexLeadingWith reports whether this table has an index whose first
+// (leading) key column is the supplied column name. Uniqueness, partial
+// predicates, INCLUDE-clause covering columns, and additional trailing key
+// columns are intentionally ignored — the audit validator only needs to know
+// that lookups by `column` can use an index. Comparison is case-sensitive to
+// match PostgreSQL's quoted identifier semantics. An empty `column` argument
+// never matches (expression indexes have an empty leading column slot, which
+// is not a meaningful target for audit validation). Note: "covering" in SQL
+// refers to INCLUDE columns; this method is about the leading key column.
+func (t *Table) HasIndexLeadingWith(column string) bool {
+	if column == "" {
+		return false
+	}
+	for i := range t.Indexes {
+		cols := t.Indexes[i].Columns
+		if len(cols) > 0 && cols[0] == column {
+			return true
+		}
+	}
+	return false
+}
+
+// HasForeignKeyTo reports whether this table has a foreign key from
+// `childColumn` referencing `referencedTable`.`referencedColumn`. The
+// referenced table is assumed to live in the same schema (v1 audit contract).
+func (t *Table) HasForeignKeyTo(childColumn, referencedTable, referencedColumn string) bool {
+	for i := range t.ForeignKeys {
+		fk := &t.ForeignKeys[i]
+		if fk.ColumnName == childColumn &&
+			fk.ReferencedTable == referencedTable &&
+			fk.ReferencedColumn == referencedColumn {
+			return true
+		}
+	}
+	return false
 }
 
 // GoStructName returns the Go struct name for this table

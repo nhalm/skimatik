@@ -5,75 +5,74 @@ import (
 	"testing"
 )
 
-func TestIntrospector_parseIndexColumns(t *testing.T) {
-	introspector := &Introspector{}
+func TestTable_HasIndexLeadingWith(t *testing.T) {
+	table := Table{
+		Indexes: []Index{
+			{Name: "idx_users_email", Columns: []string{"email"}},
+			{Name: "idx_users_active_created", Columns: []string{"is_active", "created_at"}},
+			{Name: "idx_users_expr", Columns: []string{""}}, // expression index, no leading column
+		},
+	}
 
 	tests := []struct {
-		name     string
-		indexDef string
-		want     []string
+		name   string
+		column string
+		want   bool
 	}{
-		{
-			name:     "single column index",
-			indexDef: "CREATE INDEX idx_users_email ON users USING btree (email)",
-			want:     []string{"email"},
-		},
-		{
-			name:     "multiple column index",
-			indexDef: "CREATE INDEX idx_users_name_email ON users USING btree (name, email)",
-			want:     []string{"name", "email"},
-		},
-		{
-			name:     "unique index",
-			indexDef: "CREATE UNIQUE INDEX idx_users_email_unique ON users USING btree (email)",
-			want:     []string{"email"},
-		},
-		{
-			name:     "index with schema",
-			indexDef: "CREATE INDEX idx_public_users_email ON public.users USING btree (email)",
-			want:     []string{"email"},
-		},
-		{
-			name:     "index with spaces",
-			indexDef: "CREATE INDEX idx_users_multi ON users USING btree (first_name, last_name, email)",
-			want:     []string{"first_name", "last_name", "email"},
-		},
-		{
-			name:     "index with quoted columns",
-			indexDef: "CREATE INDEX idx_users_quoted ON users USING btree (\"first name\", \"last name\")",
-			want:     []string{"\"first name\"", "\"last name\""},
-		},
-		{
-			name:     "complex index definition",
-			indexDef: "CREATE INDEX CONCURRENTLY idx_posts_user_status ON posts USING btree (user_id, status) WHERE status = 'active'",
-			want:     []string{"user_id", "status"},
-		},
-		{
-			name:     "malformed index definition",
-			indexDef: "CREATE INDEX invalid_index",
-			want:     []string{},
-		},
-		{
-			name:     "empty index definition",
-			indexDef: "",
-			want:     []string{},
-		},
+		{"single-column leading match", "email", true},
+		{"composite leading match", "is_active", true},
+		{"non-leading column does not count", "created_at", false},
+		{"missing column", "name", false},
+		{"empty column does not match expression index", "", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := introspector.parseIndexColumns(tt.indexDef)
-			if len(got) != len(tt.want) {
-				t.Errorf("parseIndexColumns() = %v, want %v", got, tt.want)
-				return
-			}
-			for i, col := range got {
-				if col != tt.want[i] {
-					t.Errorf("parseIndexColumns() = %v, want %v", got, tt.want)
-					break
-				}
+			if got := table.HasIndexLeadingWith(tt.column); got != tt.want {
+				t.Errorf("HasIndexLeadingWith(%q) = %v, want %v", tt.column, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestTable_HasForeignKeyTo(t *testing.T) {
+	table := Table{
+		Name: "users_audit",
+		ForeignKeys: []ForeignKey{
+			{
+				ConstraintName:   "users_audit_parent_id_fkey",
+				ColumnName:       "parent_id",
+				ReferencedTable:  "users",
+				ReferencedColumn: "id",
+			},
+		},
+	}
+
+	if !table.HasForeignKeyTo("parent_id", "users", "id") {
+		t.Error("expected HasForeignKeyTo to find parent_id -> users.id")
+	}
+	if table.HasForeignKeyTo("parent_id", "users", "name") {
+		t.Error("HasForeignKeyTo should reject mismatched referenced column")
+	}
+	if table.HasForeignKeyTo("parent_id", "posts", "id") {
+		t.Error("HasForeignKeyTo should reject mismatched referenced table")
+	}
+	if table.HasForeignKeyTo("user_id", "users", "id") {
+		t.Error("HasForeignKeyTo should reject mismatched child column")
+	}
+}
+
+func TestTable_HasIndexLeadingWith_NoIndexes(t *testing.T) {
+	table := Table{}
+	if table.HasIndexLeadingWith("anything") {
+		t.Error("table with no indexes should never report a leading match")
+	}
+}
+
+func TestTable_HasForeignKeyTo_NoForeignKeys(t *testing.T) {
+	table := Table{}
+	if table.HasForeignKeyTo("a", "b", "c") {
+		t.Error("table with no foreign keys should never report a match")
 	}
 }
 

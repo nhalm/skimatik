@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/nhalm/pgxkit/v2"
@@ -112,4 +113,96 @@ func (r *UserRepository) GetUser(ctx context.Context, userID uuid.UUID) (*models
 	}
 
 	return userDetail, nil
+}
+
+// CreateUser routes through the audited generated Create. Skimatik's CTE
+// inserts the parent row and an open audit row in a single statement; we
+// call the embedded UsersRepository.Create directly via method promotion.
+func (r *UserRepository) CreateUser(ctx context.Context, name, email string, bio *string) (*models.UserSummary, error) {
+	user, err := r.Create(ctx, executorFromContext(ctx, r.db), generated.CreateUsersParams{
+		Name:  name,
+		Email: email,
+		Bio:   bio,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+	return &models.UserSummary{
+		ID:       user.Id,
+		Name:     user.Name,
+		Email:    user.Email,
+		IsActive: user.IsActive,
+	}, nil
+}
+
+// UpdateUserName routes through the audited generated Update. The CTE closes
+// the previously open audit row, applies the parent UPDATE, and opens a new
+// audit row, all sharing one statement-level NOW() timestamp.
+func (r *UserRepository) UpdateUserName(ctx context.Context, userID uuid.UUID, name string) (*models.UserSummary, error) {
+	exec := executorFromContext(ctx, r.db)
+	// Read the current row so we can pass a faithful post-image to the
+	// audit CTE; only the name field is mutated for this demo.
+	current, err := r.Get(ctx, exec, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read user before update: %w", err)
+	}
+	user, err := r.Update(ctx, exec, userID, generated.UpdateUsersParams{
+		Name:      name,
+		Email:     current.Email,
+		Bio:       current.Bio,
+		IsActive:  current.IsActive,
+		CreatedAt: current.CreatedAt,
+		UpdatedAt: current.UpdatedAt,
+		DeletedAt: current.DeletedAt,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to update user: %w", err)
+	}
+	return &models.UserSummary{
+		ID:       user.Id,
+		Name:     user.Name,
+		Email:    user.Email,
+		IsActive: user.IsActive,
+	}, nil
+}
+
+// GetUserAuditHistory queries users_audit directly (the audit table is owned
+// by the application — skimatik validates its shape but does not generate a
+// repository for it). Rows are ordered oldest-first so callers can see the
+// open row last.
+func (r *UserRepository) GetUserAuditHistory(ctx context.Context, userID uuid.UUID) ([]models.UserAuditEntry, error) {
+	const q = `
+		SELECT id, parent_id, data::text, start_date, end_date
+		FROM users_audit
+		WHERE parent_id = $1
+		ORDER BY start_date ASC, id ASC
+	`
+	rows, err := executorFromContext(ctx, r.db).Query(ctx, q, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query users_audit: %w", err)
+	}
+	defer rows.Close()
+
+	const tsLayout = "2006-01-02T15:04:05.999999999Z07:00"
+	var entries []models.UserAuditEntry
+	for rows.Next() {
+		var (
+			entry  models.UserAuditEntry
+			start  time.Time
+			endPtr *time.Time
+		)
+		if err := rows.Scan(&entry.ID, &entry.ParentID, &entry.Data, &start, &endPtr); err != nil {
+			return nil, fmt.Errorf("failed to scan audit row: %w", err)
+		}
+		entry.StartDate = start.Format(tsLayout)
+		if endPtr != nil {
+			s := endPtr.Format(tsLayout)
+			entry.EndDate = &s
+		}
+		entries = append(entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("audit history rows: %w", err)
+	}
+	return entries, nil
 }

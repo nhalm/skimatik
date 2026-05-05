@@ -18,6 +18,13 @@ type UserRepository interface {
 	GetUserStats(ctx context.Context, userID uuid.UUID) (*models.UserStats, error)
 	DeactivateUser(ctx context.Context, userID uuid.UUID) error
 	GetUser(ctx context.Context, userID uuid.UUID) (*models.UserDetail, error)
+
+	// Audit-demo methods. CreateUser and UpdateUserName route through the
+	// generated audited Create/Update on UsersRepository, which means each
+	// call writes a row to users_audit via the CTE.
+	CreateUser(ctx context.Context, name, email string, bio *string) (*models.UserSummary, error)
+	UpdateUserName(ctx context.Context, userID uuid.UUID, name string) (*models.UserSummary, error)
+	GetUserAuditHistory(ctx context.Context, userID uuid.UUID) ([]models.UserAuditEntry, error)
 }
 
 // UserService implements the api.UserService interface using domain types
@@ -84,4 +91,36 @@ func (s *UserService) GetUser(ctx context.Context, userID uuid.UUID) (*models.Us
 
 	// Service layer can apply business logic here if needed
 	return user, nil
+}
+
+// CreateUser delegates to the audited generated Create method on the user
+// repository. Every call here also writes an open audit row to users_audit
+// via skimatik's CTE-based Create.
+func (s *UserService) CreateUser(ctx context.Context, name, email string, bio *string) (*models.UserSummary, error) {
+	user, err := s.userRepo.CreateUser(ctx, name, email, bio)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+	return user, nil
+}
+
+// UpdateUserName delegates to the audited generated Update method. The CTE
+// closes the user's currently open audit row and inserts a new one.
+func (s *UserService) UpdateUserName(ctx context.Context, userID uuid.UUID, name string) (*models.UserSummary, error) {
+	user, err := s.userRepo.UpdateUserName(ctx, userID, name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update user: %w", err)
+	}
+	return user, nil
+}
+
+// GetUserAuditHistory returns the SCD Type 2 audit trail for a user, ordered
+// from oldest to newest, used by the demo curl test to assert that Create +
+// Update produced two audit rows with one closed and one open.
+func (s *UserService) GetUserAuditHistory(ctx context.Context, userID uuid.UUID) ([]models.UserAuditEntry, error) {
+	entries, err := s.userRepo.GetUserAuditHistory(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read audit history: %w", err)
+	}
+	return entries, nil
 }

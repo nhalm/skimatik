@@ -53,6 +53,10 @@ type OutputConfig struct {
 // TableConfig represents configuration for a specific table
 type TableConfig struct {
 	Functions []string `yaml:"functions"`
+	// Audit enables generation of SCD Type 2 audit history for the table.
+	// When true, mutations are rewritten as CTEs that maintain a parallel
+	// <table>_audit table; the user is responsible for providing that table.
+	Audit bool `yaml:"audit,omitempty"`
 }
 
 // TablesConfig represents table generation configuration
@@ -210,6 +214,16 @@ func (c *Config) ShouldIncludeTable(tableName string) bool {
 		}
 	}
 
+	return false
+}
+
+// IsTableAudited reports whether the given table has audit history enabled in
+// its per-table configuration. Tables with no entry in TableConfigs default to
+// false.
+func (c *Config) IsTableAudited(tableName string) bool {
+	if config, exists := c.TableConfigs[tableName]; exists {
+		return config.Audit
+	}
 	return false
 }
 

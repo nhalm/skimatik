@@ -93,8 +93,11 @@ func run() error {
 
 		r.Route("/users", func(r chi.Router) {
 			r.Get("/", userHandler.GetActiveUsers)
+			r.Post("/", userHandler.CreateUser)
 			r.Get("/search", userHandler.SearchUsers)
 			r.Get("/{id}", userHandler.GetUser)
+			r.Patch("/{id}/name", userHandler.UpdateUserName)
+			r.Get("/{id}/audit", userHandler.GetUserAuditHistory)
 			r.Get("/{id}/stats", userHandler.GetUserStats)
 			r.Get("/{id}/posts", postHandler.GetUserPosts)
 			r.Delete("/{id}", userHandler.DeactivateUser)

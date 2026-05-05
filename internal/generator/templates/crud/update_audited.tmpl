@@ -1,0 +1,38 @@
+// Update{{.StructName}}Params holds parameters for updating a {{.StructName}}
+type Update{{.StructName}}Params struct {
+{{range .UpdateFields}}	{{.Name}} {{.Type}} `{{.Tag}}`
+{{end}}}
+
+// Update updates an existing {{.StructName}} and maintains its audit history in
+// {{.AuditTableName}}. A single statement closes the previous open audit row,
+// applies the parent UPDATE, and inserts a new audit row capturing the post-image.
+// All three operations share the same statement-level NOW() timestamp.
+func (r *{{.RepositoryName}}) Update(ctx context.Context, db pgxkit.Executor, id {{.IDType}}, params Update{{.StructName}}Params) (*{{.StructName}}, error) {
+	query := `
+		WITH closed AS (
+			UPDATE {{.AuditTableName}}
+			SET end_date = NOW()
+			WHERE parent_id = $1 AND end_date IS NULL
+		),
+		updated AS (
+			UPDATE {{.TableName}}
+			SET {{.AuditedUpdateColumns}}
+			WHERE {{.IDColumn}} = $1
+			RETURNING {{.SelectColumns}}
+		),
+		audited AS (
+			INSERT INTO {{.AuditTableName}} (id, parent_id, data, start_date)
+			SELECT gen_random_uuid(), id, to_jsonb(updated.*), NOW() FROM updated
+		)
+		SELECT {{.SelectColumns}} FROM updated
+	`
+
+	var {{.ReceiverName}} {{.StructName}}
+	row := ExecuteQueryRow(ctx, db, "update", "{{.StructName}}", query, {{.AuditedUpdateArgs}})
+	err := row.Scan({{.ScanArgs}})
+	if err := HandleQueryRowError("update", "{{.StructName}}", err); err != nil {
+		return nil, err
+	}
+
+	return &{{.ReceiverName}}, nil
+}

@@ -10,11 +10,13 @@ var templateFS embed.FS
 // Template file paths (constants for type safety)
 const (
 	// CRUD templates
-	TemplateGetByID = "templates/crud/get_by_id.tmpl"
-	TemplateCreate  = "templates/crud/create.tmpl"
-	TemplateUpdate  = "templates/crud/update.tmpl"
-	TemplateDelete  = "templates/crud/delete.tmpl"
-	TemplateList    = "templates/crud/list.tmpl"
+	TemplateGetByID       = "templates/crud/get_by_id.tmpl"
+	TemplateCreate        = "templates/crud/create.tmpl"
+	TemplateCreateAudited = "templates/crud/create_audited.tmpl"
+	TemplateUpdate        = "templates/crud/update.tmpl"
+	TemplateUpdateAudited = "templates/crud/update_audited.tmpl"
+	TemplateDelete        = "templates/crud/delete.tmpl"
+	TemplateList          = "templates/crud/list.tmpl"
 
 	// Pagination templates
 	TemplatePaginationShared              = "templates/pagination/shared_types.tmpl"

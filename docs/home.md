@@ -68,6 +68,7 @@ A database-first code generator for PostgreSQL that creates type-safe Go reposit
 - **[Configuration Reference](configuration-reference)** - Complete configuration options
 - **[Type Mapping](type-mapping)** - PostgreSQL to Go type mappings
 - **[Database Migrations](database-migrations)** - Schema management with golang-migrate
+- **[Audit Tables](audit)** - SCD Type 2 history via CTE-based mutations
 
 ## 🚀 Quick Start
 

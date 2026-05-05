@@ -126,3 +126,41 @@ func TestCodeGenerator_GenerateTableRepository_Integration(t *testing.T) {
 		t.Error("Generated file seems too short")
 	}
 }
+
+// TestCodeGenerator_GenerateTableRepository_Audited verifies that flagging a
+// Table with Audit: true routes Create/Update through the CTE-based audited
+// templates. Delete is generated normally on audited tables — whether
+// deletion is permitted is a database-level policy concern (Postgres roles),
+// not a codegen one. Step 6 covers the end-to-end runtime test against a live
+// database.
+func TestCodeGenerator_GenerateTableRepository_Audited(t *testing.T) {
+	config := getTestConfigWithTempDir(t)
+	cg := NewCodeGenerator(config, "test")
+
+	table := getTestTable()
+	table.Audit = true
+
+	if err := cg.GenerateTableRepository(table); err != nil {
+		t.Fatalf("GenerateTableRepository failed: %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(config.OutputDir, "users_generated.go"))
+	if err != nil {
+		t.Fatalf("Failed to read generated file: %v", err)
+	}
+	contentStr := string(content)
+
+	mustContain := []string{
+		"WITH closed AS",
+		"to_jsonb(updated.*)",
+		"to_jsonb(inserted.*)",
+		"gen_random_uuid()",
+		"users_audit",
+		"end_date IS NULL",
+	}
+	for _, sub := range mustContain {
+		if !strings.Contains(contentStr, sub) {
+			t.Errorf("expected generated source to contain %q; not found", sub)
+		}
+	}
+}

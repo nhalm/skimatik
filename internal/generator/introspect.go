@@ -3,7 +3,6 @@ package generator
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/nhalm/pgxkit/v2"
 )
@@ -48,19 +47,122 @@ func (i *Introspector) GetTables(ctx context.Context) ([]Table, error) {
 		return nil, fmt.Errorf("failed to get indexes: %w", err)
 	}
 
+	foreignKeysMap, err := i.getAllTableForeignKeys(ctx, tableNames)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get foreign keys: %w", err)
+	}
+
 	tables := make([]Table, 0, len(tableNames))
 	for _, tableName := range tableNames {
 		table := Table{
-			Name:       tableName,
-			Schema:     i.schema,
-			Columns:    columnsMap[tableName],
-			PrimaryKey: primaryKeysMap[tableName],
-			Indexes:    indexesMap[tableName],
+			Name:        tableName,
+			Schema:      i.schema,
+			Columns:     columnsMap[tableName],
+			PrimaryKey:  primaryKeysMap[tableName],
+			Indexes:     indexesMap[tableName],
+			ForeignKeys: foreignKeysMap[tableName],
 		}
 		tables = append(tables, table)
 	}
 
 	return tables, nil
+}
+
+// GetTablesByName retrieves the named tables from the configured schema,
+// bypassing any include/exclude filters that the caller may have applied to
+// GetTables. It is intended for resolving auxiliary tables (e.g. audit
+// children) that the user has not explicitly listed in their config but that
+// must still be introspected for validation purposes.
+//
+// The returned map is keyed by table name. Names that do not exist in the
+// schema are simply absent from the map — this is not an error, since callers
+// (like the audit pre-flight gate) want to surface "missing audit table" as
+// a domain-level validation failure rather than an introspection failure.
+//
+// An empty input slice short-circuits to an empty map without touching the
+// database. The underlying loaders (columns, primary keys, indexes, foreign
+// keys) all accept a name list and are reused verbatim — there is no separate
+// query path for "by name" introspection.
+func (i *Introspector) GetTablesByName(ctx context.Context, names []string) (map[string]Table, error) {
+	if len(names) == 0 {
+		return map[string]Table{}, nil
+	}
+
+	// Resolve which of the requested names actually exist in the schema.
+	// Loaders accept a name list, but if a name is missing from
+	// information_schema we want to omit it from the result map rather than
+	// emit a Table struct with empty columns/PK/etc.
+	existing, err := i.filterExistingTableNames(ctx, names)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve table names: %w", err)
+	}
+	if len(existing) == 0 {
+		return map[string]Table{}, nil
+	}
+
+	columnsMap, err := i.getAllTableColumns(ctx, existing)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get columns: %w", err)
+	}
+
+	primaryKeysMap, err := i.getAllTablePrimaryKeys(ctx, existing)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get primary keys: %w", err)
+	}
+
+	indexesMap, err := i.getAllTableIndexes(ctx, existing)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get indexes: %w", err)
+	}
+
+	foreignKeysMap, err := i.getAllTableForeignKeys(ctx, existing)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get foreign keys: %w", err)
+	}
+
+	result := make(map[string]Table, len(existing))
+	for _, tableName := range existing {
+		result[tableName] = Table{
+			Name:        tableName,
+			Schema:      i.schema,
+			Columns:     columnsMap[tableName],
+			PrimaryKey:  primaryKeysMap[tableName],
+			Indexes:     indexesMap[tableName],
+			ForeignKeys: foreignKeysMap[tableName],
+		}
+	}
+	return result, nil
+}
+
+// filterExistingTableNames returns the subset of `names` that exist as base
+// tables in the configured schema. Used by GetTablesByName so that callers
+// receive a map containing only real tables; non-existent names are silently
+// dropped rather than surfaced as Table structs with zero columns.
+func (i *Introspector) filterExistingTableNames(ctx context.Context, names []string) ([]string, error) {
+	query := `
+		SELECT table_name
+		FROM information_schema.tables
+		WHERE table_schema = $1
+		  AND table_type = 'BASE TABLE'
+		  AND table_name = ANY($2)
+		ORDER BY table_name
+	`
+
+	rows, err := i.db.Query(ctx, query, i.schema, names)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var found []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		found = append(found, name)
+	}
+	return found, rows.Err()
 }
 
 // getTableNames retrieves all table names in the schema
@@ -206,19 +308,49 @@ func (i *Introspector) getAllTablePrimaryKeys(ctx context.Context, tableNames []
 	return primaryKeysMap, rows.Err()
 }
 
-// getAllTableIndexes retrieves all indexes for all tables in a single query
+// getAllTableIndexes retrieves all indexes for all tables in a single query.
+//
+// Column ordering is taken from pg_index.indkey (the authoritative source) so
+// callers can reliably ask "is column X the leading column of any index on
+// this table?" — important for the audit pre-flight gate. Expression columns
+// (e.g. LOWER(email)) are emitted as the empty string at the matching
+// position; partial-predicate clauses are ignored. INCLUDE-clause covering
+// columns are excluded via pos < indnkeyatts so only true key columns surface,
+// and concurrently-built or otherwise unusable indexes are filtered out via
+// indisvalid AND indisready.
 func (i *Introspector) getAllTableIndexes(ctx context.Context, tableNames []string) (map[string][]Index, error) {
 	query := `
+		WITH idx AS (
+			SELECT
+				c.relname           AS table_name,
+				ic.relname          AS index_name,
+				x.indisunique       AS is_unique,
+				x.indkey            AS indkey,
+				x.indnkeyatts       AS indnkeyatts,
+				x.indrelid          AS indrelid,
+				generate_subscripts(x.indkey, 1) AS pos
+			FROM pg_index x
+			JOIN pg_class c       ON c.oid = x.indrelid
+			JOIN pg_class ic      ON ic.oid = x.indexrelid
+			JOIN pg_namespace n   ON n.oid = c.relnamespace
+			WHERE n.nspname = $1
+			  AND c.relname = ANY($2)
+			  AND NOT x.indisprimary
+			  AND x.indisvalid
+			  AND x.indisready
+		)
 		SELECT
-			i.tablename,
-			i.indexname,
-			i.indexdef,
-			CASE WHEN i.indexdef LIKE '%UNIQUE%' THEN true ELSE false END as is_unique
-		FROM pg_indexes i
-		WHERE i.schemaname = $1
-		  AND i.tablename = ANY($2)
-		  AND i.indexname NOT LIKE '%_pkey'
-		ORDER BY i.tablename, i.indexname
+			idx.table_name,
+			idx.index_name,
+			idx.is_unique,
+			idx.pos,
+			COALESCE(a.attname, '') AS column_name
+		FROM idx
+		LEFT JOIN pg_attribute a
+			ON a.attrelid = idx.indrelid
+			AND a.attnum  = idx.indkey[idx.pos]
+		WHERE idx.pos < idx.indnkeyatts
+		ORDER BY idx.table_name, idx.index_name, idx.pos
 	`
 
 	rows, err := i.db.Query(ctx, query, i.schema, tableNames)
@@ -227,62 +359,132 @@ func (i *Introspector) getAllTableIndexes(ctx context.Context, tableNames []stri
 	}
 	defer rows.Close()
 
-	indexesMap := make(map[string][]Index)
-	for rows.Next() {
-		var tableName string
-		var indexName, indexDef string
-		var isUnique bool
+	type key struct{ table, index string }
+	type entry struct {
+		isUnique bool
+		columns  []string
+	}
+	order := make(map[string][]string) // table -> ordered list of index names
+	seen := make(map[key]*entry)
 
-		if err := rows.Scan(&tableName, &indexName, &indexDef, &isUnique); err != nil {
+	for rows.Next() {
+		var tableName, indexName, columnName string
+		var isUnique bool
+		var pos int
+
+		if err := rows.Scan(&tableName, &indexName, &isUnique, &pos, &columnName); err != nil {
 			return nil, err
 		}
 
-		columns := i.parseIndexColumns(indexDef)
-
-		index := Index{
-			Name:     indexName,
-			Columns:  columns,
-			IsUnique: isUnique,
+		k := key{tableName, indexName}
+		e, ok := seen[k]
+		if !ok {
+			e = &entry{isUnique: isUnique}
+			seen[k] = e
+			order[tableName] = append(order[tableName], indexName)
 		}
-		indexesMap[tableName] = append(indexesMap[tableName], index)
+		e.columns = append(e.columns, columnName)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
-	return indexesMap, rows.Err()
+	indexesMap := make(map[string][]Index, len(order))
+	for tableName, names := range order {
+		for _, name := range names {
+			e := seen[key{tableName, name}]
+			indexesMap[tableName] = append(indexesMap[tableName], Index{
+				Name:     name,
+				Columns:  e.columns,
+				IsUnique: e.isUnique,
+			})
+		}
+	}
+
+	return indexesMap, nil
 }
 
-// parseIndexColumns extracts column names from an index definition
-func (i *Introspector) parseIndexColumns(indexDef string) []string {
-	start := strings.Index(indexDef, "(")
-	end := strings.LastIndex(indexDef, ")")
+// getAllTableForeignKeys retrieves foreign-key constraints for all tables in
+// the configured schema. Returns one row per FK column. Composite FKs surface
+// as multiple rows sharing a ConstraintName; group by ConstraintName to
+// reconstitute composites.
+//
+// Joins information_schema.table_constraints + key_column_usage +
+// referential_constraints + constraint_column_usage. All joins include
+// table_schema to prevent cross-schema bleed when two FKs of the same name
+// exist in different schemas. The referenced column is pulled from
+// constraint_column_usage and aligned by ordinal_position so composite-FK
+// rows pair the correct (child, parent) columns. Only same-schema references
+// are returned (v1 audit contract).
+func (i *Introspector) getAllTableForeignKeys(ctx context.Context, tableNames []string) (map[string][]ForeignKey, error) {
+	query := `
+		SELECT
+			tc.table_name        AS child_table,
+			tc.constraint_name   AS constraint_name,
+			kcu.column_name      AS child_column,
+			kcu.ordinal_position AS ordinal_position,
+			ccu.table_name       AS referenced_table,
+			ccu.column_name      AS referenced_column
+		FROM information_schema.table_constraints tc
+		JOIN information_schema.key_column_usage kcu
+			ON tc.constraint_schema = kcu.constraint_schema
+			AND tc.constraint_name  = kcu.constraint_name
+			AND tc.table_schema     = kcu.table_schema
+			AND tc.table_name       = kcu.table_name
+		JOIN information_schema.referential_constraints rc
+			ON tc.constraint_schema = rc.constraint_schema
+			AND tc.constraint_name  = rc.constraint_name
+		JOIN information_schema.constraint_column_usage ccu
+			ON rc.unique_constraint_schema = ccu.constraint_schema
+			AND rc.unique_constraint_name  = ccu.constraint_name
+			AND kcu.position_in_unique_constraint = (
+				SELECT kcu2.ordinal_position
+				FROM information_schema.key_column_usage kcu2
+				WHERE kcu2.constraint_schema = ccu.constraint_schema
+				  AND kcu2.constraint_name   = ccu.constraint_name
+				  AND kcu2.column_name       = ccu.column_name
+			)
+		WHERE tc.constraint_type = 'FOREIGN KEY'
+		  AND tc.table_schema    = $1
+		  AND tc.table_name      = ANY($2)
+		ORDER BY tc.table_name, tc.constraint_name, kcu.ordinal_position
+	`
 
-	if start == -1 || end == -1 || start >= end {
-		return []string{}
+	rows, err := i.db.Query(ctx, query, i.schema, tableNames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	fkMap := make(map[string][]ForeignKey)
+	for rows.Next() {
+		var (
+			childTable       string
+			constraintName   string
+			childColumn      string
+			ordinalPosition  int
+			referencedTable  string
+			referencedColumn string
+		)
+
+		if err := rows.Scan(
+			&childTable,
+			&constraintName,
+			&childColumn,
+			&ordinalPosition,
+			&referencedTable,
+			&referencedColumn,
+		); err != nil {
+			return nil, err
+		}
+
+		fkMap[childTable] = append(fkMap[childTable], ForeignKey{
+			ConstraintName:   constraintName,
+			ColumnName:       childColumn,
+			ReferencedTable:  referencedTable,
+			ReferencedColumn: referencedColumn,
+		})
 	}
 
-	columnsPart := indexDef[start+1 : end]
-
-	var columns []string
-	for _, col := range strings.Split(columnsPart, ",") {
-		col = strings.TrimSpace(col)
-		if col == "" {
-			continue
-		}
-
-		if strings.HasPrefix(col, "\"") && strings.Contains(col, "\"") {
-			endQuote := strings.Index(col[1:], "\"")
-			if endQuote != -1 {
-				col = col[:endQuote+2]
-			}
-		} else {
-			if spaceIndex := strings.Index(col, " "); spaceIndex != -1 {
-				col = col[:spaceIndex]
-			}
-		}
-
-		if col != "" {
-			columns = append(columns, col)
-		}
-	}
-
-	return columns
+	return fkMap, rows.Err()
 }

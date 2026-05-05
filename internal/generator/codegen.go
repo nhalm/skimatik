@@ -295,11 +295,22 @@ func (cg *CodeGenerator) generateCRUDOperations(table Table) (string, error) {
 	// Get the functions to generate for this table
 	functions := cg.config.GetTableFunctions(table.Name)
 
+	// Audited tables route create/update through CTE-based templates that
+	// maintain the parallel <table>_audit history alongside the parent
+	// mutation. Delete is generated normally — whether deletion is permitted
+	// is a database-level concern enforced via Postgres roles, not by codegen.
+	createTemplate := TemplateCreate
+	updateTemplate := TemplateUpdate
+	if table.Audit {
+		createTemplate = TemplateCreateAudited
+		updateTemplate = TemplateUpdateAudited
+	}
+
 	// Map function names to templates (using template manager)
 	operationTemplates := map[string]string{
 		"get":      TemplateGetByID,
-		"create":   TemplateCreate,
-		"update":   TemplateUpdate,
+		"create":   createTemplate,
+		"update":   updateTemplate,
 		"delete":   TemplateDelete,
 		"list":     TemplateList,
 		"paginate": TemplatePaginationSharedListPaginated,
@@ -369,6 +380,10 @@ func (cg *CodeGenerator) prepareCRUDTemplateData(table Table) map[string]any {
 	var insertArgs []string
 	var updateAssignments []string
 	var updateArgs []string
+	// Audited variants reserve $1 for the row ID so the same placeholder can
+	// be used in both the closed-audit and parent-update WHERE clauses,
+	// pushing SET assignments to $2..$N.
+	var auditedUpdateAssignments []string
 
 	// First, add ID column to insert lists
 	insertColumns = append(insertColumns, idColumn.Name)
@@ -408,32 +423,38 @@ func (cg *CodeGenerator) prepareCRUDTemplateData(table Table) map[string]any {
 		})
 
 		updateAssignments = append(updateAssignments, fmt.Sprintf("%s = $%d", col.Name, updateParamIndex))
+		auditedUpdateAssignments = append(auditedUpdateAssignments, fmt.Sprintf("%s = $%d", col.Name, updateParamIndex+1))
 		updateArgs = append(updateArgs, "params."+col.GoFieldName())
 		updateParamIndex++
 	}
 
-	// ID parameter comes last in update
+	// ID parameter comes last in the non-audited update; audited variants
+	// place it first so closed/updated CTEs share $1.
 	updateArgs = append(updateArgs, "id")
 	idParamIndex := updateParamIndex
+	auditedUpdateArgs := append([]string{"id"}, updateArgs[:len(updateArgs)-1]...)
 
 	return map[string]any{
-		"StructName":         structName,
-		"RepositoryName":     repositoryName,
-		"ReceiverName":       receiverName,
-		"TableName":          table.Name,
-		"IDColumn":           idColumn.Name,
-		"IDColumnType":       idColumn.Type,
-		"IDType":             idColumn.GoType,
-		"IDParamIndex":       idParamIndex,
-		"SelectColumns":      strings.Join(selectColumns, ", "),
-		"ScanArgs":           strings.Join(scanArgs, ", "),
-		"CreateFields":       createFields,
-		"UpdateFields":       updateFields,
-		"InsertColumns":      strings.Join(insertColumns, ", "),
-		"InsertPlaceholders": strings.Join(insertPlaceholders, ", "),
-		"InsertArgs":         strings.Join(insertArgs, ", "),
-		"UpdateColumns":      strings.Join(updateAssignments, ", "),
-		"UpdateArgs":         strings.Join(updateArgs, ", "),
+		"StructName":           structName,
+		"RepositoryName":       repositoryName,
+		"ReceiverName":         receiverName,
+		"TableName":            table.Name,
+		"AuditTableName":       table.Name + "_audit",
+		"IDColumn":             idColumn.Name,
+		"IDColumnType":         idColumn.Type,
+		"IDType":               idColumn.GoType,
+		"IDParamIndex":         idParamIndex,
+		"SelectColumns":        strings.Join(selectColumns, ", "),
+		"ScanArgs":             strings.Join(scanArgs, ", "),
+		"CreateFields":         createFields,
+		"UpdateFields":         updateFields,
+		"InsertColumns":        strings.Join(insertColumns, ", "),
+		"InsertPlaceholders":   strings.Join(insertPlaceholders, ", "),
+		"InsertArgs":           strings.Join(insertArgs, ", "),
+		"UpdateColumns":        strings.Join(updateAssignments, ", "),
+		"UpdateArgs":           strings.Join(updateArgs, ", "),
+		"AuditedUpdateColumns": strings.Join(auditedUpdateAssignments, ", "),
+		"AuditedUpdateArgs":    strings.Join(auditedUpdateArgs, ", "),
 	}
 }
 

@@ -1,0 +1,32 @@
+// Create{{.StructName}}Params holds parameters for creating a {{.StructName}}
+type Create{{.StructName}}Params struct {
+{{range .CreateFields}}	{{.Name}} {{.Type}} `{{.Tag}}`
+{{end}}}
+
+// Create creates a new {{.StructName}} and writes an audit row to {{.AuditTableName}}.
+// The parent INSERT and audit INSERT execute as a single CTE so they share the same
+// statement-level NOW() timestamp and either both succeed or both fail.
+func (r *{{.RepositoryName}}) Create(ctx context.Context, db pgxkit.Executor, params Create{{.StructName}}Params) (*{{.StructName}}, error) {
+	id := r.generateIdFunc()
+	query := `
+		WITH inserted AS (
+			INSERT INTO {{.TableName}} ({{.InsertColumns}})
+			VALUES ({{.InsertPlaceholders}})
+			RETURNING {{.SelectColumns}}
+		),
+		audited AS (
+			INSERT INTO {{.AuditTableName}} (id, parent_id, data, start_date)
+			SELECT gen_random_uuid(), id, to_jsonb(inserted.*), NOW() FROM inserted
+		)
+		SELECT {{.SelectColumns}} FROM inserted
+	`
+
+	var {{.ReceiverName}} {{.StructName}}
+	row := ExecuteQueryRow(ctx, db, "create", "{{.StructName}}", query, {{.InsertArgs}})
+	err := row.Scan({{.ScanArgs}})
+	if err := HandleQueryRowError("create", "{{.StructName}}", err); err != nil {
+		return nil, err
+	}
+
+	return &{{.ReceiverName}}, nil
+}

@@ -1,0 +1,130 @@
+package generator
+
+import (
+	"strings"
+	"testing"
+)
+
+// auditFixture returns a well-formed UUID-keyed audit child Table; tests mutate it to inject failures.
+func auditFixture(parentName string) Table {
+	auditName := parentName + "_audit"
+	return Table{
+		Name:   auditName,
+		Schema: "public",
+		Columns: []Column{
+			{Name: "id", Type: "uuid", IsNullable: false},
+			{Name: "parent_id", Type: "uuid", IsNullable: false},
+			{Name: "data", Type: "jsonb", IsNullable: false},
+			{Name: "start_date", Type: "timestamptz", IsNullable: false},
+			{Name: "end_date", Type: "timestamptz", IsNullable: true},
+		},
+		PrimaryKey: []string{"id"},
+		Indexes: []Index{
+			{Name: "idx_" + auditName + "_parent", Columns: []string{"parent_id"}},
+		},
+		ForeignKeys: []ForeignKey{{
+			ConstraintName:   auditName + "_parent_fk",
+			ColumnName:       "parent_id",
+			ReferencedTable:  parentName,
+			ReferencedColumn: "id",
+		}},
+	}
+}
+
+// parentFixture returns a minimal UUID-keyed parent Table flagged for audit.
+func parentFixture(name string) Table {
+	return Table{
+		Name:       name,
+		Schema:     "public",
+		Columns:    []Column{{Name: "id", Type: "uuid", IsNullable: false}},
+		PrimaryKey: []string{"id"},
+		Audit:      true,
+	}
+}
+
+func TestValidateAuditTables_OK(t *testing.T) {
+	parents := map[string]Table{"users": parentFixture("users")}
+	audits := map[string]Table{"users_audit": auditFixture("users")}
+	if err := ValidateAuditTables(parents, audits); err != nil {
+		t.Fatalf("expected nil error; got %v", err)
+	}
+}
+
+func TestValidateAuditTables_Errors(t *testing.T) {
+	cases := []struct {
+		name         string
+		parents      map[string]Table
+		audits       map[string]Table
+		wantContains []string
+	}{
+		{
+			name:         "missing audit table",
+			parents:      map[string]Table{"posts": parentFixture("posts")},
+			audits:       map[string]Table{},
+			wantContains: []string{"posts_audit not found"},
+		},
+		{
+			name:    "wrong column type",
+			parents: map[string]Table{"posts": parentFixture("posts")},
+			audits: func() map[string]Table {
+				a := auditFixture("posts")
+				for i := range a.Columns {
+					if a.Columns[i].Name == "data" {
+						a.Columns[i].Type = "text"
+					}
+				}
+				return map[string]Table{"posts_audit": a}
+			}(),
+			wantContains: []string{"type mismatch"},
+		},
+		{
+			name:    "missing FK",
+			parents: map[string]Table{"posts": parentFixture("posts")},
+			audits: func() map[string]Table {
+				a := auditFixture("posts")
+				a.ForeignKeys = nil
+				return map[string]Table{"posts_audit": a}
+			}(),
+			wantContains: []string{"missing foreign key"},
+		},
+		{
+			name: "aggregates two parents",
+			parents: map[string]Table{
+				"posts": parentFixture("posts"),
+				"users": parentFixture("users"),
+			},
+			audits: func() map[string]Table {
+				posts := auditFixture("posts")
+				posts.Indexes = nil
+				users := auditFixture("users")
+				for i := range users.Columns {
+					if users.Columns[i].Name == "data" {
+						users.Columns[i].Type = "text"
+					}
+				}
+				return map[string]Table{"posts_audit": posts, "users_audit": users}
+			}(),
+			wantContains: []string{
+				"posts_audit missing index on (parent_id)",
+				`users_audit column "data" type mismatch`,
+				"CREATE TABLE posts_audit",
+				"CREATE TABLE users_audit",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateAuditTables(tc.parents, tc.audits)
+			if err == nil {
+				t.Fatal("expected error; got nil")
+			}
+			got := err.Error()
+			for _, want := range tc.wantContains {
+				if !strings.Contains(got, want) {
+					t.Errorf("expected error to contain %q; got:\n%s", want, got)
+				}
+			}
+		})
+	}
+}
