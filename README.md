@@ -163,7 +163,7 @@ func (q *Queries) ListUsersWithFilters(
 
 ## Requirements
 
-- Go 1.24+
+- Go 1.25+
 - PostgreSQL (any version supported by pgx)
 - Tables must have single-column primary keys (composite keys not supported)
 

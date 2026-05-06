@@ -15,7 +15,7 @@ make setup && make generate && make run
 
 ## Prerequisites
 
-- **Go 1.24+** - Required for installation and generated code
+- **Go 1.25+** - Required for installation and generated code
 - **PostgreSQL** - Any version supported by pgx
 - **Database with UUID v7 primary keys** - Required for pagination support
 
