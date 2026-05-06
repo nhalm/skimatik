@@ -72,7 +72,6 @@ Plans are PostgreSQL-version-sensitive — pin your test image. PG inlines param
 | `internal/generator/audit_runtime_integration_test.go::TestAuditCTE_Golden` | Golden | The CTE SQL the audited Create/Update templates render |
 | `example-app/internal/repository/golden_test.go::TestUsersRepository_Golden` | Golden | `generated.UsersRepository.Create + Get` end-to-end |
 | `example-app/internal/repository/golden_test.go::TestUsersRepository_Plan` | Plan | EXPLAIN plan of the same generated `Create + Get` |
-| Generated `Test<Struct>Repository_Golden` / `_Plan` (in `templates/tests/repository_test.tmpl`) | Both | Per-table `Create + Get` for users who adopt the test template |
 
 ## See also
 

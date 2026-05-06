@@ -4,7 +4,7 @@ import "embed"
 
 // Embed all template files at build time
 //
-//go:embed templates/crud/* templates/pagination/* templates/repository/* templates/queries/* templates/shared/* templates/tests/*
+//go:embed templates/crud/* templates/pagination/* templates/repository/* templates/queries/* templates/shared/*
 var templateFS embed.FS
 
 // Template file paths (constants for type safety)
@@ -45,7 +45,4 @@ const (
 	TemplateSharedErrors       = "templates/shared/errors.tmpl"
 	TemplateDatabaseOperations = "templates/shared/database_operations.tmpl"
 	TemplateIDGenerators       = "templates/shared/id_generators.tmpl"
-
-	// Test templates
-	TemplateRepositoryTest = "templates/tests/repository_test.tmpl"
 )
