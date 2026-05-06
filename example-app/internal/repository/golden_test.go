@@ -75,14 +75,7 @@ func fixedIDGen() func() uuid.UUID {
 // Determinism: the parent users.id is supplied by fixedIDGen(); the audit
 // row id, the params Email, and any returned timestamps/UUIDs are
 // normalized by pgxkit's default normalizers.
-//
-// NOTE: currently blocked by https://github.com/nhalm/pgxkit/issues/77 —
-// pgxkit v2.1.0's golden recorder cannot replay UUID columns through Scan
-// (returns "unable to scan type [16]uint8 into UUID"). The Skip below comes
-// out once that issue is resolved and pgxkit is re-bumped in this branch.
 func TestUsersRepository_Golden(t *testing.T) {
-	t.Skip("blocked on pgxkit#77 — golden replay cannot Scan UUID columns")
-
 	testDB := newGoldenTestDB(t)
 
 	// Pre-clean any leftover row at the deterministic ID so the scenario
