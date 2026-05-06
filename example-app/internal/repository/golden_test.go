@@ -14,9 +14,9 @@ import (
 	"github.com/nhalm/skimatik/v2/example-app/internal/repository/generated"
 )
 
-// newGoldenTestDB connects a *pgxkit.TestDB to TEST_DATABASE_URL or DATABASE_URL.
-// EnableGolden / EnableAssertPlan are methods on *TestDB, so the regular
-// *pgxkit.DB used by pagination_test.go is not enough.
+// newGoldenTestDB returns a connected *pgxkit.TestDB. EnableGolden and
+// EnableAssertPlan are methods on *TestDB, so the *DB used by pagination_test.go
+// is not enough.
 func newGoldenTestDB(t *testing.T) *pgxkit.TestDB {
 	t.Helper()
 
@@ -45,12 +45,9 @@ func newGoldenTestDB(t *testing.T) *pgxkit.TestDB {
 	return testDB
 }
 
-// fixedIDGen returns a closure that produces a deterministic sequence of
-// UUIDs (00000000-0000-0000-0000-000000000001, ...000002, ...). Pass it to
-// generated.NewUsersRepository so the parent-row UUID skimatik mints during
-// Create is the same across runs — the prerequisite for a stable golden
-// transcript. The audit-row UUID is still pgxkit-normalized by the default
-// recorder, so it does not need to be deterministic.
+// fixedIDGen returns a counter-based UUID factory so the parent-row IDs
+// skimatik mints are stable across runs (required for stable golden + plan
+// baselines).
 func fixedIDGen() func() uuid.UUID {
 	var counter uint64
 	return func() uuid.UUID {
@@ -61,44 +58,27 @@ func fixedIDGen() func() uuid.UUID {
 	}
 }
 
-// TestUsersRepository_Golden locks in the DB-event transcript of a
-// Create + Get scenario against the *generated* skimatik repository — no
-// HTTP, no service-layer wrapper. The transcript contains exactly the SQL
-// skimatik emits, the args it binds, and the rows it scans back.
-//
-// A diff against the committed baseline at testdata/golden/TestUsersRepository_Golden.json
-// catches any change to:
-//   - The audited Create CTE skimatik renders for the users table
-//   - The Get-by-id query skimatik renders
-//   - The columns either statement returns
-//
-// Determinism: the parent users.id is supplied by fixedIDGen(); the audit
-// row id, the params Email, and any returned timestamps/UUIDs are
-// normalized by pgxkit's default normalizers.
+const seedUserID = "00000000-0000-0000-0000-000000000001"
+
+func preCleanSeedUser(t *testing.T, db *pgxkit.DB) {
+	t.Helper()
+	if _, err := db.Exec(context.Background(),
+		`DELETE FROM users_audit WHERE parent_id = $1`, seedUserID); err != nil {
+		t.Fatalf("pre-clean users_audit: %v", err)
+	}
+	if _, err := db.Exec(context.Background(),
+		`DELETE FROM users WHERE id = $1`, seedUserID); err != nil {
+		t.Fatalf("pre-clean users: %v", err)
+	}
+}
+
 func TestUsersRepository_Golden(t *testing.T) {
 	testDB := newGoldenTestDB(t)
-
-	// Pre-clean any leftover row at the deterministic ID so the scenario
-	// starts from a known state. fixedIDGen() emits 00000000-...-000001 first.
-	const seedID = "00000000-0000-0000-0000-000000000001"
-	preClean := func() {
-		_, err := testDB.Exec(context.Background(),
-			`DELETE FROM users_audit WHERE parent_id = $1`, seedID)
-		if err != nil {
-			t.Fatalf("pre-clean users_audit: %v", err)
-		}
-		_, err = testDB.Exec(context.Background(),
-			`DELETE FROM users WHERE id = $1`, seedID)
-		if err != nil {
-			t.Fatalf("pre-clean users: %v", err)
-		}
-	}
-	preClean()
-	t.Cleanup(preClean)
+	preCleanSeedUser(t, testDB.DB)
+	t.Cleanup(func() { preCleanSeedUser(t, testDB.DB) })
 
 	golden := testDB.EnableGolden("TestUsersRepository_Golden")
 	repo := generated.NewUsersRepository(fixedIDGen())
-
 	ctx := context.Background()
 
 	created, err := repo.Create(ctx, golden, generated.CreateUsersParams{
@@ -108,53 +88,21 @@ func TestUsersRepository_Golden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if created == nil {
-		t.Fatalf("Create returned nil user")
-	}
 
-	fetched, err := repo.Get(ctx, golden, created.Id)
-	if err != nil {
+	if _, err := repo.Get(ctx, golden, created.Id); err != nil {
 		t.Fatalf("Get: %v", err)
-	}
-	if fetched == nil {
-		t.Fatalf("Get returned nil user")
 	}
 
 	golden.AssertGolden(t, "TestUsersRepository_Golden")
 }
 
-// TestUsersRepository_Plan locks in the structural EXPLAIN plan of the
-// Create + Get scenario. A diff against the committed baseline at
-// testdata/plans/TestUsersRepository_Plan.json.baseline catches plan-shape
-// regressions: seq-scan vs index-scan, nested-loop vs hash-join, new sort
-// nodes, join-order changes.
-//
-// Determinism: same fixedIDGen() and pre-clean as the golden test, so the
-// per-run UUIDs that would otherwise inline into the plan's filter
-// literals (PG's custom-plan inlining) are now stable across runs. Plans
-// remain PostgreSQL-version-sensitive — pin the test image.
 func TestUsersRepository_Plan(t *testing.T) {
 	testDB := newGoldenTestDB(t)
-
-	const seedID = "00000000-0000-0000-0000-000000000001"
-	preClean := func() {
-		_, err := testDB.Exec(context.Background(),
-			`DELETE FROM users_audit WHERE parent_id = $1`, seedID)
-		if err != nil {
-			t.Fatalf("pre-clean users_audit: %v", err)
-		}
-		_, err = testDB.Exec(context.Background(),
-			`DELETE FROM users WHERE id = $1`, seedID)
-		if err != nil {
-			t.Fatalf("pre-clean users: %v", err)
-		}
-	}
-	preClean()
-	t.Cleanup(preClean)
+	preCleanSeedUser(t, testDB.DB)
+	t.Cleanup(func() { preCleanSeedUser(t, testDB.DB) })
 
 	plan := testDB.EnableAssertPlan("TestUsersRepository_Plan")
 	repo := generated.NewUsersRepository(fixedIDGen())
-
 	ctx := context.Background()
 
 	created, err := repo.Create(ctx, plan, generated.CreateUsersParams{

@@ -531,16 +531,10 @@ func (qa *QueryAnalyzer) analyzeSelectQuery(ctx context.Context, query *query) e
 	return qa.analyzeQueryColumns(ctx, query)
 }
 
-// analyzeQueryColumns analyzes the columns returned by a SELECT query.
-//
-// The metadata is sourced from a PREPARE inside a rolled-back transaction
-// rather than from executing the query with NULL placeholder args, because
-// pgx v5.9+ surfaces bind/execute errors at rows.Next() rather than at
-// Query() — leaving FieldDescriptions empty for any query whose dummy NULL
-// args would violate NOT NULL or other constraints (notably DML CTEs that
-// INSERT/UPDATE on real columns). Prepare returns the result-column
-// descriptions without executing, so it works for SELECT and DML-CTE shapes
-// alike and is independent of pgx error-timing changes.
+// analyzeQueryColumns sources column metadata from a PREPARE in a rolled-back
+// transaction rather than executing with NULL placeholder args, because pgx
+// v5.9+ surfaces bind/execute errors at rows.Next() — leaving FieldDescriptions
+// empty for DML CTEs whose nil args violate NOT NULL.
 func (qa *QueryAnalyzer) analyzeQueryColumns(ctx context.Context, query *query) error {
 	// Remove trailing semicolon if present
 	sql := strings.TrimSpace(query.SQL)

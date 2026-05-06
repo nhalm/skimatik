@@ -270,10 +270,6 @@ func buildUpdateArgs(t *testing.T, table table, id uuid.UUID, updatedEmail, name
 	return args
 }
 
-// runAuditScenario executes the audited Create + Update + Update flow against
-// db using deterministic, constant inputs. Shared by the runtime invariants
-// test, the golden transcript test, and the plan-regression test so all three
-// drive identical SQL/args/rows.
 func runAuditScenario(t *testing.T, db *pgxkit.DB, usersTable table, id uuid.UUID,
 	createSQL, updateSQL, createEmail, updateEmail, secondUpdateEmail string,
 ) {
@@ -308,9 +304,6 @@ func runAuditScenario(t *testing.T, db *pgxkit.DB, usersTable table, id uuid.UUI
 	}
 }
 
-// loadAuditTemplates introspects the users table, marks it audited, and renders
-// the audited CREATE and UPDATE SQL strings. Shared by the runtime, golden,
-// and plan tests.
 func loadAuditTemplates(t *testing.T, testDB *pgxkit.TestDB) (table, string, string) {
 	t.Helper()
 
@@ -330,8 +323,6 @@ func loadAuditTemplates(t *testing.T, testDB *pgxkit.TestDB) (table, string, str
 		renderAuditedSQL(t, usersTable, TemplateUpdateAudited)
 }
 
-// preCleanAuditFixture removes any leftover rows from a prior run so the
-// scenario starts from a known state. Idempotent.
 func preCleanAuditFixture(t *testing.T, db *pgxkit.DB, emails []string) {
 	t.Helper()
 	ctx := context.Background()
@@ -345,12 +336,6 @@ func preCleanAuditFixture(t *testing.T, db *pgxkit.DB, emails []string) {
 	}
 }
 
-// TestAuditCTE_Golden locks in the full DB-event transcript that the audited
-// Create/Update CTE templates produce. A diff against the committed baseline
-// catches any change in SQL, arg shape, or returned rows.
-//
-// Determinism: emails/names are constants; UUIDs and timestamps normalize
-// automatically (defaults: <UUID:N>, <TIMESTAMP>).
 func TestAuditCTE_Golden(t *testing.T) {
 	testDB := pgxkit.RequireDB(t)
 	if err := testDB.Setup(); err != nil {

@@ -1,13 +1,8 @@
-// Test{{.StructName}}Repository provides comprehensive testing for {{.RepositoryName}}.
-//
-// Each sub-test is hermetic: it creates its own data and does not rely on
-// state left by prior runs. Run with `TEST_DATABASE_URL` set to a writable
-// Postgres; `pgxkit.RequireDB` skips the test if the variable is unset.
 func Test{{.StructName}}Repository(t *testing.T) {
 	t.Parallel()
 
 	testDB := pgxkit.RequireDB(t)
-	repo := New{{.RepositoryName}}(nil) // nil = default UUID v7 generator
+	repo := New{{.RepositoryName}}(nil)
 	ctx := context.Background()
 
 	t.Run("Create", func(t *testing.T) {
@@ -154,20 +149,6 @@ func Test{{.StructName}}Repository(t *testing.T) {
 	})
 }
 
-// Test{{.StructName}}Repository_Golden locks in the full DB-event transcript
-// (BEGIN, every Query/Exec with sql/args/rows, COMMIT/ROLLBACK) of a
-// Create + Get scenario against the generated repository. A diff against the
-// committed baseline at testdata/golden/Test{{.StructName}}Repository_Golden.json
-// catches any change in which SQL skimatik emits or which rows it returns —
-// the contract a code generator owes its users.
-//
-// Regenerate the baseline (after an intentional change) with:
-//
-//	go test -run Test{{.StructName}}Repository_Golden -overwrite-golden ./...
-//
-// Default normalizers handle UUIDs and timestamps; if your CreateFields embed
-// per-run values that aren't UUID/time-typed, register a custom normalizer
-// via pgxkit.WithGoldenNormalizer.
 func Test{{.StructName}}Repository_Golden(t *testing.T) {
 	t.Parallel()
 
@@ -192,14 +173,6 @@ func Test{{.StructName}}Repository_Golden(t *testing.T) {
 	golden.AssertGolden(t, "Test{{.StructName}}Repository_Golden")
 }
 
-// Test{{.StructName}}Repository_Plan locks in the structural EXPLAIN plan
-// (FORMAT JSON, COSTS OFF) of the same Create + Get scenario. A diff against
-// the committed baseline at testdata/plans/Test{{.StructName}}Repository_Plan.json
-// catches plan-shape regressions: seq-scan vs index-scan, nested-loop vs
-// hash-join, new sort nodes, join-order changes. It does not assert row data.
-//
-// Plans are PostgreSQL-version-sensitive — pin your test image to the same
-// version your CI uses, or baselines will flake.
 func Test{{.StructName}}Repository_Plan(t *testing.T) {
 	t.Parallel()
 
@@ -222,7 +195,6 @@ func Test{{.StructName}}Repository_Plan(t *testing.T) {
 	plan.AssertPlan(t, "Test{{.StructName}}Repository_Plan")
 }
 
-// Test{{.StructName}}RepositoryTimeout tests timeout handling.
 func Test{{.StructName}}RepositoryTimeout(t *testing.T) {
 	t.Parallel()
 
@@ -253,7 +225,6 @@ func Test{{.StructName}}RepositoryTimeout(t *testing.T) {
 	})
 }
 
-// Test{{.StructName}}RepositoryConstraints tests database constraint handling.
 func Test{{.StructName}}RepositoryConstraints(t *testing.T) {
 	t.Parallel()
 
