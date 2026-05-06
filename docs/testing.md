@@ -136,7 +136,7 @@ go test -tags=integration -run TestUsersRepository_Golden -overwrite-golden ./..
 
 ### What it captures
 
-For every eligible statement (SELECT, INSERT, UPDATE, DELETE, WITH …) issued through a `*DB` returned by `EnableAssertPlan`, the recorder issues `EXPLAIN (FORMAT JSON, COSTS OFF) <sql>` against the same args and writes the resulting plan to `testdata/plans/<test-name>.json`. `AssertPlan` then diffs against `testdata/plans/<test-name>.json.baseline`.
+For every eligible statement (SELECT, INSERT, UPDATE, DELETE, WITH …) issued through a `*DB` returned by `EnableAssertPlan`, the recorder issues `EXPLAIN (FORMAT JSON, COSTS OFF) <sql>` against the same args, accumulates the captured plans in memory, and at `AssertPlan` time writes them to `testdata/plans/<test-name>.json` (first run) or diffs against it (subsequent runs).
 
 Because the EXPLAIN doesn't `ANALYZE`, the underlying statement is not executed — so plan capture has no side effects.
 
@@ -149,7 +149,15 @@ repo := generated.NewUsersRepository(fixedIDGen())
 plan.AssertPlan(t, "TestUsersRepository_Plan")
 ```
 
-First run creates `testdata/plans/TestUsersRepository_Plan.json.baseline` — **commit that.** The non-baseline `.json` capture is overwritten on each run; gitignore it.
+First run creates `testdata/plans/TestUsersRepository_Plan.json` — **commit that.** Subsequent runs read the file, marshal current plans, and `t.Errorf` with a unified diff on mismatch. Same shape as golden — one file per scenario, no separate `.baseline` sibling.
+
+### Regenerating the baseline
+
+```bash
+go test -tags=integration -run TestUsersRepository_Plan -overwrite-plan ./...
+```
+
+`-overwrite-plan` mirrors `-overwrite-golden`: rewrites only baselines for tests that actually run, so you can target a single test and review its diff in isolation.
 
 ### Determinism caveats
 

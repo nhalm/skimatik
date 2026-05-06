@@ -14,22 +14,6 @@
       null,
       null,
       "\u003cUUID:2\u003e"
-    ],
-    "rows": [
-      {
-        "age": null,
-        "balance": null,
-        "created_at": "\u003cTIMESTAMP\u003e",
-        "email": "audit-cte-golden-create@example.com",
-        "id": "\u003cUUID:1\u003e",
-        "is_active": true,
-        "last_login": null,
-        "metadata": null,
-        "name": "Audit Test User",
-        "password_hash": "hash-placeholder",
-        "profile_picture_url": null,
-        "updated_at": "\u003cTIMESTAMP\u003e"
-      }
     ]
   },
   {
@@ -50,22 +34,6 @@
       null,
       null,
       "\u003cUUID:3\u003e"
-    ],
-    "rows": [
-      {
-        "age": null,
-        "balance": null,
-        "created_at": null,
-        "email": "audit-cte-golden-update@example.com",
-        "id": "\u003cUUID:1\u003e",
-        "is_active": null,
-        "last_login": null,
-        "metadata": null,
-        "name": "Audit Test User",
-        "password_hash": "hash-placeholder",
-        "profile_picture_url": null,
-        "updated_at": null
-      }
     ]
   },
   {
@@ -86,22 +54,6 @@
       null,
       null,
       "\u003cUUID:4\u003e"
-    ],
-    "rows": [
-      {
-        "age": null,
-        "balance": null,
-        "created_at": null,
-        "email": "audit-cte-golden-update2@example.com",
-        "id": "\u003cUUID:1\u003e",
-        "is_active": null,
-        "last_login": null,
-        "metadata": null,
-        "name": "Audit Test User",
-        "password_hash": "hash-placeholder",
-        "profile_picture_url": null,
-        "updated_at": null
-      }
     ]
   }
 ]

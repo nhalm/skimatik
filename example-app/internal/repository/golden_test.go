@@ -5,7 +5,6 @@ package repository
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -124,18 +123,6 @@ func TestUsersRepository_Golden(t *testing.T) {
 	golden.AssertGolden(t, "TestUsersRepository_Golden")
 }
 
-// resetPlanCapture removes the per-run plan capture file (NOT the
-// .baseline) before EnableAssertPlan re-records. Works around pgxkit's
-// behavior of appending to the capture across runs, which would otherwise
-// produce doubled-up plan counts on the second invocation.
-func resetPlanCapture(t *testing.T, testName string) {
-	t.Helper()
-	path := fmt.Sprintf("testdata/plans/%s.json", testName)
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		t.Fatalf("reset plan capture %s: %v", path, err)
-	}
-}
-
 // TestUsersRepository_Plan locks in the structural EXPLAIN plan of the
 // Create + Get scenario. A diff against the committed baseline at
 // testdata/plans/TestUsersRepository_Plan.json.baseline catches plan-shape
@@ -165,7 +152,6 @@ func TestUsersRepository_Plan(t *testing.T) {
 	preClean()
 	t.Cleanup(preClean)
 
-	resetPlanCapture(t, "TestUsersRepository_Plan")
 	plan := testDB.EnableAssertPlan("TestUsersRepository_Plan")
 	repo := generated.NewUsersRepository(fixedIDGen())
 
