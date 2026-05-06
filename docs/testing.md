@@ -35,8 +35,44 @@ pgxkit normalizes UUID/timestamp/`id`-typed args automatically; everything else 
 
 ## Worked example
 
+A complete file users can copy. The same shape works for `EnableAssertPlan` / `AssertPlan` — swap the calls and the test name.
+
 ```go
 //go:build integration
+
+package repository
+
+import (
+    "context"
+    "encoding/binary"
+    "testing"
+
+    "github.com/google/uuid"
+    "github.com/nhalm/pgxkit/v2"
+    "github.com/your/project/repository/generated"
+)
+
+func fixedIDGen() func() uuid.UUID {
+    var counter uint64
+    return func() uuid.UUID {
+        counter++
+        var u uuid.UUID
+        binary.BigEndian.PutUint64(u[8:], counter)
+        return u
+    }
+}
+
+// seedUserID is the first UUID fixedIDGen() mints. Pre-clean by this so the
+// scenario starts from a known state across runs.
+const seedUserID = "00000000-0000-0000-0000-000000000001"
+
+func preCleanSeedUser(t *testing.T, db *pgxkit.DB) {
+    t.Helper()
+    if _, err := db.Exec(context.Background(),
+        `DELETE FROM users WHERE id = $1`, seedUserID); err != nil {
+        t.Fatalf("pre-clean: %v", err)
+    }
+}
 
 func TestUsersRepository_Golden(t *testing.T) {
     testDB := pgxkit.RequireDB(t)
@@ -51,15 +87,20 @@ func TestUsersRepository_Golden(t *testing.T) {
         Name:  "Golden Test User",
         Email: "golden-test@example.com",
     })
-    require.NoError(t, err)
-    _, err = repo.Get(ctx, golden, created.Id)
-    require.NoError(t, err)
+    if err != nil {
+        t.Fatalf("Create: %v", err)
+    }
+    if _, err := repo.Get(ctx, golden, created.Id); err != nil {
+        t.Fatalf("Get: %v", err)
+    }
 
     golden.AssertGolden(t, "TestUsersRepository_Golden")
 }
 ```
 
-Pre-clean by a constant `seedID` matching what `fixedIDGen()` mints first. First run writes the baseline; subsequent runs assert against it. Regenerate intentionally with `-overwrite-golden` (or `-overwrite-plan`).
+First run writes `testdata/golden/TestUsersRepository_Golden.json`; commit it. Subsequent runs assert against it. Regenerate intentionally with `go test -overwrite-golden` (or `-overwrite-plan` for plan tests).
+
+The example-app integration suite at [`example-app/internal/repository/golden_test.go`](https://github.com/nhalm/skimatik/blob/main/example-app/internal/repository/golden_test.go) is the same pattern with `_Plan` alongside `_Golden`.
 
 ## Plan-regression caveats
 
@@ -72,7 +113,6 @@ Plans are PostgreSQL-version-sensitive — pin your test image. PG inlines param
 | `internal/generator/audit_runtime_integration_test.go::TestAuditCTE_Golden` | Golden | The CTE SQL the audited Create/Update templates render |
 | `example-app/internal/repository/golden_test.go::TestUsersRepository_Golden` | Golden | `generated.UsersRepository.Create + Get` end-to-end |
 | `example-app/internal/repository/golden_test.go::TestUsersRepository_Plan` | Plan | EXPLAIN plan of the same generated `Create + Get` |
-| Generated `Test<Struct>Repository_Golden` / `_Plan` (in `templates/tests/repository_test.tmpl`) | Both | Per-table `Create + Get` for users who adopt the test template |
 
 ## See also
 
