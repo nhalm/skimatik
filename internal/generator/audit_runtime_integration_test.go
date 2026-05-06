@@ -270,6 +270,94 @@ func buildUpdateArgs(t *testing.T, table table, id uuid.UUID, updatedEmail, name
 	return args
 }
 
+func runAuditScenario(t *testing.T, db *pgxkit.DB, usersTable table, id uuid.UUID,
+	createSQL, updateSQL, createEmail, updateEmail, secondUpdateEmail string,
+) {
+	t.Helper()
+	ctx := context.Background()
+
+	rows, err := db.Query(ctx, createSQL, buildCreateArgs(t, usersTable, id, "Audit Test User", createEmail, "hash-placeholder")...)
+	if err != nil {
+		t.Fatalf("audited CREATE failed: %v", err)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		t.Fatalf("audited CREATE rows err: %v", err)
+	}
+
+	rows, err = db.Query(ctx, updateSQL, buildUpdateArgs(t, usersTable, id, updateEmail, "Audit Test User")...)
+	if err != nil {
+		t.Fatalf("audited UPDATE failed: %v", err)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		t.Fatalf("audited UPDATE rows err: %v", err)
+	}
+
+	rows, err = db.Query(ctx, updateSQL, buildUpdateArgs(t, usersTable, id, secondUpdateEmail, "Audit Test User")...)
+	if err != nil {
+		t.Fatalf("second audited UPDATE failed: %v", err)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		t.Fatalf("second audited UPDATE rows err: %v", err)
+	}
+}
+
+func loadAuditTemplates(t *testing.T, testDB *pgxkit.TestDB) (table, string, string) {
+	t.Helper()
+
+	introspector := NewIntrospector(testDB.DB, "public")
+	tables, err := introspector.getTablesByName(context.Background(), []string{"users"})
+	if err != nil {
+		t.Fatalf("introspect users: %v", err)
+	}
+	usersTable, ok := tables["users"]
+	if !ok {
+		t.Fatalf("users table not found in introspection result")
+	}
+	usersTable.Audit = true
+
+	return usersTable,
+		renderAuditedSQL(t, usersTable, TemplateCreateAudited),
+		renderAuditedSQL(t, usersTable, TemplateUpdateAudited)
+}
+
+func preCleanAuditFixture(t *testing.T, db *pgxkit.DB, emails []string) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := db.Exec(ctx,
+		`DELETE FROM users_audit
+		 WHERE parent_id IN (SELECT id FROM users WHERE email = ANY($1))`, emails); err != nil {
+		t.Fatalf("pre-clean users_audit: %v", err)
+	}
+	if _, err := db.Exec(ctx, `DELETE FROM users WHERE email = ANY($1)`, emails); err != nil {
+		t.Fatalf("pre-clean users: %v", err)
+	}
+}
+
+func TestAuditCTE_Golden(t *testing.T) {
+	testDB := pgxkit.RequireDB(t)
+	if err := testDB.Setup(); err != nil {
+		t.Fatalf("test db setup: %v", err)
+	}
+
+	usersTable, createSQL, updateSQL := loadAuditTemplates(t, testDB)
+
+	const (
+		createEmail       = "audit-cte-golden-create@example.com"
+		updateEmail       = "audit-cte-golden-update@example.com"
+		secondUpdateEmail = "audit-cte-golden-update2@example.com"
+	)
+	emails := []string{createEmail, updateEmail, secondUpdateEmail}
+	preCleanAuditFixture(t, testDB.DB, emails)
+	t.Cleanup(func() { preCleanAuditFixture(t, testDB.DB, emails) })
+
+	golden := testDB.EnableGolden("TestAuditCTE_Golden")
+	runAuditScenario(t, golden, usersTable, uuid.New(), createSQL, updateSQL, createEmail, updateEmail, secondUpdateEmail)
+	golden.AssertGolden(t, "TestAuditCTE_Golden")
+}
+
 func requireAuditCount(ctx context.Context, t *testing.T, db *pgxkit.DB, id uuid.UUID, want int) {
 	t.Helper()
 	var got int

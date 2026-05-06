@@ -1,0 +1,59 @@
+[
+  {
+    "step": 1,
+    "event": "QUERY",
+    "sql": "\n\t\tWITH inserted AS (\n\t\t\tINSERT INTO users (id, name, email, password_hash, last_login, metadata, age, balance, profile_picture_url)\n\t\t\tVALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n\t\t\tRETURNING id, name, email, password_hash, is_active, created_at, updated_at, last_login, metadata, age, balance, profile_picture_url\n\t\t),\n\t\taudited AS (\n\t\t\tINSERT INTO users_audit (id, parent_id, version, snapshot, valid_from)\n\t\t\tSELECT $10, id, 1, to_jsonb(inserted.*), NOW() FROM inserted\n\t\t)\n\t\tSELECT id, name, email, password_hash, is_active, created_at, updated_at, last_login, metadata, age, balance, profile_picture_url FROM inserted\n\t",
+    "args": [
+      "\u003cUUID:1\u003e",
+      "Audit Test User",
+      "audit-cte-golden-create@example.com",
+      "hash-placeholder",
+      null,
+      null,
+      null,
+      null,
+      null,
+      "\u003cUUID:2\u003e"
+    ]
+  },
+  {
+    "step": 2,
+    "event": "QUERY",
+    "sql": "\n\t\tWITH closed AS (\n\t\t\tUPDATE users_audit\n\t\t\tSET valid_to = NOW()\n\t\t\tWHERE parent_id = $1 AND valid_to IS NULL\n\t\t),\n\t\tupdated AS (\n\t\t\tUPDATE users\n\t\t\tSET name = $2, email = $3, password_hash = $4, is_active = $5, created_at = $6, updated_at = $7, last_login = $8, metadata = $9, age = $10, balance = $11, profile_picture_url = $12\n\t\t\tWHERE id = $1\n\t\t\tRETURNING id, name, email, password_hash, is_active, created_at, updated_at, last_login, metadata, age, balance, profile_picture_url\n\t\t),\n\t\taudited AS (\n\t\t\tINSERT INTO users_audit (id, parent_id, version, snapshot, valid_from)\n\t\t\tSELECT $13, updated.id,\n\t\t\t       COALESCE((SELECT MAX(version) FROM users_audit WHERE parent_id = updated.id), 0) + 1,\n\t\t\t       to_jsonb(updated.*),\n\t\t\t       NOW()\n\t\t\tFROM updated\n\t\t)\n\t\tSELECT id, name, email, password_hash, is_active, created_at, updated_at, last_login, metadata, age, balance, profile_picture_url FROM updated\n\t",
+    "args": [
+      "\u003cUUID:1\u003e",
+      "Audit Test User",
+      "audit-cte-golden-update@example.com",
+      "hash-placeholder",
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      "\u003cUUID:3\u003e"
+    ]
+  },
+  {
+    "step": 3,
+    "event": "QUERY",
+    "sql": "\n\t\tWITH closed AS (\n\t\t\tUPDATE users_audit\n\t\t\tSET valid_to = NOW()\n\t\t\tWHERE parent_id = $1 AND valid_to IS NULL\n\t\t),\n\t\tupdated AS (\n\t\t\tUPDATE users\n\t\t\tSET name = $2, email = $3, password_hash = $4, is_active = $5, created_at = $6, updated_at = $7, last_login = $8, metadata = $9, age = $10, balance = $11, profile_picture_url = $12\n\t\t\tWHERE id = $1\n\t\t\tRETURNING id, name, email, password_hash, is_active, created_at, updated_at, last_login, metadata, age, balance, profile_picture_url\n\t\t),\n\t\taudited AS (\n\t\t\tINSERT INTO users_audit (id, parent_id, version, snapshot, valid_from)\n\t\t\tSELECT $13, updated.id,\n\t\t\t       COALESCE((SELECT MAX(version) FROM users_audit WHERE parent_id = updated.id), 0) + 1,\n\t\t\t       to_jsonb(updated.*),\n\t\t\t       NOW()\n\t\t\tFROM updated\n\t\t)\n\t\tSELECT id, name, email, password_hash, is_active, created_at, updated_at, last_login, metadata, age, balance, profile_picture_url FROM updated\n\t",
+    "args": [
+      "\u003cUUID:1\u003e",
+      "Audit Test User",
+      "audit-cte-golden-update2@example.com",
+      "hash-placeholder",
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      "\u003cUUID:4\u003e"
+    ]
+  }
+]

@@ -207,6 +207,8 @@ make test-example-app
 # 5. HTTP endpoints responding correctly
 ```
 
+For locking in the exact SQL skimatik emits across regenerations, see [Testing](testing) — golden testing pairs naturally with the example-app's repository layer and works at the same `make test-example-app` integration tier.
+
 ## 📁 Configuration
 
 The example uses a complete skimatik configuration:

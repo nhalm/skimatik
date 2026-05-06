@@ -131,3 +131,4 @@ The validator is permissive about extra columns — your audit table is allowed 
 - [Configuration Reference](configuration-reference) — full `skimatik.yaml` schema.
 - [Embedding Patterns](embedding-patterns) — composing repositories that wrap audited generated code.
 - [Database Migrations](database-migrations) — managing your own schema, including audit tables, with golang-migrate.
+- [Testing](testing) — golden testing locks in the exact CTE SQL skimatik renders for audited Create/Update.

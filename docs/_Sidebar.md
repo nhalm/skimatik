@@ -16,6 +16,7 @@
 - **[Embedding Patterns](embedding-patterns)** - Repository composition
 - **[Shared Utilities](shared-utilities)** - Database operations
 - **[Error Handling](error-handling)** - Error management
+- **[Testing](testing)** - Golden + plan-regression tests for generated SQL
 - **[blueprint-vet Integration](blueprint-vet)** - Conformance rules for generated code
 
 ### External Links
