@@ -531,30 +531,42 @@ func (qa *QueryAnalyzer) analyzeSelectQuery(ctx context.Context, query *query) e
 	return qa.analyzeQueryColumns(ctx, query)
 }
 
-// analyzeQueryColumns analyzes the columns returned by a SELECT query
+// analyzeQueryColumns analyzes the columns returned by a SELECT query.
+//
+// The metadata is sourced from a PREPARE inside a rolled-back transaction
+// rather than from executing the query with NULL placeholder args, because
+// pgx v5.9+ surfaces bind/execute errors at rows.Next() rather than at
+// Query() — leaving FieldDescriptions empty for any query whose dummy NULL
+// args would violate NOT NULL or other constraints (notably DML CTEs that
+// INSERT/UPDATE on real columns). Prepare returns the result-column
+// descriptions without executing, so it works for SELECT and DML-CTE shapes
+// alike and is independent of pgx error-timing changes.
 func (qa *QueryAnalyzer) analyzeQueryColumns(ctx context.Context, query *query) error {
 	// Remove trailing semicolon if present
 	sql := strings.TrimSpace(query.SQL)
 	sql = strings.TrimSuffix(sql, ";")
 
-	// Prepare dummy parameter values for execution
-	paramValues := make([]any, 0, len(query.Parameters))
-	for range query.Parameters {
-		paramValues = append(paramValues, nil) // Use nil for all parameters
-	}
-
-	// Execute the query to get column information
-	rows, err := qa.db.Query(ctx, sql, paramValues...)
+	tx, err := qa.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to analyze query columns: %w", err)
+		return fmt.Errorf("failed to begin transaction for column analysis: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+			slog.Warn("failed to rollback transaction during column analysis",
+				"query", query.Name,
+				"error", err)
+		}
+	}()
 
-	// Get column descriptions
-	fieldDescriptions := rows.FieldDescriptions()
+	stmtName := fmt.Sprintf("analyze_columns_%s", query.Name)
+	stmt, err := tx.Tx().Prepare(ctx, stmtName, sql)
+	if err != nil {
+		return fmt.Errorf("failed to prepare query for column analysis: %w", err)
+	}
+
 	var columns []column
 
-	for _, field := range fieldDescriptions {
+	for _, field := range stmt.Fields {
 		// Detect if this is an array type
 		isArray := qa.isArrayOID(field.DataTypeOID)
 
@@ -585,10 +597,6 @@ func (qa *QueryAnalyzer) analyzeQueryColumns(ctx context.Context, query *query) 
 			IsArray:    isArray,
 		}
 		columns = append(columns, column)
-	}
-
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("rows iteration: %w", err)
 	}
 
 	query.Columns = columns

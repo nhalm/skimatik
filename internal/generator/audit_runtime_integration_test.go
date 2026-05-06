@@ -270,6 +270,118 @@ func buildUpdateArgs(t *testing.T, table table, id uuid.UUID, updatedEmail, name
 	return args
 }
 
+// runAuditScenario executes the audited Create + Update + Update flow against
+// db using deterministic, constant inputs. Shared by the runtime invariants
+// test, the golden transcript test, and the plan-regression test so all three
+// drive identical SQL/args/rows.
+func runAuditScenario(t *testing.T, db *pgxkit.DB, usersTable table, id uuid.UUID,
+	createSQL, updateSQL, createEmail, updateEmail, secondUpdateEmail string,
+) {
+	t.Helper()
+	ctx := context.Background()
+
+	rows, err := db.Query(ctx, createSQL, buildCreateArgs(t, usersTable, id, "Audit Test User", createEmail, "hash-placeholder")...)
+	if err != nil {
+		t.Fatalf("audited CREATE failed: %v", err)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		t.Fatalf("audited CREATE rows err: %v", err)
+	}
+
+	rows, err = db.Query(ctx, updateSQL, buildUpdateArgs(t, usersTable, id, updateEmail, "Audit Test User")...)
+	if err != nil {
+		t.Fatalf("audited UPDATE failed: %v", err)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		t.Fatalf("audited UPDATE rows err: %v", err)
+	}
+
+	rows, err = db.Query(ctx, updateSQL, buildUpdateArgs(t, usersTable, id, secondUpdateEmail, "Audit Test User")...)
+	if err != nil {
+		t.Fatalf("second audited UPDATE failed: %v", err)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		t.Fatalf("second audited UPDATE rows err: %v", err)
+	}
+}
+
+// loadAuditTemplates introspects the users table, marks it audited, and renders
+// the audited CREATE and UPDATE SQL strings. Shared by the runtime, golden,
+// and plan tests.
+func loadAuditTemplates(t *testing.T, testDB *pgxkit.TestDB) (table, string, string) {
+	t.Helper()
+
+	introspector := NewIntrospector(testDB.DB, "public")
+	tables, err := introspector.getTablesByName(context.Background(), []string{"users"})
+	if err != nil {
+		t.Fatalf("introspect users: %v", err)
+	}
+	usersTable, ok := tables["users"]
+	if !ok {
+		t.Fatalf("users table not found in introspection result")
+	}
+	usersTable.Audit = true
+
+	return usersTable,
+		renderAuditedSQL(t, usersTable, TemplateCreateAudited),
+		renderAuditedSQL(t, usersTable, TemplateUpdateAudited)
+}
+
+// preCleanAuditFixture removes any leftover rows from a prior run so the
+// scenario starts from a known state. Idempotent.
+func preCleanAuditFixture(t *testing.T, db *pgxkit.DB, emails []string) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := db.Exec(ctx,
+		`DELETE FROM users_audit
+		 WHERE parent_id IN (SELECT id FROM users WHERE email = ANY($1))`, emails); err != nil {
+		t.Fatalf("pre-clean users_audit: %v", err)
+	}
+	if _, err := db.Exec(ctx, `DELETE FROM users WHERE email = ANY($1)`, emails); err != nil {
+		t.Fatalf("pre-clean users: %v", err)
+	}
+}
+
+// TestAuditCTE_Golden locks in the full DB-event transcript that the audited
+// Create/Update CTE templates produce. A diff against the committed baseline
+// catches any change in SQL, arg shape, or returned rows.
+//
+// Determinism: emails/names are constants; UUIDs and timestamps normalize
+// automatically (defaults: <UUID:N>, <TIMESTAMP>).
+func TestAuditCTE_Golden(t *testing.T) {
+	testDB := pgxkit.RequireDB(t)
+	if err := testDB.Setup(); err != nil {
+		t.Fatalf("test db setup: %v", err)
+	}
+
+	usersTable, createSQL, updateSQL := loadAuditTemplates(t, testDB)
+
+	const (
+		createEmail       = "audit-cte-golden-create@example.com"
+		updateEmail       = "audit-cte-golden-update@example.com"
+		secondUpdateEmail = "audit-cte-golden-update2@example.com"
+	)
+	emails := []string{createEmail, updateEmail, secondUpdateEmail}
+	preCleanAuditFixture(t, testDB.DB, emails)
+	t.Cleanup(func() { preCleanAuditFixture(t, testDB.DB, emails) })
+
+	golden := testDB.EnableGolden("TestAuditCTE_Golden")
+	runAuditScenario(t, golden, usersTable, uuid.New(), createSQL, updateSQL, createEmail, updateEmail, secondUpdateEmail)
+	golden.AssertGolden(t, "TestAuditCTE_Golden")
+}
+
+// AssertPlan was evaluated for this CTE and intentionally not adopted: the
+// audit CTE's plan literals embed per-run UUIDs (PostgreSQL inlines bound
+// values into custom plans), and the plan shape further depends on
+// users_audit row counts the rest of the suite perturbs. The structural
+// EXPLAIN baseline therefore flakes between runs in this shared-DB setup.
+// AssertPlan remains documented (docs/testing.md) and demonstrated in the
+// generated test template (templates/tests/repository_test.tmpl) for users
+// whose query shapes and data isolation make plans stable.
+
 func requireAuditCount(ctx context.Context, t *testing.T, db *pgxkit.DB, id uuid.UUID, want int) {
 	t.Helper()
 	var got int
