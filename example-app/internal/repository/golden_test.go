@@ -5,6 +5,7 @@ package repository
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -121,4 +122,66 @@ func TestUsersRepository_Golden(t *testing.T) {
 	}
 
 	golden.AssertGolden(t, "TestUsersRepository_Golden")
+}
+
+// resetPlanCapture removes the per-run plan capture file (NOT the
+// .baseline) before EnableAssertPlan re-records. Works around pgxkit's
+// behavior of appending to the capture across runs, which would otherwise
+// produce doubled-up plan counts on the second invocation.
+func resetPlanCapture(t *testing.T, testName string) {
+	t.Helper()
+	path := fmt.Sprintf("testdata/plans/%s.json", testName)
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		t.Fatalf("reset plan capture %s: %v", path, err)
+	}
+}
+
+// TestUsersRepository_Plan locks in the structural EXPLAIN plan of the
+// Create + Get scenario. A diff against the committed baseline at
+// testdata/plans/TestUsersRepository_Plan.json.baseline catches plan-shape
+// regressions: seq-scan vs index-scan, nested-loop vs hash-join, new sort
+// nodes, join-order changes.
+//
+// Determinism: same fixedIDGen() and pre-clean as the golden test, so the
+// per-run UUIDs that would otherwise inline into the plan's filter
+// literals (PG's custom-plan inlining) are now stable across runs. Plans
+// remain PostgreSQL-version-sensitive — pin the test image.
+func TestUsersRepository_Plan(t *testing.T) {
+	testDB := newGoldenTestDB(t)
+
+	const seedID = "00000000-0000-0000-0000-000000000001"
+	preClean := func() {
+		_, err := testDB.Exec(context.Background(),
+			`DELETE FROM users_audit WHERE parent_id = $1`, seedID)
+		if err != nil {
+			t.Fatalf("pre-clean users_audit: %v", err)
+		}
+		_, err = testDB.Exec(context.Background(),
+			`DELETE FROM users WHERE id = $1`, seedID)
+		if err != nil {
+			t.Fatalf("pre-clean users: %v", err)
+		}
+	}
+	preClean()
+	t.Cleanup(preClean)
+
+	resetPlanCapture(t, "TestUsersRepository_Plan")
+	plan := testDB.EnableAssertPlan("TestUsersRepository_Plan")
+	repo := generated.NewUsersRepository(fixedIDGen())
+
+	ctx := context.Background()
+
+	created, err := repo.Create(ctx, plan, generated.CreateUsersParams{
+		Name:  "Plan Test User",
+		Email: "plan-test@example.com",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if _, err := repo.Get(ctx, plan, created.Id); err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+
+	plan.AssertPlan(t, "TestUsersRepository_Plan")
 }

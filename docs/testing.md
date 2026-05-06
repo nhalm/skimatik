@@ -157,9 +157,7 @@ Plans are sensitive to:
 
 1. **PostgreSQL version.** Pin your test DB to one major version. Plans differ between PG14 / PG15 / PG16.
 2. **Bound parameter values.** PostgreSQL inlines parameter values into custom plans, so a `WHERE id = $1` filter shows the actual UUID/integer literal in the plan. Use a deterministic ID generator (same trick as for golden) so the literal is stable.
-3. **Table statistics.** The planner picks bitmap-scan vs seq-scan based on row count. If your test scenario shares its tables with other tests, accumulated rows can flip the plan choice. Either reset table state before the plan test (`TRUNCATE … CASCADE`), or pick scenarios where the plan is statistics-insensitive.
-
-skimatik's own `internal/generator/audit_runtime_integration_test.go` ships a `TestAuditCTE_Golden` but **not** a `TestAuditCTE_Plan`, because the audit CTE plan is stats-sensitive in the shared test DB. Plan-regression testing is a great fit for individual `SELECT … WHERE indexed = $1` queries; less so for compound DML CTEs over shared tables.
+3. **Table statistics.** The planner picks bitmap-scan vs seq-scan based on row count. If a scenario's plan is borderline, accumulated test data can flip the choice. For a small, well-isolated scenario this rarely matters; for large or shared tables, either pre-clean to a known state or pick scenarios where the plan is statistics-insensitive.
 
 ---
 
@@ -167,11 +165,10 @@ skimatik's own `internal/generator/audit_runtime_integration_test.go` ships a `T
 
 | Test | Type | What it locks in |
 |---|---|---|
-| `internal/generator/audit_runtime_integration_test.go::TestAuditCTE_Golden` | Golden | The exact CTE SQL skimatik renders for audited `Create` and `Update`, plus arg shape and returned columns |
-| Generated `Test<Struct>Repository_Golden` (in `templates/tests/repository_test.tmpl`) | Golden | Per-table `Create + Get` SQL — wired into your repo if you adopt the test template |
-| Generated `Test<Struct>Repository_Plan` (same template) | Plan | Per-table `Create + Get` plan shape — same caveat about PG version + statistics applies |
-
-`TestAuditCTE_Plan` was evaluated and intentionally not adopted — see the comment in `audit_runtime_integration_test.go` for the rationale.
+| `internal/generator/audit_runtime_integration_test.go::TestAuditCTE_Golden` | Golden | The exact CTE SQL the audited Create/Update templates render — a template-correctness regression test |
+| `example-app/internal/repository/golden_test.go::TestUsersRepository_Golden` | Golden | The full transcript of `generated.UsersRepository.Create + Get` end-to-end — exercises the actual generated repository, not the rendered template string |
+| `example-app/internal/repository/golden_test.go::TestUsersRepository_Plan` | Plan | The structural EXPLAIN plan of the same generated `Create + Get` flow |
+| Generated `Test<Struct>Repository_Golden` / `_Plan` (in `templates/tests/repository_test.tmpl`) | Both | Per-table `Create + Get` for users who adopt the test template in their own project |
 
 ---
 

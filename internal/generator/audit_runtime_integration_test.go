@@ -373,15 +373,6 @@ func TestAuditCTE_Golden(t *testing.T) {
 	golden.AssertGolden(t, "TestAuditCTE_Golden")
 }
 
-// AssertPlan was evaluated for this CTE and intentionally not adopted: the
-// audit CTE's plan literals embed per-run UUIDs (PostgreSQL inlines bound
-// values into custom plans), and the plan shape further depends on
-// users_audit row counts the rest of the suite perturbs. The structural
-// EXPLAIN baseline therefore flakes between runs in this shared-DB setup.
-// AssertPlan remains documented (docs/testing.md) and demonstrated in the
-// generated test template (templates/tests/repository_test.tmpl) for users
-// whose query shapes and data isolation make plans stable.
-
 func requireAuditCount(ctx context.Context, t *testing.T, db *pgxkit.DB, id uuid.UUID, want int) {
 	t.Helper()
 	var got int

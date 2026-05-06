@@ -1,0 +1,73 @@
+[
+  {
+    "query": 1,
+    "sql": "\n\t\tWITH inserted AS (\n\t\t\tINSERT INTO users (id, name, email, bio, deleted_at)\n\t\t\tVALUES ($1, $2, $3, $4, $5)\n\t\t\tRETURNING id, name, email, bio, is_active, created_at, updated_at, deleted_at\n\t\t),\n\t\taudited AS (\n\t\t\tINSERT INTO users_audit (id, parent_id, version, snapshot, valid_from)\n\t\t\tSELECT $6, id, 1, to_jsonb(inserted.*), NOW() FROM inserted\n\t\t)\n\t\tSELECT id, name, email, bio, is_active, created_at, updated_at, deleted_at FROM inserted\n\t",
+    "plan": [
+      {
+        "Plan": {
+          "Alias": "inserted",
+          "Async Capable": false,
+          "CTE Name": "inserted",
+          "Node Type": "CTE Scan",
+          "Parallel Aware": false,
+          "Plans": [
+            {
+              "Alias": "users",
+              "Async Capable": false,
+              "Node Type": "ModifyTable",
+              "Operation": "Insert",
+              "Parallel Aware": false,
+              "Parent Relationship": "InitPlan",
+              "Plans": [
+                {
+                  "Async Capable": false,
+                  "Node Type": "Result",
+                  "Parallel Aware": false,
+                  "Parent Relationship": "Outer"
+                }
+              ],
+              "Relation Name": "users",
+              "Subplan Name": "CTE inserted"
+            },
+            {
+              "Alias": "users_audit",
+              "Async Capable": false,
+              "Node Type": "ModifyTable",
+              "Operation": "Insert",
+              "Parallel Aware": false,
+              "Parent Relationship": "InitPlan",
+              "Plans": [
+                {
+                  "Alias": "inserted_1",
+                  "Async Capable": false,
+                  "CTE Name": "inserted",
+                  "Node Type": "CTE Scan",
+                  "Parallel Aware": false,
+                  "Parent Relationship": "Outer"
+                }
+              ],
+              "Relation Name": "users_audit",
+              "Subplan Name": "CTE audited"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "query": 2,
+    "sql": "\n\t\tSELECT id, name, email, bio, is_active, created_at, updated_at, deleted_at\n\t\tFROM users\n\t\tWHERE id = $1\n\t",
+    "plan": [
+      {
+        "Plan": {
+          "Alias": "users",
+          "Async Capable": false,
+          "Filter": "(id = '00000000-0000-0000-0000-000000000001'::uuid)",
+          "Node Type": "Seq Scan",
+          "Parallel Aware": false,
+          "Relation Name": "users"
+        }
+      }
+    ]
+  }
+]
