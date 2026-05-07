@@ -2,12 +2,15 @@
   {
     "step": 1,
     "event": "QUERY",
-    "sql": "\n\t\tWITH inserted AS (\n\t\t\tINSERT INTO users (id, name, email, bio, deleted_at)\n\t\t\tVALUES ($1, $2, $3, $4, $5)\n\t\t\tRETURNING id, name, email, bio, is_active, created_at, updated_at, deleted_at\n\t\t),\n\t\taudited AS (\n\t\t\tINSERT INTO users_audit (id, parent_id, version, snapshot, valid_from)\n\t\t\tSELECT $6, id, 1, to_jsonb(inserted.*), NOW() FROM inserted\n\t\t)\n\t\tSELECT id, name, email, bio, is_active, created_at, updated_at, deleted_at FROM inserted\n\t",
+    "sql": "\n\t\tWITH inserted AS (\n\t\t\tINSERT INTO users (id, name, email, bio, is_active, created_at, updated_at, deleted_at)\n\t\t\tVALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n\t\t\tRETURNING id, name, email, bio, is_active, created_at, updated_at, deleted_at\n\t\t),\n\t\taudited AS (\n\t\t\tINSERT INTO users_audit (id, parent_id, version, snapshot, valid_from)\n\t\t\tSELECT $9, id, 1, to_jsonb(inserted.*), NOW() FROM inserted\n\t\t)\n\t\tSELECT id, name, email, bio, is_active, created_at, updated_at, deleted_at FROM inserted\n\t",
     "args": [
       "\u003cUUID:1\u003e",
       "Golden Test User",
       "golden-test@example.com",
       null,
+      true,
+      "\u003cTIMESTAMP\u003e",
+      "\u003cTIMESTAMP\u003e",
       null,
       "\u003cUUID:2\u003e"
     ]

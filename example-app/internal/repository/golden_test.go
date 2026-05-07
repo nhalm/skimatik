@@ -81,9 +81,13 @@ func TestUsersRepository_Golden(t *testing.T) {
 	repo := generated.NewUsersRepository(fixedIDGen())
 	ctx := context.Background()
 
+	now := time.Now()
 	created, err := repo.Create(ctx, golden, generated.CreateUsersParams{
-		Name:  "Golden Test User",
-		Email: "golden-test@example.com",
+		Name:      "Golden Test User",
+		Email:     "golden-test@example.com",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
 	})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
@@ -105,9 +109,13 @@ func TestUsersRepository_Plan(t *testing.T) {
 	repo := generated.NewUsersRepository(fixedIDGen())
 	ctx := context.Background()
 
+	now := time.Now()
 	created, err := repo.Create(ctx, plan, generated.CreateUsersParams{
-		Name:  "Plan Test User",
-		Email: "plan-test@example.com",
+		Name:      "Plan Test User",
+		Email:     "plan-test@example.com",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
 	})
 	if err != nil {
 		t.Fatalf("Create: %v", err)

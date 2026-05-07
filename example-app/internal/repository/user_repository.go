@@ -117,10 +117,15 @@ func (r *UserRepository) GetUser(ctx context.Context, userID uuid.UUID) (*models
 
 // CreateUser delegates to the audited generated Create.
 func (r *UserRepository) CreateUser(ctx context.Context, name, email string, bio *string) (*models.UserSummary, error) {
+	now := time.Now()
 	user, err := r.Create(ctx, executorFromContext(ctx, r.db), generated.CreateUsersParams{
-		Name:  name,
-		Email: email,
-		Bio:   bio,
+		Name:      name,
+		Email:     email,
+		Bio:       bio,
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+		DeletedAt: nil,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)

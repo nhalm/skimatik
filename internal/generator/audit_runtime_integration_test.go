@@ -204,8 +204,8 @@ func TestAuditCTE_CreateAndUpdate(t *testing.T) {
 }
 
 // buildCreateArgs returns positional args matching prepareCRUDTemplateData's
-// layout for audited CREATE: id, then every non-id column whose DefaultValue
-// is empty, in declaration order, then the audit row id appended last.
+// layout for audited CREATE: id, then every non-id column in declaration
+// order, then the audit row id appended last.
 //
 // NOTE: this helper reimplements prepareCRUDTemplateData's positional-arg
 // ordering. If templates ever reorder columns, this helper silently binds
@@ -216,7 +216,7 @@ func buildCreateArgs(t *testing.T, table table, id uuid.UUID, name, email, passw
 	t.Helper()
 	args := []any{id}
 	for _, col := range table.Columns {
-		if col.Name == "id" || col.DefaultValue != "" {
+		if col.Name == "id" {
 			continue
 		}
 		switch col.Name {
@@ -228,7 +228,7 @@ func buildCreateArgs(t *testing.T, table table, id uuid.UUID, name, email, passw
 			args = append(args, passwordHash)
 		default:
 			if !col.IsNullable {
-				t.Fatalf("buildCreateArgs has no value for NOT NULL column %q without default; users fixture changed?", col.Name)
+				t.Fatalf("buildCreateArgs has no value for NOT NULL column %q; users fixture changed?", col.Name)
 			}
 			args = append(args, nil)
 		}

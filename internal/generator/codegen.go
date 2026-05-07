@@ -389,18 +389,16 @@ func (cg *CodeGenerator) prepareCRUDTemplateData(table table) map[string]any {
 			continue
 		}
 
-		if col.DefaultValue == "" {
-			createFields = append(createFields, map[string]string{
-				"Name": col.goFieldName(),
-				"Type": col.GoType,
-				"Tag":  col.goStructTag(),
-			})
+		createFields = append(createFields, map[string]string{
+			"Name": col.goFieldName(),
+			"Type": col.GoType,
+			"Tag":  col.goStructTag(),
+		})
 
-			insertColumns = append(insertColumns, col.Name)
-			insertPlaceholders = append(insertPlaceholders, fmt.Sprintf("$%d", createParamIndex))
-			insertArgs = append(insertArgs, "params."+col.goFieldName())
-			createParamIndex++
-		}
+		insertColumns = append(insertColumns, col.Name)
+		insertPlaceholders = append(insertPlaceholders, fmt.Sprintf("$%d", createParamIndex))
+		insertArgs = append(insertArgs, "params."+col.goFieldName())
+		createParamIndex++
 
 		updateFields = append(updateFields, map[string]string{
 			"Name": col.goFieldName(),

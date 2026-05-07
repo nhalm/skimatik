@@ -51,10 +51,10 @@ func TestCodeGenerator_prepareCRUDTemplateData(t *testing.T) {
 		}
 	}
 
-	// Check create fields (should exclude ID and columns with defaults)
+	// Check create fields (should include all non-ID columns, mirroring update)
 	createFields := data["CreateFields"].([]map[string]string)
-	if len(createFields) != 3 { // name, email, metadata
-		t.Errorf("Expected 3 create fields, got %d", len(createFields))
+	if len(createFields) != 5 { // name, email, is_active, created_at, metadata
+		t.Errorf("Expected 5 create fields, got %d", len(createFields))
 	}
 
 	// Check update fields (should include all non-ID columns)
